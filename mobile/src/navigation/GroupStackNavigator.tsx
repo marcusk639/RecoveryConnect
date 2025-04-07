@@ -13,6 +13,7 @@ import GroupAnnouncementsScreen from '../screens/homegroup/GroupAnnouncementsScr
 // import GroupMemberDetailsScreen from '../screens/groups/GroupMemberDetailsScreen';
 import GroupAnnouncementDetailsScreen from '../screens/homegroup/GroupAnnouncementDetailsScreen';
 import GroupTreasuryScreen from '../screens/homegroup/GroupTreasuryScreen';
+import GroupEditDetailsScreen from '../screens/homegroup/GroupEditDetailsScreen';
 // import GroupEventDetailsScreen from '../screens/groups/GroupEventDetailsScreen';
 // import GroupBusinessMeetingScreen from '../screens/groups/GroupBusinessMeetingScreen';
 
@@ -96,6 +97,13 @@ const GroupStackNavigator: React.FC = () => {
           title: 'Business Meeting',
         }}
       />  */}
+      <Stack.Screen
+        name="GroupEditDetails"
+        component={GroupEditDetailsScreen}
+        options={{
+          title: 'Edit Group Details',
+        }}
+      />
     </Stack.Navigator>
   );
 };

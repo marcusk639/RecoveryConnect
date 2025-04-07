@@ -309,7 +309,8 @@ const GroupOverviewScreen: React.FC = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.navTile}
+          style={{...styles.navTile, opacity: 0.5}}
+          disabled={true}
           onPress={navigateToGroupLiterature}>
           <View style={styles.navTileIcon}>
             <Text style={styles.navTileIconText}>📚</Text>
@@ -328,7 +329,10 @@ const GroupOverviewScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.adminButton}
             onPress={() =>
-              Alert.alert('Edit Group', 'This feature will be available soon.')
+              navigation.navigate('GroupEditDetails', {
+                groupId,
+                groupName,
+              })
             }>
             <Text style={styles.adminButtonText}>Edit Group Details</Text>
           </TouchableOpacity>

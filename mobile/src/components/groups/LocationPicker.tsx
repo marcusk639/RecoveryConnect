@@ -34,6 +34,7 @@ interface LocationPickerProps {
     placeName?: string;
   }) => void;
   error?: string;
+  label?: string;
 }
 
 const LocationPicker: React.FC<LocationPickerProps> = ({
@@ -41,6 +42,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
   initialLocation,
   onLocationSelect,
   error,
+  label = 'Location',
 }) => {
   const [address, setAddress] = useState<string>(initialAddress);
   const [location, setLocation] = useState(initialLocation || null);
@@ -250,7 +252,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Meeting Location</Text>
+      <Text style={styles.label}>{label}</Text>
 
       {/* Google Places Autocomplete */}
       <GooglePlacesAutocomplete
@@ -320,7 +322,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
               }}
               draggable
               onDragEnd={handleMarkerDrag}
-              title={placeName || 'Meeting Location'}
+              title={placeName || 'Location'}
               description={address}
             />
           </MapView>

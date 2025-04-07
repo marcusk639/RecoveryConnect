@@ -12,6 +12,8 @@ export type GroupStackParamList = {
   GroupAnnouncementDetails: {groupId: string; announcementId: string};
   GroupEventDetails: {groupId: string; eventId: string};
   GroupBusinessMeeting: {groupId: string; meetingId?: string};
+  GroupEditDetails: {groupId: string; groupName: string};
+  GroupDetails: {groupId: string};
 };
 
 // Main Tab Navigation Params
