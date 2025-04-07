@@ -19,7 +19,7 @@ import {PERMISSIONS, request, RESULTS} from 'react-native-permissions';
 
 // You would normally store this in a config file or environment variable
 // For security, use API key restrictions in Google Cloud Console
-const GOOGLE_MAPS_API_KEY = 'AIzaSyCKXu_eJrW6QBamTNPyCOQy_lVO2xhwl9Q';
+const GOOGLE_MAPS_API_KEY = 'AIzaSyAyjHVwL4AcgLGdo1O7mmRFJLLHgpNOC5A';
 
 interface LocationPickerProps {
   initialAddress?: string;
