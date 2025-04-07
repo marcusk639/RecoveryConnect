@@ -11,6 +11,7 @@ import {
   FlatList,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 
@@ -97,7 +98,7 @@ const GroupsListScreen: React.FC = () => {
   };
 
   const navigateToGroupDetails = (group: HomeGroup) => {
-    navigation.navigate('GroupDetails', {
+    navigation.navigate('GroupOverview', {
       groupId: group.id,
       groupName: group.name,
     });

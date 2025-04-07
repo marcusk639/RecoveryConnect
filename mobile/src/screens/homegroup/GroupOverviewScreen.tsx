@@ -11,12 +11,11 @@ import {
 } from 'react-native';
 import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 
 // Import types
-import {GroupTabParamList, GroupStackParamList} from '../../types/navigation';
-
-// Import components
-import GroupInviteModal from '../../components/groups/GroupInviteModal';
+import {GroupStackParamList} from '../../types/navigation';
 
 // Types for home screen data
 interface Announcement {
@@ -57,7 +56,7 @@ interface HomeGroup {
 }
 
 type GroupOverviewScreenRouteProp = RouteProp<
-  GroupTabParamList,
+  GroupStackParamList,
   'GroupOverview'
 >;
 type GroupOverviewScreenNavigationProp =
@@ -66,11 +65,11 @@ type GroupOverviewScreenNavigationProp =
 const GroupOverviewScreen: React.FC = () => {
   const route = useRoute<GroupOverviewScreenRouteProp>();
   const navigation = useNavigation<GroupOverviewScreenNavigationProp>();
-  const {groupId} = route.params;
+  const {groupId, groupName} = route.params;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [leaveGroupLoading, setLeaveGroupLoading] = useState(false);
 
   // Data states
   const [group, setGroup] = useState<HomeGroup | null>(null);
@@ -91,7 +90,7 @@ const GroupOverviewScreen: React.FC = () => {
       // Mock group data
       const mockGroup: HomeGroup = {
         id: groupId,
-        name: 'Serenity Now Group',
+        name: groupName,
         description:
           'A welcoming group focused on practical application of the principles. Meeting since 2010.',
         meetingDay: 'Tuesday',
@@ -182,6 +181,68 @@ const GroupOverviewScreen: React.FC = () => {
     });
   };
 
+  const navigateToGroupMembers = () => {
+    navigation.navigate('GroupMembers', {
+      groupId,
+      groupName,
+    });
+  };
+
+  const navigateToGroupAnnouncements = () => {
+    navigation.navigate('GroupAnnouncements', {
+      groupId,
+      groupName,
+    });
+  };
+
+  const navigateToGroupTreasury = () => {
+    navigation.navigate('GroupTreasury', {
+      groupId,
+      groupName,
+    });
+  };
+
+  const navigateToGroupLiterature = () => {
+    navigation.navigate('GroupLiterature', {
+      groupId,
+      groupName,
+    });
+  };
+
+  const handleLeaveGroup = () => {
+    Alert.alert('Leave Group', 'Are you sure you want to leave this group?', [
+      {
+        text: 'Cancel',
+        style: 'cancel',
+      },
+      {
+        text: 'Leave',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLeaveGroupLoading(true);
+
+            // In a real app, this would call Firestore to remove the user from the group
+            // For now, we'll just simulate a network delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Navigate back to the groups list
+            navigation.goBack();
+            Alert.alert('Success', `You've left ${groupName}`);
+          } catch (error) {
+            console.error('Error leaving group:', error);
+            Alert.alert(
+              'Error',
+              'Failed to leave group. Please try again later.',
+            );
+          } finally {
+            setLeaveGroupLoading(false);
+          }
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -214,34 +275,81 @@ const GroupOverviewScreen: React.FC = () => {
               {formatDate(new Date(group.foundedDate))}
             </Text>
             <Text style={styles.groupDescriptionText}>{group.description}</Text>
-
-            {/* Admin Actions */}
-            {group.isAdmin && (
-              <View style={styles.adminActions}>
-                <TouchableOpacity
-                  style={styles.adminButton}
-                  onPress={() => setInviteModalVisible(true)}>
-                  <Text style={styles.adminButtonText}>Invite Members</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         )}
       </View>
+
+      {/* Navigation Tiles */}
+      <View style={styles.navTilesContainer}>
+        <TouchableOpacity
+          style={styles.navTile}
+          onPress={navigateToGroupMembers}>
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>👥</Text>
+          </View>
+          <Text style={styles.navTileText}>Members</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTile}
+          onPress={navigateToGroupAnnouncements}>
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>📢</Text>
+          </View>
+          <Text style={styles.navTileText}>Announcements</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTile}
+          onPress={navigateToGroupTreasury}>
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>💰</Text>
+          </View>
+          <Text style={styles.navTileText}>Treasury</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTile}
+          onPress={navigateToGroupLiterature}>
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>📚</Text>
+          </View>
+          <Text style={styles.navTileText}>Literature</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Admin Actions */}
+      {group?.isAdmin && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Admin Actions</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.adminButton}
+            onPress={() =>
+              Alert.alert('Edit Group', 'This feature will be available soon.')
+            }>
+            <Text style={styles.adminButtonText}>Edit Group Details</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.adminButton}
+            onPress={() =>
+              Alert.alert(
+                'Manage Members',
+                'This feature will be available soon.',
+              )
+            }>
+            <Text style={styles.adminButtonText}>Manage Members</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Upcoming Meetings Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming Meetings</Text>
-          <TouchableOpacity
-            onPress={() =>
-              navigation.navigate('GroupDetails', {
-                screen: 'GroupAnnouncements',
-                params: {groupId},
-              })
-            }>
-            <Text style={styles.seeAllText}>See All</Text>
-          </TouchableOpacity>
         </View>
 
         {upcomingMeetings.length > 0 ? (
@@ -267,13 +375,7 @@ const GroupOverviewScreen: React.FC = () => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Announcements</Text>
-          <TouchableOpacity
-            onPress={() =>
-              navigation.navigate('GroupDetails', {
-                screen: 'GroupAnnouncements',
-                params: {groupId},
-              })
-            }>
+          <TouchableOpacity onPress={navigateToGroupAnnouncements}>
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
@@ -326,15 +428,17 @@ const GroupOverviewScreen: React.FC = () => {
         )}
       </View>
 
-      {/* Invite Modal */}
-      {group && (
-        <GroupInviteModal
-          visible={inviteModalVisible}
-          onClose={() => setInviteModalVisible(false)}
-          groupId={groupId}
-          groupName={group.name}
-        />
-      )}
+      {/* Leave Group Button */}
+      <TouchableOpacity
+        style={styles.leaveGroupButton}
+        onPress={handleLeaveGroup}
+        disabled={leaveGroupLoading}>
+        {leaveGroupLoading ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Text style={styles.leaveGroupButtonText}>Leave Group</Text>
+        )}
+      </TouchableOpacity>
     </ScrollView>
   );
 };
@@ -406,15 +510,50 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 16,
   },
-  adminActions: {
-    marginTop: 8,
+  navTilesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginHorizontal: 12,
+    marginBottom: 12,
+  },
+  navTile: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  navTileIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  navTileIconText: {
+    fontSize: 24,
+  },
+  navTileText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#212121',
   },
   adminButton: {
     backgroundColor: '#E3F2FD',
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: 'center',
+    marginBottom: 12,
   },
   adminButtonText: {
     color: '#2196F3',
@@ -531,6 +670,20 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     padding: 16,
+  },
+  leaveGroupButton: {
+    backgroundColor: '#FFEBEE',
+    margin: 16,
+    marginTop: 4,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  leaveGroupButtonText: {
+    color: '#F44336',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 

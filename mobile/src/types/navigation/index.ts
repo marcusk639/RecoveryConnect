@@ -1,22 +1,13 @@
-// src/types/navigation.ts
-import {NavigatorScreenParams} from '@react-navigation/native';
-
-// Group Tab Navigation Params
-export type GroupTabParamList = {
-  GroupOverview: {groupId: string};
-  GroupMembers: {groupId: string};
-  GroupAnnouncements: {groupId: string};
-  GroupTreasury: {groupId: string};
-  GroupLiterature: {groupId: string};
-};
+// src/types/navigation/index.ts
 
 // Group Stack Navigation Params
 export type GroupStackParamList = {
   GroupsList: undefined;
-  GroupDetails: {
-    groupId: string;
-    groupName: string;
-  } & NavigatorScreenParams<GroupTabParamList>;
+  GroupOverview: {groupId: string; groupName: string};
+  GroupMembers: {groupId: string; groupName: string};
+  GroupAnnouncements: {groupId: string; groupName: string};
+  GroupTreasury: {groupId: string; groupName: string};
+  GroupLiterature: {groupId: string; groupName: string};
   GroupMemberDetails: {groupId: string; memberId: string};
   GroupAnnouncementDetails: {groupId: string; announcementId: string};
   GroupEventDetails: {groupId: string; eventId: string};
@@ -25,10 +16,11 @@ export type GroupStackParamList = {
 
 // Main Tab Navigation Params
 export type MainTabParamList = {
-  Home: NavigatorScreenParams<GroupStackParamList>;
+  Home: undefined;
   Meetings: undefined;
   Treasury: undefined;
   Profile: undefined;
+  GroupSearch: undefined;
 };
 
 // Auth Stack Navigation Params
@@ -43,6 +35,6 @@ export type AuthStackParamList = {
 // Root Stack Navigation Params
 export type RootStackParamList = {
   Splash: undefined;
-  Auth: NavigatorScreenParams<AuthStackParamList>;
-  Main: NavigatorScreenParams<MainTabParamList>;
+  Auth: undefined;
+  Main: undefined;
 };

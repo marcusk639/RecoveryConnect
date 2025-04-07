@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
-import Clipboard from '@react-native-clipboard/clipboard';
+import * as Clipboard from '@react-native-clipboard/clipboard';
 
 interface GroupInviteModalProps {
   visible: boolean;

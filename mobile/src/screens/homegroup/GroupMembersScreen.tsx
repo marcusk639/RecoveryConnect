@@ -13,10 +13,11 @@ import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 
 // Import types
-import {GroupTabParamList, GroupStackParamList} from '../../types/navigation';
+import {GroupStackParamList} from '../../types/navigation';
 
 // Import components
 import GroupInviteModal from '../../components/groups/GroupInviteModal';
+import {getAnonymizedName} from '../../utils/anonymous';
 
 // Types for members
 interface GroupMember {
@@ -27,7 +28,10 @@ interface GroupMember {
   isAdmin: boolean;
 }
 
-type GroupMembersScreenRouteProp = RouteProp<GroupTabParamList, 'GroupMembers'>;
+type GroupMembersScreenRouteProp = RouteProp<
+  GroupStackParamList,
+  'GroupMembers'
+>;
 type GroupMembersScreenNavigationProp =
   StackNavigationProp<GroupStackParamList>;
 
@@ -68,14 +72,14 @@ const GroupMembersScreen: React.FC = () => {
       const mockMembers: GroupMember[] = [
         {
           id: '1',
-          name: 'J.',
+          name: 'Marcus Klein',
           sobrietyDate: '2020-06-12',
           position: 'Secretary',
           isAdmin: true,
         },
         {
           id: '2',
-          name: 'M.',
+          name: 'Jack Doe',
           sobrietyDate: '2015-03-22',
           position: 'Treasurer',
           isAdmin: true,
@@ -168,7 +172,7 @@ const GroupMembersScreen: React.FC = () => {
       style={styles.memberItem}
       onPress={() => handleMemberPress(item)}>
       <View style={styles.memberInitialContainer}>
-        <Text style={styles.memberInitial}>{item.name.charAt(0)}</Text>
+        <Text style={styles.memberInitial}>{getAnonymizedName(item.name)}</Text>
       </View>
 
       <View style={styles.memberDetailsContainer}>
@@ -187,7 +191,7 @@ const GroupMembersScreen: React.FC = () => {
 
         {item.sobrietyDate && (
           <Text style={styles.memberSobriety}>
-            {calculateSobrietyYears(item.sobrietyDate)} years
+            {formatSobrietyDate(item.sobrietyDate)}
           </Text>
         )}
       </View>

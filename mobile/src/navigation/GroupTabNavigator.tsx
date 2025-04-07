@@ -4,7 +4,7 @@ import {Text, View} from 'react-native';
 import {useRoute, RouteProp} from '@react-navigation/native';
 
 // Import types
-import {GroupTabParamList, GroupStackParamList} from '../types/navigation';
+import {GroupStackParamList} from '../types/navigation';
 import GroupMembersScreen from '../screens/homegroup/GroupMembersScreen';
 import GroupOverviewScreen from '../screens/homegroup/GroupOverviewScreen';
 
@@ -116,11 +116,11 @@ const LiteratureIcon = ({focused}: {focused: boolean}) => (
   </View>
 );
 
-const Tab = createBottomTabNavigator<GroupTabParamList>();
+const Tab = createBottomTabNavigator<any>();
 
 type GroupTabNavigatorRouteProp = RouteProp<
   GroupStackParamList,
-  'GroupDetails'
+  'GroupOverview'
 >;
 
 const GroupTabNavigator: React.FC = () => {

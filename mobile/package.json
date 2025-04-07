@@ -9,6 +9,7 @@
     "uninstall": "rm -rf node_modules",
     "pod:install": "cd ios && pod install && cd ..",
     "fresh-install": "rm -rf $TMPDIR/react-* && watchman watch-del-all && rm -rf ios/build/ModuleCache/* && rm -rf node_modules/ && npm cache clean --force && npm install",
+    "derived-data": "rm -rf ~/Library/Developer/Xcode/DerivedData/*",
     "postinstall": "cd ios && pod install && cd .. && patch-package",
     "test": "jest",
     "lint": "eslint ."
