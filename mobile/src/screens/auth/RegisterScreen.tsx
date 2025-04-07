@@ -304,11 +304,11 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
             disabled={loading}
           />
         )}
-        <SocialSignInButton
+        {/* <SocialSignInButton
           provider="facebook"
           onPress={() => handleSocialSignIn('facebook')}
           disabled={loading}
-        />
+        /> */}
       </View>
 
       <Button
