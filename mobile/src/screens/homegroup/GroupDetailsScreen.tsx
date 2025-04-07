@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
 } from 'react-native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp} from '@react-navigation/native';
@@ -18,6 +19,7 @@ import {MainStackParamList} from '../../types';
 import {GroupModel} from '../../models/GroupModel';
 import Button from '../../components/common/Button';
 import GroupInviteModal from '../../components/groups/GroupInviteModal';
+import {auth} from '../../services/firebase/config';
 
 type GroupDetailsScreenProps = {
   navigation: StackNavigationProp<MainStackParamList, 'GroupDetails'>;
@@ -56,12 +58,12 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
 
           // Check if current user is admin
           setIsAdmin(
-            groupData.admins?.includes(auth().currentUser?.uid) || false,
+            groupData.admins?.includes(auth.currentUser?.uid || '') || false,
           );
 
           // Check if current user is a member
           setIsMember(
-            membersList.some(member => member.id === auth().currentUser?.uid),
+            membersList.some(member => member.id === auth.currentUser?.uid),
           );
         } else {
           setError('Group not found');
@@ -83,7 +85,7 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
       setJoiningGroup(true);
 
       // Add current user to group members
-      await GroupModel.addMember(groupId, auth().currentUser?.uid || '', false);
+      await GroupModel.addMember(groupId, auth.currentUser?.uid || '', false);
 
       // Update local state
       setIsMember(true);
@@ -114,10 +116,7 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
         onPress: async () => {
           try {
             // Remove current user from group members
-            await GroupModel.removeMember(
-              groupId,
-              auth().currentUser?.uid || '',
-            );
+            await GroupModel.removeMember(groupId, auth.currentUser?.uid || '');
 
             // Update local state
             setIsMember(false);
@@ -318,7 +317,7 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
                 variant="outline"
                 onPress={handleLeaveGroup}
                 fullWidth
-                style={[styles.actionButton, styles.leaveButton]}
+                style={{...styles.actionButton, ...styles.leaveButton}}
                 textStyle={styles.leaveButtonText}
               />
             </>
@@ -339,6 +338,7 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
       <GroupInviteModal
         visible={showInviteModal}
         groupId={groupId}
+        groupName={group?.name}
         onClose={() => setShowInviteModal(false)}
       />
     </SafeAreaView>

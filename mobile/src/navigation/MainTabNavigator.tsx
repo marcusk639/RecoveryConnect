@@ -2,16 +2,16 @@ import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {Text, View} from 'react-native';
 
-// Import screens
-import HomeScreen from '../screens/home/HomeScreen';
+// Import types
+import {MainTabParamList} from '../types/navigation';
+
+// Import screens and navigators
+import GroupStackNavigator from './GroupStackNavigator';
 import MeetingsScreen from '../screens/meetings/MeetingScreen';
 import TreasuryScreen from '../screens/treasury/TreasuryScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
-import HomeGroupNavigator from './HomegroupNavigator';
-import ProfileNavigator from './ProfileNavigator';
 
-// Import icons (would use a library like react-native-vector-icons in a real app)
-// For simplicity, we're using Text components as placeholders
+// Tab Icons
 const HomeIcon = ({focused}: {focused: boolean}) => (
   <View
     style={{
@@ -92,14 +92,6 @@ const ProfileIcon = ({focused}: {focused: boolean}) => (
   </View>
 );
 
-// Define the param types for tab navigator
-type MainTabParamList = {
-  Home: undefined;
-  Meetings: undefined;
-  Treasury: undefined;
-  Profile: undefined;
-};
-
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const MainTabNavigator: React.FC = () => {
@@ -119,10 +111,11 @@ const MainTabNavigator: React.FC = () => {
       }}>
       <Tab.Screen
         name="Home"
-        component={HomeGroupNavigator}
+        component={GroupStackNavigator}
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({focused}) => <HomeIcon focused={focused} />,
+          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -131,6 +124,8 @@ const MainTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: 'Meetings',
           tabBarIcon: ({focused}) => <MeetingsIcon focused={focused} />,
+          headerShown: true,
+          headerTitle: 'Meetings',
         }}
       />
       <Tab.Screen
@@ -139,14 +134,18 @@ const MainTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: 'Treasury',
           tabBarIcon: ({focused}) => <TreasuryIcon focused={focused} />,
+          headerShown: true,
+          headerTitle: 'Treasury',
         }}
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileNavigator}
+        component={ProfileScreen}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({focused}) => <ProfileIcon focused={focused} />,
+          headerShown: true,
+          headerTitle: 'Profile',
         }}
       />
     </Tab.Navigator>

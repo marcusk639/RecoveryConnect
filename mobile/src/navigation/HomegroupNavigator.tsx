@@ -3,7 +3,7 @@ import {createStackNavigator} from '@react-navigation/stack';
 
 // Import screens
 import HomeScreen from '../screens/home/HomeScreen';
-import HomegroupMainScreen from '../screens/homegroup/HomegroupMainScreen';
+import HomeGroupScreen from '../screens/homegroup/HomegroupMainScreen';
 
 // Define the param types for navigation
 type HomeStackParamList = {
@@ -21,7 +21,7 @@ const HomeGroupNavigator: React.FC = () => {
         headerShown: false,
       }}>
       <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="HomeGroup" component={HomegroupMainScreen} />
+      <Stack.Screen name="HomeGroup" component={HomeGroupScreen} />
     </Stack.Navigator>
   );
 };

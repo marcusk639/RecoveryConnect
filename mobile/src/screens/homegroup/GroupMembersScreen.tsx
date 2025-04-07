@@ -1,5 +1,3 @@
-// src/screens/groups/GroupMembersScreen.tsx
-
 import React, {useState, useEffect} from 'react';
 import {
   View,
@@ -7,259 +5,276 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator,
   Alert,
-  Modal,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
-import {RouteProp} from '@react-navigation/native';
-import auth from '@react-native-firebase/auth';
-import {MainStackParamList} from '../../types';
-import {GroupModel} from '../../models/GroupModel';
-import Button from '../../components/common/Button';
+
+// Import types
+import {GroupTabParamList, GroupStackParamList} from '../../types/navigation';
+
+// Import components
 import GroupInviteModal from '../../components/groups/GroupInviteModal';
-import GroupMemberDetailModal from '../../components/groups/GroupMemberDetailModal';
 
-type GroupMembersScreenProps = {
-  navigation: StackNavigationProp<MainStackParamList, 'GroupMembers'>;
-  route: RouteProp<MainStackParamList, 'GroupMembers'>;
-};
-
+// Types for members
 interface GroupMember {
   id: string;
   name: string;
   sobrietyDate?: string;
-  position?: string;
+  position?: string; // secretary, treasurer, etc.
   isAdmin: boolean;
 }
 
-const GroupMembersScreen: React.FC<GroupMembersScreenProps> = ({
-  navigation,
-  route,
-}) => {
-  const {groupId, groupName} = route.params;
+type GroupMembersScreenRouteProp = RouteProp<GroupTabParamList, 'GroupMembers'>;
+type GroupMembersScreenNavigationProp =
+  StackNavigationProp<GroupStackParamList>;
+
+const GroupMembersScreen: React.FC = () => {
+  const route = useRoute<GroupMembersScreenRouteProp>();
+  const navigation = useNavigation<GroupMembersScreenNavigationProp>();
+  const {groupId} = route.params;
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [members, setMembers] = useState<GroupMember[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
-  const [selectedMember, setSelectedMember] = useState<GroupMember | null>(
-    null,
-  );
-  const [showMemberModal, setShowMemberModal] = useState<boolean>(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [groupName, setGroupName] = useState('');
 
-  // Load members data
   useEffect(() => {
-    const loadMembers = async () => {
-      try {
-        setLoading(true);
-
-        // Get all members
-        const membersList = await GroupModel.getMembers(groupId);
-        setMembers(membersList);
-
-        // Check if current user is admin
-        const currentUser = auth().currentUser;
-        const group = await GroupModel.getById(groupId);
-        setIsAdmin(group?.admins?.includes(currentUser?.uid) || false);
-      } catch (error) {
-        console.error('Error loading members:', error);
-        Alert.alert('Error', 'Failed to load members. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadMembers();
   }, [groupId]);
 
-  // Handle member selection
+  const loadMembers = async () => {
+    try {
+      setLoading(true);
+
+      // In a real app, this would fetch data from Firestore
+      // For now, we'll use mock data
+
+      // Get the group data
+      const mockGroup = {
+        id: groupId,
+        name: 'Serenity Now Group',
+        isAdmin: true,
+      };
+
+      setGroupName(mockGroup.name);
+      setIsAdmin(mockGroup.isAdmin);
+
+      // Mock members data
+      const mockMembers: GroupMember[] = [
+        {
+          id: '1',
+          name: 'J.',
+          sobrietyDate: '2020-06-12',
+          position: 'Secretary',
+          isAdmin: true,
+        },
+        {
+          id: '2',
+          name: 'M.',
+          sobrietyDate: '2015-03-22',
+          position: 'Treasurer',
+          isAdmin: true,
+        },
+        {
+          id: '3',
+          name: 'S.',
+          sobrietyDate: '2019-11-05',
+          position: 'GSR',
+          isAdmin: true,
+        },
+        {
+          id: '4',
+          name: 'T.',
+          sobrietyDate: '2023-09-01',
+          isAdmin: false,
+        },
+        {
+          id: '5',
+          name: 'L.',
+          sobrietyDate: '2018-04-30',
+          isAdmin: false,
+        },
+        {
+          id: '6',
+          name: 'R.',
+          sobrietyDate: '2021-12-10',
+          isAdmin: false,
+        },
+        {
+          id: '7',
+          name: 'K.',
+          sobrietyDate: '2022-05-15',
+          isAdmin: false,
+        },
+        {
+          id: '8',
+          name: 'P.',
+          isAdmin: false,
+        },
+      ];
+
+      setMembers(mockMembers);
+    } catch (error) {
+      console.error('Error loading members:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load group members. Please try again later.',
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   const handleMemberPress = (member: GroupMember) => {
-    setSelectedMember(member);
-    setShowMemberModal(true);
+    navigation.navigate('GroupMemberDetails', {
+      groupId,
+      memberId: member.id,
+    });
   };
 
-  // Make member an admin
-  const handleMakeAdmin = async (memberId: string) => {
+  const calculateSobrietyYears = (dateString?: string): number | null => {
+    if (!dateString) return null;
+
+    const sobrietyDate = new Date(dateString);
+    const today = new Date();
+    const yearInMs = 365.25 * 24 * 60 * 60 * 1000; // Average year including leap years
+    const diffInMs = today.getTime() - sobrietyDate.getTime();
+    return Math.floor(diffInMs / yearInMs);
+  };
+
+  const formatSobrietyDate = (dateString?: string): string => {
+    if (!dateString) return 'Not set';
+
     try {
-      await GroupModel.makeAdmin(groupId, memberId);
-
-      // Update local state
-      setMembers(
-        members.map(member =>
-          member.id === memberId ? {...member, isAdmin: true} : member,
-        ),
-      );
-
-      // Close modal
-      setShowMemberModal(false);
-
-      Alert.alert('Success', 'Member is now an admin');
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
     } catch (error) {
-      console.error('Error making member admin:', error);
-      Alert.alert('Error', 'Failed to update member role. Please try again.');
+      return 'Invalid date';
     }
   };
 
-  // Remove member as admin
-  const handleRemoveAdmin = async (memberId: string) => {
-    try {
-      await GroupModel.removeAdmin(groupId, memberId);
-
-      // Update local state
-      setMembers(
-        members.map(member =>
-          member.id === memberId ? {...member, isAdmin: false} : member,
-        ),
-      );
-
-      // Close modal
-      setShowMemberModal(false);
-
-      Alert.alert('Success', 'Member is no longer an admin');
-    } catch (error) {
-      console.error('Error removing member as admin:', error);
-      Alert.alert('Error', 'Failed to update member role. Please try again.');
-    }
-  };
-
-  // Remove member from group
-  const handleRemoveMember = async (memberId: string) => {
-    Alert.alert(
-      'Remove Member',
-      'Are you sure you want to remove this member from the group?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await GroupModel.removeMember(groupId, memberId);
-
-              // Update local state
-              setMembers(members.filter(member => member.id !== memberId));
-
-              // Close modal
-              setShowMemberModal(false);
-
-              Alert.alert('Success', 'Member has been removed from the group');
-            } catch (error) {
-              console.error('Error removing member:', error);
-              Alert.alert(
-                'Error',
-                'Failed to remove member. Please try again.',
-              );
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const renderMemberItem = ({item}: {item: GroupMember}) => {
-    const isCurrentUser = item.id === auth().currentUser?.uid;
-
-    return (
-      <TouchableOpacity
-        style={styles.memberItem}
-        onPress={() => handleMemberPress(item)}>
-        <View style={styles.memberAvatar}>
-          <Text style={styles.memberInitial}>{item.name.charAt(0)}</Text>
-        </View>
-
-        <View style={styles.memberInfo}>
-          <View style={styles.memberNameRow}>
-            <Text style={styles.memberName}>
-              {item.name} {isCurrentUser ? '(You)' : ''}
-            </Text>
-
-            {item.isAdmin && (
-              <View style={styles.adminBadge}>
-                <Text style={styles.adminText}>Admin</Text>
-              </View>
-            )}
-          </View>
-
-          {item.position && (
-            <Text style={styles.memberPosition}>{item.position}</Text>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{groupName} - Members</Text>
-        <View style={{width: 40}} />
+  const renderMemberItem = ({item}: {item: GroupMember}) => (
+    <TouchableOpacity
+      style={styles.memberItem}
+      onPress={() => handleMemberPress(item)}>
+      <View style={styles.memberInitialContainer}>
+        <Text style={styles.memberInitial}>{item.name.charAt(0)}</Text>
       </View>
 
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2196F3" />
-          <Text style={styles.loadingText}>Loading members...</Text>
+      <View style={styles.memberDetailsContainer}>
+        <View style={styles.memberNameRow}>
+          <Text style={styles.memberName}>{item.name}</Text>
+          {item.isAdmin && (
+            <View style={styles.adminBadge}>
+              <Text style={styles.adminBadgeText}>Admin</Text>
+            </View>
+          )}
         </View>
-      ) : (
-        <>
-          <View style={styles.countContainer}>
-            <Text style={styles.memberCount}>
-              {members.length} {members.length === 1 ? 'Member' : 'Members'}
-            </Text>
 
-            {isAdmin && (
-              <Button
-                title="Invite People"
-                size="small"
-                onPress={() => setShowInviteModal(true)}
-              />
-            )}
+        {item.position && (
+          <Text style={styles.memberPosition}>{item.position}</Text>
+        )}
+
+        {item.sobrietyDate && (
+          <Text style={styles.memberSobriety}>
+            {calculateSobrietyYears(item.sobrietyDate)} years
+          </Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderServicePositions = () => {
+    const serviceMembers = members.filter(member => member.position);
+
+    if (serviceMembers.length === 0) {
+      return null;
+    }
+
+    return (
+      <View style={styles.servicePositionsContainer}>
+        <Text style={styles.sectionTitle}>Service Positions</Text>
+
+        {serviceMembers.map(member => (
+          <View key={member.id} style={styles.servicePositionItem}>
+            <View style={styles.positionNameContainer}>
+              <Text style={styles.positionName}>{member.position}</Text>
+            </View>
+            <View style={styles.positionMemberContainer}>
+              <Text style={styles.positionMember}>{member.name}</Text>
+              {member.sobrietyDate && (
+                <Text style={styles.positionSobriety}>
+                  {calculateSobrietyYears(member.sobrietyDate)} years
+                </Text>
+              )}
+            </View>
           </View>
+        ))}
+      </View>
+    );
+  };
 
-          <FlatList
-            data={members}
-            renderItem={renderMemberItem}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContainer}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No members found</Text>
-              </View>
-            }
-          />
-        </>
-      )}
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2196F3" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={members}
+        renderItem={renderMemberItem}
+        keyExtractor={item => item.id}
+        ListHeaderComponent={
+          <>
+            <View style={styles.header}>
+              <Text style={styles.memberCount}>{members.length} Members</Text>
+              {isAdmin && (
+                <TouchableOpacity
+                  style={styles.inviteButton}
+                  onPress={() => setInviteModalVisible(true)}>
+                  <Text style={styles.inviteButtonText}>Invite</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {renderServicePositions()}
+
+            <Text style={styles.sectionTitle}>All Members</Text>
+          </>
+        }
+        contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={loadMembers} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No members found</Text>
+          </View>
+        }
+      />
 
       {/* Invite Modal */}
       <GroupInviteModal
-        visible={showInviteModal}
+        visible={inviteModalVisible}
+        onClose={() => setInviteModalVisible(false)}
         groupId={groupId}
-        onClose={() => setShowInviteModal(false)}
+        groupName={groupName}
       />
-
-      {/* Member Detail Modal */}
-      {selectedMember && (
-        <GroupMemberDetailModal
-          visible={showMemberModal}
-          member={selectedMember}
-          isAdmin={isAdmin}
-          isCurrentUser={selectedMember.id === auth().currentUser?.uid}
-          onClose={() => setShowMemberModal(false)}
-          onMakeAdmin={() => handleMakeAdmin(selectedMember.id)}
-          onRemoveAdmin={() => handleRemoveAdmin(selectedMember.id)}
-          onRemoveMember={() => handleRemoveMember(selectedMember.id)}
-        />
-      )}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -268,79 +283,109 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#212121',
-  },
-  backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    fontSize: 24,
-    color: '#2196F3',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F5F5F5',
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#757575',
-  },
-  countContainer: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
   },
   memberCount: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#424242',
+    color: '#616161',
+  },
+  inviteButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  inviteButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   listContainer: {
-    paddingVertical: 8,
+    paddingBottom: 20,
   },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#212121',
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  servicePositionsContainer: {
     backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    marginBottom: 16,
+  },
+  servicePositionItem: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
-  memberAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  positionNameContainer: {
+    width: 100,
+    marginRight: 16,
+  },
+  positionName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#424242',
+  },
+  positionMemberContainer: {
+    flex: 1,
+  },
+  positionMember: {
+    fontSize: 14,
+    color: '#212121',
+  },
+  positionSobriety: {
+    fontSize: 12,
+    color: '#757575',
+    marginTop: 2,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  memberInitialContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
   memberInitial: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#2196F3',
   },
-  memberInfo: {
+  memberDetailsContainer: {
     flex: 1,
+    justifyContent: 'center',
   },
   memberNameRow: {
     flexDirection: 'row',
@@ -349,28 +394,34 @@ const styles = StyleSheet.create({
   },
   memberName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#212121',
     marginRight: 8,
   },
   adminBadge: {
-    backgroundColor: '#FFF9C4',
-    paddingHorizontal: 8,
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 12,
+    borderRadius: 4,
   },
-  adminText: {
-    fontSize: 12,
-    color: '#FFA000',
-    fontWeight: '500',
+  adminBadgeText: {
+    fontSize: 10,
+    color: '#2196F3',
+    fontWeight: '600',
   },
   memberPosition: {
     fontSize: 14,
-    color: '#757575',
+    color: '#616161',
+    marginBottom: 2,
+  },
+  memberSobriety: {
+    fontSize: 14,
+    color: '#2196F3',
   },
   emptyContainer: {
-    padding: 48,
+    padding: 32,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyText: {
     fontSize: 16,

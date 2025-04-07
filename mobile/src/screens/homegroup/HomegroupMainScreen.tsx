@@ -91,7 +91,7 @@ type Props =
   | NativeStackScreenProps<RootStackParamList, 'HomeGroup'>
   | BottomTabScreenProps<MainTabParamList, 'Homegroup'>;
 
-const HomegroupMainScreen = ({route, navigation}: Props) => {
+const HomeGroupScreen = ({route, navigation}: Props) => {
   const {groupId} = route.params;
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'members' | 'literature'>(
@@ -1495,4 +1495,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HomegroupMainScreen;
+export default HomeGroupScreen;
