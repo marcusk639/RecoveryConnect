@@ -115,7 +115,7 @@ const MeetingsScreen: React.FC = () => {
           'Unable to get your location. Please check app permissions.',
         );
         // Still attempt to load meetings with a default location
-        loadMeetings(null);
+        loadMeetings(undefined);
       },
       {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
     );
@@ -156,7 +156,7 @@ const MeetingsScreen: React.FC = () => {
   }, [filterOptions, userLocation]);
 
   // Load meetings from the backend
-  const loadMeetings = async (location: Location | null) => {
+  const loadMeetings = async (location: Location | undefined) => {
     setLoading(true);
     try {
       // Build meeting search input
@@ -233,7 +233,7 @@ const MeetingsScreen: React.FC = () => {
       // Build meeting search input
       const searchInput: MeetingSearchInput = {
         location: userLocation,
-        filters: buildMeetingFilters(),
+        filters: buildMeetingFilters(userLocation),
         criteria: searchQuery ? {name: searchQuery} : undefined,
       };
 
@@ -288,6 +288,7 @@ const MeetingsScreen: React.FC = () => {
           meeting.name.toLowerCase().includes(queryLower) ||
           (meeting.locationName &&
             meeting.locationName.toLowerCase().includes(queryLower)) ||
+          (meeting.name && meeting.name.toLowerCase().includes(queryLower)) ||
           (meeting.street &&
             meeting.street.toLowerCase().includes(queryLower)) ||
           (meeting.city && meeting.city.toLowerCase().includes(queryLower)),
@@ -689,7 +690,14 @@ const MeetingsScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.meetingDetailContent}>
+            <ScrollView
+              contentContainerStyle={{
+                flexGrow: 1,
+                justifyContent: 'flex-start',
+                // alignItems: 'center',
+                width: '100%',
+              }}
+              style={styles.meetingDetailContent}>
               <Text style={styles.detailsName}>{selectedMeeting.name}</Text>
 
               <View style={styles.detailsSection}>
@@ -705,6 +713,7 @@ const MeetingsScreen: React.FC = () => {
                   {selectedMeeting.online
                     ? 'Online Meeting'
                     : selectedMeeting.locationName ||
+                      selectedMeeting.name ||
                       'Location name not specified'}
                 </Text>
                 {!selectedMeeting.online && (
@@ -1111,7 +1120,8 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
   },
   modalScrollView: {
-    flex: 1,
+    // flex: 1,
+    width: '100%',
   },
   detailsModalContent: {
     backgroundColor: '#FFFFFF',
@@ -1259,8 +1269,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   meetingDetailContent: {
-    flex: 1,
     marginBottom: 16,
+    width: '100%',
   },
   detailsName: {
     fontSize: 22,

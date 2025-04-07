@@ -43,13 +43,10 @@ export type MeetingTypeFilters =
   | "all"
   | "Celebrate Recovery";
 export const findMeetings = functions.https.onCall(async (request) => {
-  functions.logger.info("FIND MEETING Request", request);
   const data = request.data as MeetingSearchInput;
-  functions.logger.info("FIND MEETING Data", data);
   const meetingPromises: Promise<Meeting[]>[] = [];
   const start = Date.now();
   try {
-    functions.logger.info("FIND MEETING Filters", data.filters);
     if (data.filters && data.filters.type && data.filters.type !== "all") {
       if (data.filters.type === "AA") {
         const aaMeetings = getAlcoholicsAnonymousMeetings(

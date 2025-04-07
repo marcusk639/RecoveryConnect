@@ -6,7 +6,6 @@ import {
   getCelebrateRecoveryMeetings,
 } from "../api/api";
 import { getDistance } from "./location";
-import tabletojson from "tabletojson";
 import { NAMeetingResponse, NAMeeting } from "../entities/NAMeetingResponse";
 import {
   MeetingSearchCriteria,
