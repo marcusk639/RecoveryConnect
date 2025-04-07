@@ -13,6 +13,7 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 type RootStackParamList = {
   Login: undefined;
   Register: undefined;
+  Meetings: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -49,7 +50,7 @@ const LandingScreen = () => {
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={() => {
-                /* Navigate to meeting finder */
+                navigation.navigate('Meetings');
               }}>
               <Text style={styles.primaryButtonText}>Find a Meeting</Text>
             </TouchableOpacity>

@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions/v2";
+import * as functions from "firebase-functions";
 import {
   getNarcoticsAnoymousMeetings,
   getAll12StepMeetings,
@@ -43,7 +43,9 @@ export type MeetingTypeFilters =
   | "all"
   | "Celebrate Recovery";
 export const findMeetings = functions.https.onCall(async (request) => {
+  functions.logger.info("FIND MEETING Request", request);
   const data = request.data as MeetingSearchInput;
+  functions.logger.info("FIND MEETING Data", data);
   const meetingPromises: Promise<Meeting[]>[] = [];
   const start = Date.now();
   try {

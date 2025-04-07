@@ -177,8 +177,8 @@ export interface MeetingFilters {
 }
 
 export interface MeetingSearchInput {
-  location: Location;
-  filters: MeetingFilters;
+  location?: Location;
+  filters?: MeetingFilters;
   criteria?: MeetingSearchCriteria;
 }
 

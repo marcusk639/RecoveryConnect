@@ -159,16 +159,9 @@ const MeetingsScreen: React.FC = () => {
   const loadMeetings = async (location: Location | null) => {
     setLoading(true);
     try {
-      // If no user location, use a default (this could be a central location for your service area)
-      const searchLocation = location || {
-        lat: 40.7128, // NYC coordinates as fallback
-        lng: -74.006,
-      };
-
       // Build meeting search input
       const searchInput: MeetingSearchInput = {
-        location: searchLocation,
-        filters: buildMeetingFilters(),
+        filters: buildMeetingFilters(location),
       };
 
       // Call the cloud function
@@ -199,7 +192,9 @@ const MeetingsScreen: React.FC = () => {
   };
 
   // Build meeting filters from current filter options
-  const buildMeetingFilters = (): MeetingFilters => {
+  const buildMeetingFilters = (
+    location?: Location,
+  ): MeetingFilters | undefined => {
     const filters: MeetingFilters = {};
 
     if (filterOptions.day) {
@@ -211,9 +206,13 @@ const MeetingsScreen: React.FC = () => {
     }
 
     // Add location and radius to filters
-    if (userLocation) {
-      filters.location = userLocation;
+    if (location) {
+      filters.location = location;
       filters.radius = filterOptions.radius;
+    }
+
+    if (Object.keys(filters).length === 0) {
+      return undefined;
     }
 
     return filters;
