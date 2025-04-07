@@ -1,19 +1,15 @@
 import React from 'react';
 import {createStackNavigator} from '@react-navigation/stack';
 
+// Import types
+import {AuthStackParamList} from '../types/navigation';
+
 // Import auth screens
 import LandingScreen from '../screens/auth/LandingScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPosswordScreen';
 import MeetingsScreen from '../screens/meetings/MeetingScreen';
-
-// Define the param types for auth navigator
-type AuthStackParamList = {
-  Landing: undefined;
-  Login: undefined;
-  Register: undefined;
-  Meetings: undefined;
-};
 
 const Stack = createStackNavigator<AuthStackParamList>();
 
@@ -28,6 +24,7 @@ const AuthNavigator: React.FC = () => {
       <Stack.Screen name="Landing" component={LandingScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="Meetings" component={MeetingsScreen} />
     </Stack.Navigator>
   );

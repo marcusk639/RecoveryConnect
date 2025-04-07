@@ -12,7 +12,20 @@
           "package_name": "com.recoveryconnect"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "421876308052-svrffku08omm18n0bhbs7ivc9jo7ftpi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.recoveryconnect",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "421876308052-s558o9vfqjcj5faj1gfogo2sock2enpd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBuFKlYO0BhGINQ13MUMd-WrlswWb3A2zw"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "421876308052-s558o9vfqjcj5faj1gfogo2sock2enpd.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "421876308052-fnmhdvrf5ujk9vca86g26sun1d91l0te.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.homegroups"
+              }
+            }
+          ]
         }
       }
     }

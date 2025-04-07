@@ -1,16 +1,19 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {Text, View} from 'react-native';
+import {useRoute, RouteProp} from '@react-navigation/native';
 
 // Import types
-import {MainTabParamList} from '../types/navigation';
+import {GroupStackParamList} from '../types/navigation';
+import GroupMembersScreen from '../screens/homegroup/GroupMembersScreen';
+import GroupOverviewScreen from '../screens/homegroup/GroupOverviewScreen';
 
-// Import screens and navigators
-import GroupStackNavigator from './GroupStackNavigator';
-import MeetingsScreen from '../screens/meetings/MeetingScreen';
-import TreasuryScreen from '../screens/treasury/TreasuryScreen';
-import ProfileScreen from '../screens/profile/ProfileScreen';
-import GroupSearchScreen from '../screens/homegroup/GroupSearchScreen';
+// Import screens
+// import GroupOverviewScreen from '../screens/groups/GroupOverviewScreen';
+// import GroupMembersScreen from '../screens/groups/GroupMembersScreen';
+// import GroupAnnouncementsScreen from '../screens/groups/GroupAnnouncementsScreen';
+// import GroupTreasuryScreen from '../screens/groups/GroupTreasuryScreen';
+// import GroupLiteratureScreen from '../screens/groups/GroupLiteratureScreen';
 
 // Tab Icons
 const HomeIcon = ({focused}: {focused: boolean}) => (
@@ -33,7 +36,7 @@ const HomeIcon = ({focused}: {focused: boolean}) => (
   </View>
 );
 
-const MeetingsIcon = ({focused}: {focused: boolean}) => (
+const MembersIcon = ({focused}: {focused: boolean}) => (
   <View
     style={{
       width: 24,
@@ -48,7 +51,27 @@ const MeetingsIcon = ({focused}: {focused: boolean}) => (
         fontSize: 16,
         color: focused ? '#2196F3' : '#9E9E9E',
       }}>
-      📅
+      👥
+    </Text>
+  </View>
+);
+
+const AnnouncementsIcon = ({focused}: {focused: boolean}) => (
+  <View
+    style={{
+      width: 24,
+      height: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: focused ? '#E3F2FD' : 'transparent',
+      borderRadius: 12,
+    }}>
+    <Text
+      style={{
+        fontSize: 16,
+        color: focused ? '#2196F3' : '#9E9E9E',
+      }}>
+      📢
     </Text>
   </View>
 );
@@ -73,7 +96,7 @@ const TreasuryIcon = ({focused}: {focused: boolean}) => (
   </View>
 );
 
-const ProfileIcon = ({focused}: {focused: boolean}) => (
+const LiteratureIcon = ({focused}: {focused: boolean}) => (
   <View
     style={{
       width: 24,
@@ -88,34 +111,22 @@ const ProfileIcon = ({focused}: {focused: boolean}) => (
         fontSize: 16,
         color: focused ? '#2196F3' : '#9E9E9E',
       }}>
-      👤
+      📚
     </Text>
   </View>
 );
 
-const GroupSearchIcon = ({focused}: {focused: boolean}) => (
-  <View
-    style={{
-      width: 24,
-      height: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: focused ? '#E3F2FD' : 'transparent',
-      borderRadius: 12,
-    }}>
-    <Text
-      style={{
-        fontSize: 16,
-        color: focused ? '#2196F3' : '#9E9E9E',
-      }}>
-      🔍
-    </Text>
-  </View>
-);
+const Tab = createBottomTabNavigator<any>();
 
-const Tab = createBottomTabNavigator<MainTabParamList>();
+type GroupTabNavigatorRouteProp = RouteProp<
+  GroupStackParamList,
+  'GroupOverview'
+>;
 
-const MainTabNavigator: React.FC = () => {
+const GroupTabNavigator: React.FC = () => {
+  const route = useRoute<GroupTabNavigatorRouteProp>();
+  const {groupId, groupName} = route.params;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -128,45 +139,55 @@ const MainTabNavigator: React.FC = () => {
           paddingBottom: 8,
           paddingTop: 8,
         },
+        headerTitle: groupName || 'Group Details',
       }}>
       <Tab.Screen
-        name="Home"
-        component={GroupStackNavigator}
+        name="GroupOverview"
+        component={GroupOverviewScreen}
+        initialParams={{groupId}}
         options={{
-          tabBarLabel: 'Home',
+          tabBarLabel: 'Overview',
           tabBarIcon: ({focused}) => <HomeIcon focused={focused} />,
-          headerShown: false,
         }}
       />
       <Tab.Screen
-        name="Meetings"
-        component={MeetingsScreen}
+        name="GroupMembers"
+        component={GroupMembersScreen}
+        initialParams={{groupId}}
         options={{
-          tabBarLabel: 'Meetings',
-          tabBarIcon: ({focused}) => <MeetingsIcon focused={focused} />,
-          headerTitle: 'Meetings',
+          tabBarLabel: 'Members',
+          tabBarIcon: ({focused}) => <MembersIcon focused={focused} />,
         }}
       />
-      <Tab.Screen
-        name="GroupSearch"
-        component={GroupSearchScreen}
+      {/* <Tab.Screen
+        name="GroupAnnouncements"
+        component={GroupAnnouncementsScreen}
+        initialParams={{groupId}}
         options={{
-          tabBarLabel: 'Groups',
-          headerTitle: 'Find Groups',
-          tabBarIcon: ({focused}) => <GroupSearchIcon focused={focused} />,
+          tabBarLabel: 'Announcements',
+          tabBarIcon: ({focused}) => <AnnouncementsIcon focused={focused} />,
         }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
+      /> */}
+      {/* <Tab.Screen
+        name="GroupTreasury"
+        component={GroupTreasuryScreen}
+        initialParams={{groupId}}
         options={{
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({focused}) => <ProfileIcon focused={focused} />,
-          headerTitle: 'Profile',
+          tabBarLabel: 'Treasury',
+          tabBarIcon: ({focused}) => <TreasuryIcon focused={focused} />,
         }}
-      />
+      /> */}
+      {/* <Tab.Screen
+        name="GroupLiterature"
+        component={GroupLiteratureScreen}
+        initialParams={{groupId}}
+        options={{
+          tabBarLabel: 'Literature',
+          tabBarIcon: ({focused}) => <LiteratureIcon focused={focused} />,
+        }}
+      /> */}
     </Tab.Navigator>
   );
 };
 
-export default MainTabNavigator;
+export default GroupTabNavigator;

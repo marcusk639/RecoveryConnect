@@ -13,6 +13,16 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import {MainStackParamList} from '../../types';
+import {useNavigation} from '@react-navigation/native';
+import {StackNavigationProp} from '@react-navigation/stack';
+
+type ProfileStackParamList = {
+  ProfileMain: undefined;
+  ProfileManagement: undefined;
+};
+
+type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList>;
 
 // Types for user profile
 interface UserProfile {
@@ -31,6 +41,7 @@ interface UserProfile {
 }
 
 const ProfileScreen: React.FC = () => {
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
   const [userProfile, setUserProfile] = useState<UserProfile>({
     displayName: '',
     email: '',
@@ -523,6 +534,12 @@ const ProfileScreen: React.FC = () => {
               )
             }>
             <Text style={styles.accountActionText}>Change Password</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.accountAction}
+            onPress={() => navigation.navigate('ProfileManagement')}>
+            <Text style={styles.accountActionText}>Edit Profile</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

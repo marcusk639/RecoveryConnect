@@ -10,8 +10,13 @@ import {
 } from 'react-native';
 import theme from '../../theme';
 
+// Import social media logos
+const googleLogo = require('../../assets/images/google-logo.png');
+const appleLogo = require('../../assets/images/apple-logo.png');
+const facebookLogo = require('../../assets/images/facebook-logo.png');
+
 interface SocialSignInButtonProps {
-  provider: 'google' | 'apple';
+  provider: 'google' | 'apple' | 'facebook';
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
@@ -28,9 +33,7 @@ const SocialSignInButton: React.FC<SocialSignInButtonProps> = ({
   // Google logo component
   const GoogleLogo = () => (
     <Image
-      source={{
-        uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg',
-      }}
+      source={googleLogo}
       style={styles.providerLogo}
       resizeMode="contain"
     />
@@ -39,9 +42,16 @@ const SocialSignInButton: React.FC<SocialSignInButtonProps> = ({
   // Apple logo component
   const AppleLogo = () => (
     <Image
-      source={{
-        uri: 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg',
-      }}
+      source={appleLogo}
+      style={styles.providerLogo}
+      resizeMode="contain"
+    />
+  );
+
+  // Facebook logo component
+  const FacebookLogo = () => (
+    <Image
+      source={facebookLogo}
       style={styles.providerLogo}
       resizeMode="contain"
     />
@@ -53,6 +63,8 @@ const SocialSignInButton: React.FC<SocialSignInButtonProps> = ({
         return <GoogleLogo />;
       case 'apple':
         return <AppleLogo />;
+      case 'facebook':
+        return <FacebookLogo />;
       default:
         return null;
     }
@@ -64,6 +76,8 @@ const SocialSignInButton: React.FC<SocialSignInButtonProps> = ({
         return 'Continue with Google';
       case 'apple':
         return 'Continue with Apple';
+      case 'facebook':
+        return 'Continue with Facebook';
       default:
         return 'Continue with Provider';
     }
