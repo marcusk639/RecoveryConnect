@@ -8,11 +8,27 @@ import {
   Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as dateFns from 'date-fns';
 
 interface TimePickerProps {
   selectedTime: string;
   onSelectTime: (time: string) => void;
 }
+
+// Helper function to standardize time format for comparison
+const standardizeTime = (time: string): string => {
+  try {
+    // Parse the time string into a Date object
+    // Assuming input is in military format (24-hour)
+    const parsedDate = dateFns.parse(time, 'HH:mm', new Date());
+
+    // Format the time consistently in 12-hour format with AM/PM
+    return dateFns.format(parsedDate, 'h:mm a').toUpperCase();
+  } catch (error) {
+    // If parsing fails, return the original time trimmed and uppercase
+    return time.trim().toUpperCase();
+  }
+};
 
 const TimePicker: React.FC<TimePickerProps> = ({
   selectedTime,
@@ -22,7 +38,15 @@ const TimePicker: React.FC<TimePickerProps> = ({
   const [tempTime, setTempTime] = useState(new Date());
 
   // Common time slots for meetings
-  const commonTimes = ['7:00 AM', '12:00 PM', '5:30 PM', '7:00 PM', '8:30 PM'];
+  const commonTimes = [
+    '6:30 AM',
+    '7:00 AM',
+    '12:00 PM',
+    '5:30 PM',
+    '7:00 PM',
+    '8:00 PM',
+    '8:30 PM',
+  ];
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
     const currentDate = selectedDate || tempTime;
@@ -53,13 +77,15 @@ const TimePicker: React.FC<TimePickerProps> = ({
             key={time}
             style={[
               styles.timeButton,
-              selectedTime === time && styles.selectedTimeButton,
+              standardizeTime(selectedTime) === standardizeTime(time) &&
+                styles.selectedTimeButton,
             ]}
             onPress={() => onSelectTime(time)}>
             <Text
               style={[
                 styles.timeText,
-                selectedTime === time && styles.selectedTimeText,
+                standardizeTime(selectedTime) === standardizeTime(time) &&
+                  styles.selectedTimeText,
               ]}>
               {time}
             </Text>

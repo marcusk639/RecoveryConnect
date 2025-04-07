@@ -1,6 +1,7 @@
 // src/types/schema.ts
 
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
+import {Meeting, MeetingType} from '.';
 
 export type Timestamp = FirebaseFirestoreTypes.Timestamp;
 
@@ -51,18 +52,21 @@ export interface UserDocument {
 export interface GroupDocument {
   name: string;
   description: string;
-  meetingDay: string;
-  meetingTime: string;
+  meetings: Meeting[];
   location: string;
-  address: string;
-  format: string;
-  isOnline: boolean;
-  onlineLink?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  lat?: number;
+  lng?: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   foundedDate?: Timestamp;
   memberCount: number;
-  admins: string[]; // Array of admin user IDs
+  admins: string[];
+  placeName?: string;
+  type: MeetingType;
 }
 
 /**
@@ -141,11 +145,11 @@ export interface MeetingDocument {
   day: string;
   time: string;
   address?: string;
-  city: string;
-  state: string;
-  zip: string;
-  lat: number;
-  lng: number;
+  city?: string;
+  state?: string;
+  zip?: string;
+  lat?: number;
+  lng?: number;
   location: string;
   types: string[];
   isOnline: boolean;

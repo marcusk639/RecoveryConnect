@@ -47,27 +47,26 @@ export interface LoginData {
   rememberMe?: boolean;
 }
 
-/**
- * HomeGroup Types
- */
-
 export interface HomeGroup {
   id?: string;
   name: string;
   description: string;
-  meetingDay: string;
-  meetingTime: string;
-  location: string;
+  meetings: Meeting[];
+  location?: string;
   address?: string;
-  format: string;
-  isOnline: boolean;
-  onlineLink?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  lat?: number;
+  lng?: number;
   createdAt: Date;
   updatedAt: Date;
   foundedDate?: string;
   memberCount: number;
   admins: string[];
   isAdmin?: boolean; // For UI state, not stored
+  placeName?: string;
+  type: MeetingType;
 }
 
 export interface GroupMember {
@@ -124,31 +123,50 @@ export type MeetingType =
   | 'Celebrate Recovery'
   | 'Custom';
 
+const exampleMeeting: Meeting = {
+  state: 'TX',
+  locationName: undefined,
+  zip: '78703',
+  onlineNotes: undefined,
+  link: undefined,
+  time: '10:00',
+  day: 'saturday',
+  street: '3201 Windsor Road',
+  type: 'AA',
+  lat: 30.296411,
+  city: 'Austin',
+  lng: -97.7688783,
+  types: ['12 Steps & 12 Traditions', 'Closed', 'English'],
+  online: false,
+  name: 'Benevolent Manipulators - IN-PERSON',
+};
+
 export interface Meeting {
   id?: string;
   name: string;
+  type: MeetingType;
+  day: string;
   time: string;
-  street: string;
+  address?: string;
   city?: string;
   state?: string;
+  street?: string;
   zip?: string;
-  types?: string[];
   lat?: number;
   lng?: number;
-  locationName?: string;
-  type: MeetingType;
-  Location?: string[]; // specific to NA meetings
-  day: string;
-  verified?: boolean;
-  addedBy?: string;
-  daysAndTimes?: DaysAndTimes;
-  forced?: boolean;
+  location?: string;
+  types: string[];
   online?: boolean;
   link?: string;
   onlineNotes?: string;
+  verified?: boolean;
+  addedBy?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  format?: string;
+  locationName?: string;
+  groupId?: string; // Optional reference to associated group
   isFavorite?: boolean; // For UI state, not stored
-  groupId?: string;
-  groupName?: string;
 }
 
 export interface Location {
@@ -221,7 +239,7 @@ export type MainStackParamList = {
   Announcements: {groupId: string; groupName: string};
   Events: {groupId: string; groupName: string};
   Members: {groupId: string; groupName: string};
-  CreateGroup: undefined;
+  CreateGroup: {meeting?: Meeting};
   GroupDetails: {groupId: string};
   GroupMembers: {groupId: string; groupName: string};
 };

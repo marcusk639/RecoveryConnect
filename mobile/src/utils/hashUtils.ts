@@ -27,7 +27,7 @@ export function generateMeetingHash(meeting: Meeting): string {
     meeting.city || '',
     meeting.state || '',
     meeting.zip || '',
-    meeting.locationName || '',
+    meeting.location || '',
     meeting.online ? 'online' : 'in-person',
     meeting.link || '',
     meeting.lat || '',

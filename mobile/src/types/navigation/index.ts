@@ -1,4 +1,5 @@
 // src/types/navigation/index.ts
+import {Meeting} from '../index';
 
 // Group Stack Navigation Params
 export type GroupStackParamList = {
@@ -12,6 +13,9 @@ export type GroupStackParamList = {
   GroupAnnouncementDetails: {groupId: string; announcementId: string};
   GroupEventDetails: {groupId: string; eventId: string};
   GroupBusinessMeeting: {groupId: string; meetingId?: string};
+  GroupEditDetails: {groupId: string; groupName: string};
+  GroupDetails: {groupId: string};
+  CreateGroup: {meeting?: Meeting};
 };
 
 // Main Tab Navigation Params

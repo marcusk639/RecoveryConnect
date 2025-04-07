@@ -21,6 +21,13 @@ import {PERMISSIONS, request, RESULTS} from 'react-native-permissions';
 // For security, use API key restrictions in Google Cloud Console
 const GOOGLE_MAPS_API_KEY = 'AIzaSyAyjHVwL4AcgLGdo1O7mmRFJLLHgpNOC5A';
 
+export interface LocationProps {
+  address: string;
+  latitude: number;
+  longitude: number;
+  placeName?: string;
+}
+
 interface LocationPickerProps {
   initialAddress?: string;
   initialLocation?: {
@@ -32,8 +39,12 @@ interface LocationPickerProps {
     latitude: number;
     longitude: number;
     placeName?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
   }) => void;
   error?: string;
+  label?: string;
 }
 
 const LocationPicker: React.FC<LocationPickerProps> = ({
@@ -41,6 +52,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
   initialLocation,
   onLocationSelect,
   error,
+  label = 'Location',
 }) => {
   const [address, setAddress] = useState<string>(initialAddress);
   const [location, setLocation] = useState(initialLocation || null);
@@ -250,7 +262,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Meeting Location</Text>
+      <Text style={styles.label}>{label}</Text>
 
       {/* Google Places Autocomplete */}
       <GooglePlacesAutocomplete
@@ -320,7 +332,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
               }}
               draggable
               onDragEnd={handleMarkerDrag}
-              title={placeName || 'Meeting Location'}
+              title={placeName || 'Location'}
               description={address}
             />
           </MapView>

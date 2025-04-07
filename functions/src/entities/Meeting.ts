@@ -1,4 +1,4 @@
-import {Location} from "./GeocodeResponse";
+import { Location } from "./GeocodeResponse";
 
 export class Meeting {
   name = "";
@@ -17,6 +17,7 @@ export class Meeting {
   online?: boolean;
   link?: string;
   onlineNotes?: string;
+  format: string;
 }
 
 export type MeetingType =

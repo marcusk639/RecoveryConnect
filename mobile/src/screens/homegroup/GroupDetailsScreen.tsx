@@ -15,15 +15,15 @@ import {
 } from 'react-native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp} from '@react-navigation/native';
-import {MainStackParamList} from '../../types';
+import {GroupStackParamList} from '../../types/navigation';
 import {GroupModel} from '../../models/GroupModel';
 import Button from '../../components/common/Button';
 import GroupInviteModal from '../../components/groups/GroupInviteModal';
 import {auth} from '../../services/firebase/config';
 
 type GroupDetailsScreenProps = {
-  navigation: StackNavigationProp<MainStackParamList, 'GroupDetails'>;
-  route: RouteProp<MainStackParamList, 'GroupDetails'>;
+  navigation: StackNavigationProp<GroupStackParamList, 'GroupDetails'>;
+  route: RouteProp<GroupStackParamList, 'GroupDetails'>;
 };
 
 const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
@@ -57,9 +57,9 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
           setMembers(membersList);
 
           // Check if current user is admin
-          setIsAdmin(
-            groupData.admins?.includes(auth.currentUser?.uid || '') || false,
-          );
+          const isUserAdmin =
+            groupData.admins?.includes(auth.currentUser?.uid || '') || false;
+          setIsAdmin(isUserAdmin);
 
           // Check if current user is a member
           setIsMember(
@@ -77,7 +77,7 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
     };
 
     loadGroupData();
-  }, [groupId]);
+  }, [groupId, navigation]);
 
   // Join group
   const handleJoinGroup = async () => {
@@ -95,6 +95,7 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
       setMembers(updatedMembers);
 
       Alert.alert('Success', 'You have joined the group');
+      navigation.navigate('GroupOverview', {groupId, groupName: group.name});
     } catch (error) {
       console.error('Error joining group:', error);
       Alert.alert('Error', 'Failed to join group. Please try again.');
@@ -104,7 +105,7 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
   };
 
   // Leave group
-  const handleLeaveGroup = () => {
+  const handleLeaveGroup = async () => {
     Alert.alert('Leave Group', 'Are you sure you want to leave this group?', [
       {
         text: 'Cancel',
@@ -115,6 +116,8 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
         style: 'destructive',
         onPress: async () => {
           try {
+            setJoiningGroup(true);
+
             // Remove current user from group members
             await GroupModel.removeMember(groupId, auth.currentUser?.uid || '');
 
@@ -126,12 +129,15 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
             setMembers(updatedMembers);
 
             Alert.alert('Success', 'You have left the group');
-
-            // If the user was an admin, update isAdmin state
-            setIsAdmin(false);
+            navigation.navigate('GroupOverview', {
+              groupId,
+              groupName: group.name,
+            });
           } catch (error) {
             console.error('Error leaving group:', error);
             Alert.alert('Error', 'Failed to leave group. Please try again.');
+          } finally {
+            setJoiningGroup(false);
           }
         },
       },
@@ -297,7 +303,12 @@ const GroupDetailsScreen: React.FC<GroupDetailsScreenProps> = ({
             <>
               <Button
                 title="Go to Group Home"
-                onPress={() => navigation.navigate('HomeGroup', {groupId})}
+                onPress={() =>
+                  navigation.navigate('GroupOverview', {
+                    groupId,
+                    groupName: group.name,
+                  })
+                }
                 fullWidth
                 style={styles.actionButton}
               />
@@ -553,6 +564,14 @@ const styles = StyleSheet.create({
   },
   leaveButtonText: {
     color: '#F44336',
+  },
+  editButton: {
+    marginRight: 15,
+  },
+  editButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

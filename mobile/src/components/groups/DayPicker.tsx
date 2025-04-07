@@ -1,5 +1,6 @@
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import upperFirst from 'lodash/upperFirst';
 
 interface DayPickerProps {
   selectedDay: string;
@@ -15,7 +16,7 @@ const DayPicker: React.FC<DayPickerProps> = ({selectedDay, onSelectDay}) => {
     'Thursday',
     'Friday',
     'Saturday',
-  ];
+  ].map(day => day.toLowerCase());
 
   return (
     <View style={styles.container}>
@@ -32,7 +33,7 @@ const DayPicker: React.FC<DayPickerProps> = ({selectedDay, onSelectDay}) => {
               styles.dayText,
               selectedDay === day && styles.selectedDayText,
             ]}>
-            {day.substring(0, 3)}
+            {upperFirst(day.substring(0, 3))}
           </Text>
         </TouchableOpacity>
       ))}
