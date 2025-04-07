@@ -18,11 +18,13 @@ import {
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import functions from '@react-native-firebase/functions';
+import auth from '@react-native-firebase/auth';
 import Geolocation from '@react-native-community/geolocation';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import Slider from '@react-native-community/slider';
 import * as hashUtils from '../../utils/hashUtils';
+import {GroupModel} from '../../models/GroupModel';
 
 // Types for meetings data
 import {
@@ -33,7 +35,6 @@ import {
   MeetingFilters,
   DaysAndTimes,
 } from '../../types';
-import {auth} from '../../services/firebase/config';
 
 // Filter options type
 interface FilterOptions {
@@ -273,11 +274,11 @@ const MeetingsScreen: React.FC = () => {
 
     // Apply additional client-side filtering for online/in-person if needed
     if (!filterOptions.showOnline) {
-      filtered = filtered.filter(meeting => !meeting.online);
+      filtered = filtered.filter(meeting => !meeting.isOnline);
     }
 
     if (!filterOptions.showInPerson) {
-      filtered = filtered.filter(meeting => meeting.online);
+      filtered = filtered.filter(meeting => meeting.isOnline);
     }
 
     // Additional local text search if needed
@@ -286,11 +287,10 @@ const MeetingsScreen: React.FC = () => {
       filtered = filtered.filter(
         meeting =>
           meeting.name.toLowerCase().includes(queryLower) ||
-          (meeting.locationName &&
-            meeting.locationName.toLowerCase().includes(queryLower)) ||
-          (meeting.name && meeting.name.toLowerCase().includes(queryLower)) ||
-          (meeting.street &&
-            meeting.street.toLowerCase().includes(queryLower)) ||
+          (meeting.location &&
+            meeting.location.toLowerCase().includes(queryLower)) ||
+          (meeting.address &&
+            meeting.address.toLowerCase().includes(queryLower)) ||
           (meeting.city && meeting.city.toLowerCase().includes(queryLower)),
       );
     }
@@ -321,62 +321,41 @@ const MeetingsScreen: React.FC = () => {
     setMeetingDetailsVisible(true);
   };
 
-  // Toggle favorite status for a meeting
+  // Toggle favorite status
   const toggleFavorite = async (meetingId: string) => {
     try {
-      const currentUser = auth.currentUser;
-
-      if (!currentUser) {
-        Alert.alert(
-          'Authentication Required',
-          'Please log in to save favorite meetings',
-        );
-        return;
-      }
+      const currentUser = auth().currentUser;
+      if (!currentUser) return;
 
       const userRef = firestore().collection('users').doc(currentUser.uid);
       const userDoc = await userRef.get();
+      const userData = userDoc.data();
 
-      if (userDoc.exists) {
-        const userData = userDoc.data();
-        const favorites = userData?.favoriteMeetings || [];
+      if (!userData) return;
 
-        if (favorites.includes(meetingId)) {
-          // Remove from favorites
-          await userRef.update({
-            favoriteMeetings: firestore.FieldValue.arrayRemove(meetingId),
-          });
-        } else {
-          // Add to favorites
-          await userRef.update({
-            favoriteMeetings: firestore.FieldValue.arrayUnion(meetingId),
-          });
-        }
+      const favoriteMeetings = userData.favoriteMeetings || [];
+      const isFavorite = favoriteMeetings.includes(meetingId);
 
-        // Update local state
-        setMeetings(
-          meetings.map(meeting =>
-            meeting.id === meetingId
-              ? {...meeting, isFavorite: !meeting.isFavorite}
-              : meeting,
-          ),
-        );
-
-        // Update filtered meetings too
-        setFilteredMeetings(
-          filteredMeetings.map(meeting =>
-            meeting.id === meetingId
-              ? {...meeting, isFavorite: !meeting.isFavorite}
-              : meeting,
-          ),
-        );
+      if (isFavorite) {
+        await userRef.update({
+          favoriteMeetings: firestore.FieldValue.arrayRemove(meetingId),
+        });
+      } else {
+        await userRef.update({
+          favoriteMeetings: firestore.FieldValue.arrayUnion(meetingId),
+        });
       }
+
+      // Update local state
+      setMeetings(prevMeetings =>
+        prevMeetings.map(meeting =>
+          meeting.id === meetingId
+            ? {...meeting, isFavorite: !isFavorite}
+            : meeting,
+        ),
+      );
     } catch (error) {
       console.error('Error toggling favorite:', error);
-      Alert.alert(
-        'Error',
-        'Failed to update favorite status. Please try again.',
-      );
     }
   };
 
@@ -392,12 +371,12 @@ const MeetingsScreen: React.FC = () => {
 
   // Format address for display
   const formatAddress = (meeting: Meeting): string => {
-    if (meeting.online) {
+    if (meeting.isOnline) {
       return 'Online Meeting';
     }
 
-    const parts = [];
-    if (meeting.street) parts.push(meeting.street);
+    const parts: string[] = [];
+    if (meeting.address) parts.push(meeting.address);
     if (meeting.city) parts.push(meeting.city);
     if (meeting.state) parts.push(meeting.state);
     if (meeting.zip) parts.push(meeting.zip);
@@ -454,7 +433,7 @@ const MeetingsScreen: React.FC = () => {
           <View style={styles.formatTag}>
             <Text style={styles.formatTagText}>{item.type}</Text>
           </View>
-          {item.online && (
+          {item.isOnline && (
             <View style={[styles.formatTag, styles.onlineTag]}>
               <Text style={styles.formatTagText}>Online</Text>
             </View>
@@ -710,18 +689,18 @@ const MeetingsScreen: React.FC = () => {
               <View style={styles.detailsSection}>
                 <Text style={styles.detailsLabel}>Location:</Text>
                 <Text style={styles.detailsText}>
-                  {selectedMeeting.online
+                  {selectedMeeting.isOnline
                     ? 'Online Meeting'
-                    : selectedMeeting.locationName ||
+                    : selectedMeeting.location ||
                       selectedMeeting.name ||
                       'Location name not specified'}
                 </Text>
-                {!selectedMeeting.online && (
+                {!selectedMeeting.isOnline && (
                   <Text style={styles.detailsSubtext}>
                     {formatAddress(selectedMeeting)}
                   </Text>
                 )}
-                {selectedMeeting.online && selectedMeeting.link && (
+                {selectedMeeting.isOnline && selectedMeeting.link && (
                   <TouchableOpacity
                     style={styles.linkButton}
                     onPress={() => {
@@ -731,7 +710,7 @@ const MeetingsScreen: React.FC = () => {
                     <Text style={styles.linkButtonText}>Join Meeting</Text>
                   </TouchableOpacity>
                 )}
-                {selectedMeeting.online && selectedMeeting.onlineNotes && (
+                {selectedMeeting.isOnline && selectedMeeting.onlineNotes && (
                   <Text style={styles.detailsNotes}>
                     {selectedMeeting.onlineNotes}
                   </Text>
@@ -767,6 +746,26 @@ const MeetingsScreen: React.FC = () => {
                 </View>
               )}
 
+              {!selectedMeeting.groupId && (
+                <View style={styles.detailsSection}>
+                  <TouchableOpacity
+                    style={styles.createGroupButton}
+                    onPress={() => {
+                      navigation.navigate('Home', {
+                        screen: 'CreateGroup',
+                        params: {
+                          meeting: selectedMeeting,
+                        },
+                      });
+                      setMeetingDetailsVisible(false);
+                    }}>
+                    <Text style={styles.createGroupButtonText}>
+                      Create Group
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <View style={styles.detailsSection}>
                 <TouchableOpacity
                   style={styles.directionsButton}
@@ -792,14 +791,14 @@ const MeetingsScreen: React.FC = () => {
                   disabled={
                     !selectedMeeting.lat ||
                     !selectedMeeting.lng ||
-                    selectedMeeting.online
+                    selectedMeeting.isOnline
                   }>
                   <Text
                     style={[
                       styles.directionsButtonText,
                       (!selectedMeeting.lat ||
                         !selectedMeeting.lng ||
-                        selectedMeeting.online) &&
+                        selectedMeeting.isOnline) &&
                         styles.disabledButtonText,
                     ]}>
                     Get Directions
@@ -1366,6 +1365,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#2196F3',
+  },
+  createGroupButton: {
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  createGroupButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });
 

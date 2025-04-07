@@ -21,6 +21,13 @@ import {PERMISSIONS, request, RESULTS} from 'react-native-permissions';
 // For security, use API key restrictions in Google Cloud Console
 const GOOGLE_MAPS_API_KEY = 'AIzaSyAyjHVwL4AcgLGdo1O7mmRFJLLHgpNOC5A';
 
+export interface LocationProps {
+  address: string;
+  latitude: number;
+  longitude: number;
+  placeName?: string;
+}
+
 interface LocationPickerProps {
   initialAddress?: string;
   initialLocation?: {
@@ -32,6 +39,9 @@ interface LocationPickerProps {
     latitude: number;
     longitude: number;
     placeName?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
   }) => void;
   error?: string;
   label?: string;

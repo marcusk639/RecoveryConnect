@@ -7,6 +7,15 @@ export interface Meeting {
   time: string;
   duration: number;
   location: string;
+  lat: number;
+  lng: number;
+  placeName: string;
+  format: string;
+  type: string;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
   address: string | null;
   isOnline: boolean;
   onlineLink: string | null;

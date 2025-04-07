@@ -14,7 +14,7 @@ import {
   TextInput,
 } from 'react-native';
 import {StackNavigationProp} from '@react-navigation/stack';
-import {RouteProp, useNavigation, useRoute} from '@react-navigation/native';
+import {RouteProp} from '@react-navigation/native';
 import {MainStackParamList, Meeting, MeetingType, HomeGroup} from '../../types';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -27,15 +27,25 @@ import DatePicker from '../../components/common/DatePicker';
 import {generateMeetingHash} from '../../utils/hashUtils';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import {useNavigation, useRoute} from '@react-navigation/native';
 import {GroupStackParamList} from '../../types/navigation';
+
+type CreateGroupScreenProps = {
+  navigation: StackNavigationProp<GroupStackParamList, 'CreateGroup'>;
+  route: {
+    params?: {
+      meeting?: Meeting;
+    };
+  };
+};
 
 // Interface for meeting form data
 type MeetingFormData = Meeting;
 
-const CreateGroupScreen: React.FC = () => {
-  const navigation =
-    useNavigation<StackNavigationProp<GroupStackParamList, 'CreateGroup'>>();
-  const route = useRoute<RouteProp<GroupStackParamList, 'CreateGroup'>>();
+const CreateGroupScreen: React.FC<CreateGroupScreenProps> = ({
+  navigation,
+  route,
+}) => {
   const initialMeeting = route.params?.meeting;
 
   // Step management
@@ -201,13 +211,13 @@ const CreateGroupScreen: React.FC = () => {
       day: '',
       time: '',
       format: 'Open Discussion',
-      isOnline: false,
+      online: false,
       location: '',
       address: '',
       city: '',
       state: '',
       zip: '',
-      onlineLink: '',
+      link: '',
       type: 'AA' as MeetingType,
       types: [],
     };
@@ -325,17 +335,12 @@ const CreateGroupScreen: React.FC = () => {
       const group = await GroupModel.create(groupData);
 
       // Update all meetings with the new group ID
-      const batch = firestore().batch();
       for (const meeting of meetings) {
-        const meetingRef = firestore().collection('meetings').doc(meeting.id);
-        batch.set(meetingRef, {
+        await firestore().collection('meetings').doc(meeting.id).set({
           groupId: group.id,
           updatedAt: firestore.FieldValue.serverTimestamp(),
-          ...meeting,
         });
       }
-
-      await batch.commit();
 
       navigation.navigate('GroupMembers', {
         groupId: group.id!,
@@ -540,13 +545,6 @@ const CreateGroupScreen: React.FC = () => {
     );
   };
 
-  const getMeetingAddress = (meeting: Meeting) => {
-    if (meeting.online) {
-      return meeting.link;
-    }
-    return `${meeting.address}, ${meeting.city}, ${meeting.state} ${meeting.zip}`;
-  };
-
   // Render step 3 (location)
   const renderStep3 = () => {
     const currentMeeting = meetings[currentMeetingIndex];
@@ -629,20 +627,12 @@ const CreateGroupScreen: React.FC = () => {
                 placeholder="Enter location name"
               />
 
-              <LocationPicker
+              <Input
                 label="Address"
-                initialAddress={getMeetingAddress(currentMeeting)}
-                initialLocation={
-                  currentMeeting.lat && currentMeeting.lng
-                    ? {
-                        latitude: currentMeeting.lat,
-                        longitude: currentMeeting.lng,
-                      }
-                    : undefined
-                }
-                onLocationSelect={location =>
-                  updateCurrentMeeting('address', location.address)
-                }
+                value={currentMeeting.address}
+                onChangeText={value => updateCurrentMeeting('address', value)}
+                error={errors.address}
+                placeholder="Enter address"
               />
 
               <Input
@@ -714,32 +704,20 @@ const CreateGroupScreen: React.FC = () => {
           {renderStepContent()}
         </ScrollView>
 
-        <View
-          style={{
-            ...styles.footer,
-            flexDirection: 'row',
-            justifyContent: 'space-evenly',
-            alignItems: 'center',
-          }}>
+        <View style={styles.footer}>
+          <Button
+            title={currentStep === 3 ? 'Create Group' : 'Next'}
+            onPress={nextStep}
+            disabled={loading}
+          />
           {currentStep > 1 && (
             <Button
-              style={{height: 50, width: '48%'}}
-              size="medium"
-              fullWidth={false}
               title="Back"
               onPress={prevStep}
               variant="secondary"
               disabled={loading}
             />
           )}
-          <Button
-            style={{height: 50, width: '48%'}}
-            title={currentStep === 3 ? 'Create Group' : 'Next'}
-            onPress={nextStep}
-            disabled={loading}
-            size="medium"
-            fullWidth={false}
-          />
         </View>
 
         {loading && (
@@ -827,7 +805,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    flex: 1,
   },
   stepContainer: {
     backgroundColor: '#FFFFFF',

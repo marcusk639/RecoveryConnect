@@ -14,6 +14,7 @@ import GroupAnnouncementsScreen from '../screens/homegroup/GroupAnnouncementsScr
 import GroupAnnouncementDetailsScreen from '../screens/homegroup/GroupAnnouncementDetailsScreen';
 import GroupTreasuryScreen from '../screens/homegroup/GroupTreasuryScreen';
 import GroupEditDetailsScreen from '../screens/homegroup/GroupEditDetailsScreen';
+import CreateGroupScreen from '../screens/homegroup/CreateGroupScreen';
 // import GroupEventDetailsScreen from '../screens/groups/GroupEventDetailsScreen';
 // import GroupBusinessMeetingScreen from '../screens/groups/GroupBusinessMeetingScreen';
 
@@ -102,6 +103,13 @@ const GroupStackNavigator: React.FC = () => {
         component={GroupEditDetailsScreen}
         options={{
           title: 'Edit Group Details',
+        }}
+      />
+      <Stack.Screen
+        name="CreateGroup"
+        component={CreateGroupScreen}
+        options={{
+          title: 'Create Group',
         }}
       />
     </Stack.Navigator>

@@ -1,4 +1,4 @@
-import {HomeGroup, GroupMember} from '../types';
+import {HomeGroup, GroupMember, Meeting} from '../types';
 import {
   FirestoreDocument,
   GroupDocument,
@@ -6,6 +6,7 @@ import {
 } from '../types/schema';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import {generateMeetingHash} from '../utils/hashUtils';
 
 /**
  * Group model for managing group data
@@ -18,15 +19,17 @@ export class GroupModel {
     const data = doc.data();
     return {
       id: doc.id,
+      type: data.type,
       name: data.name,
       description: data.description,
-      meetingDay: data.meetingDay,
-      meetingTime: data.meetingTime,
-      location: data.location,
+      meetings: data.meetings || [],
+      location: data.location || '',
       address: data.address,
-      format: data.format,
-      isOnline: data.isOnline,
-      onlineLink: data.onlineLink,
+      city: data.city,
+      state: data.state,
+      zip: data.zip,
+      lat: data.lat,
+      lng: data.lng,
       createdAt: data.createdAt.toDate(),
       updatedAt: data.updatedAt.toDate(),
       foundedDate: data.foundedDate
@@ -34,6 +37,7 @@ export class GroupModel {
         : undefined,
       memberCount: data.memberCount,
       admins: data.admins,
+      placeName: data.placeName,
     };
   }
 
@@ -46,16 +50,7 @@ export class GroupModel {
     if (group.name !== undefined) firestoreData.name = group.name;
     if (group.description !== undefined)
       firestoreData.description = group.description;
-    if (group.meetingDay !== undefined)
-      firestoreData.meetingDay = group.meetingDay;
-    if (group.meetingTime !== undefined)
-      firestoreData.meetingTime = group.meetingTime;
-    if (group.location !== undefined) firestoreData.location = group.location;
-    if (group.address !== undefined) firestoreData.address = group.address;
-    if (group.format !== undefined) firestoreData.format = group.format;
-    if (group.isOnline !== undefined) firestoreData.isOnline = group.isOnline;
-    if (group.onlineLink !== undefined)
-      firestoreData.onlineLink = group.onlineLink;
+    if (group.meetings !== undefined) firestoreData.meetings = group.meetings;
     if (group.foundedDate !== undefined) {
       firestoreData.foundedDate = group.foundedDate
         ? firestore.Timestamp.fromDate(new Date(group.foundedDate))
@@ -111,15 +106,13 @@ export class GroupModel {
         id: '',
         name: '',
         description: '',
-        meetingDay: '',
-        meetingTime: '',
+        meetings: [],
         location: '',
-        format: '',
-        isOnline: false,
         createdAt: now,
         updatedAt: now,
         memberCount: 1,
         admins: [currentUser.uid],
+        type: 'AA',
       };
 
       const newGroup = {...defaultGroup, ...groupData};
@@ -470,8 +463,7 @@ export class GroupModel {
     groupInfo: {
       name?: string;
       description?: string;
-      meetingDay?: string;
-      meetingTime?: string;
+      meetings?: Meeting[];
       format?: string;
       isOnline?: boolean;
       location?: string;
@@ -831,6 +823,106 @@ export class GroupModel {
       return milestones.sort((a, b) => a.date.getTime() - b.date.getTime());
     } catch (error) {
       console.error('Error getting group milestones:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a group from a meeting
+   */
+  static async createFromMeeting(meeting: Meeting): Promise<HomeGroup> {
+    try {
+      const currentUser = auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      // Check if meeting already has a group
+      if (meeting.groupId) {
+        throw new Error('This meeting already has an associated group');
+      }
+
+      const now = new Date();
+      const groupMeeting: Meeting = {
+        ...meeting,
+        id: meeting.id || generateMeetingHash(meeting),
+      };
+      const groupData: Partial<HomeGroup> = {
+        name: `${meeting.name} Group`,
+        description: `A recovery group that meets at ${meeting.name}`,
+        meetings: [groupMeeting],
+        location: meeting.location,
+        address: meeting.address,
+        lat: meeting.lat,
+        lng: meeting.lng,
+        createdAt: now,
+        updatedAt: now,
+        memberCount: 1,
+        admins: [currentUser.uid],
+      };
+
+      const group = await GroupModel.create(groupData);
+
+      // Update the meeting with the new group ID
+      await firestore().collection('meetings').doc(meeting.id).set({
+        groupId: group.id,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      return group;
+    } catch (error) {
+      console.error('Error creating group from meeting:', error);
+      throw error;
+    }
+  }
+
+  static async updateMeetingGroupId(
+    meetingId: string,
+    groupId: string,
+  ): Promise<void> {
+    try {
+      const meetingRef = firestore().collection('meetings').doc(meetingId);
+      await meetingRef.update({
+        groupId: groupId,
+      });
+    } catch (error) {
+      console.error('Error updating meeting group ID:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add a meeting to an existing group
+   */
+  static async addMeetingToGroup(
+    groupId: string,
+    meeting: Meeting,
+  ): Promise<void> {
+    try {
+      const groupRef = firestore().collection('groups').doc(groupId);
+      const groupDoc = await groupRef.get();
+
+      if (!groupDoc.exists) {
+        throw new Error('Group not found');
+      }
+
+      const groupData = groupDoc.data();
+      const meetings = groupData?.meetings || [];
+
+      // Add the new meeting to the meetings array
+      meetings.push(meeting);
+
+      // Update the group document
+      await groupRef.update({
+        meetings: meetings,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Update the meeting with the group ID
+      await this.updateMeetingGroupId(meeting.id!, groupId);
+    } catch (error) {
+      console.error('Error adding meeting to group:', error);
       throw error;
     }
   }
