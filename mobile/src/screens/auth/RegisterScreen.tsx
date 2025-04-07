@@ -367,13 +367,13 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
         celebrations.
       </Text>
 
-      {showDatePicker && (
-        <DatePicker
-          value={recoveryDate ? new Date(recoveryDate) : new Date()}
-          onChange={handleDateSelect}
-          maximumDate={new Date()} // Can't select future dates
-        />
-      )}
+      <DatePicker
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        onSelect={handleDateSelect}
+        initialDate={recoveryDate ? new Date(recoveryDate) : new Date()}
+        maxDate={new Date()} // Can't select future dates
+      />
 
       <Text style={styles.sectionTitle}>Privacy Settings</Text>
 

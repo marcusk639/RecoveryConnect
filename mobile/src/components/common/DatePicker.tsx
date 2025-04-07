@@ -1,177 +1,214 @@
+// src/components/common/DatePicker.tsx
+
 import React, {useState} from 'react';
 import {
-  Platform,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
   View,
+  Text,
   Modal,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import theme from '../../theme';
 
 interface DatePickerProps {
-  value: Date;
-  onChange: (date: Date) => void;
-  label?: string;
-  placeholder?: string;
-  disabled?: boolean;
-  minimumDate?: Date;
-  maximumDate?: Date;
-  mode?: 'date' | 'time' | 'datetime';
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (date: Date | undefined) => void;
+  initialDate?: Date;
+  maxDate?: Date;
+  minDate?: Date;
+  title?: string;
 }
 
 const DatePicker: React.FC<DatePickerProps> = ({
-  value,
-  onChange,
-  label,
-  placeholder = 'Select date',
-  disabled = false,
-  minimumDate,
-  maximumDate,
-  mode = 'date',
+  visible,
+  onClose,
+  onSelect,
+  initialDate,
+  maxDate,
+  minDate,
+  title = 'Select Date',
 }) => {
-  const [showPicker, setShowPicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(
+    initialDate || new Date(),
+  );
 
-  const handlePress = () => {
-    if (disabled) return;
-    setShowPicker(true);
-  };
+  const handleDateChange = (_: any, date?: Date) => {
+    if (date) {
+      setSelectedDate(date);
 
-  const handleChange = (event: any, selectedDate?: Date) => {
-    setShowPicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      onChange(selectedDate);
+      // On Android, the picker is dismissed automatically after selection
+      if (Platform.OS === 'android') {
+        onSelect(date);
+      }
+    } else {
+      // If date is undefined (user canceled on Android)
+      if (Platform.OS === 'android') {
+        onClose();
+      }
     }
   };
 
-  const formatDate = (date: Date) => {
-    if (!date) return placeholder;
-    return date.toLocaleDateString();
+  const handleConfirm = () => {
+    onSelect(selectedDate);
+  };
+
+  const handleCancel = () => {
+    onClose();
+  };
+
+  const formatDate = (date: Date): string => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
   };
 
   return (
-    <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      <TouchableOpacity
-        style={[styles.input, disabled && styles.disabled]}
-        onPress={handlePress}
-        disabled={disabled}>
-        <Text style={[styles.text, !value && styles.placeholder]}>
-          {formatDate(value)}
-        </Text>
-      </TouchableOpacity>
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={handleCancel} style={styles.closeButton}>
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
 
-      {showPicker &&
-        (Platform.OS === 'ios' ? (
-          <Modal
-            visible={showPicker}
-            transparent
-            animationType="slide"
-            onRequestClose={() => setShowPicker(false)}>
-            <View style={styles.modalContainer}>
-              <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                  <TouchableOpacity
-                    onPress={() => setShowPicker(false)}
-                    style={styles.modalButton}>
-                    <Text style={styles.modalButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setShowPicker(false)}
-                    style={styles.modalButton}>
-                    <Text
-                      style={[
-                        styles.modalButtonText,
-                        styles.modalButtonTextDone,
-                      ]}>
-                      Done
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  value={value}
-                  mode={mode}
-                  display="spinner"
-                  onChange={handleChange}
-                  minimumDate={minimumDate}
-                  maximumDate={maximumDate}
-                  style={styles.picker}
-                />
+          {/* Display selected date more prominently for better UX */}
+          <View style={styles.selectedDateContainer}>
+            <Text style={styles.selectedDateText}>
+              {formatDate(selectedDate)}
+            </Text>
+          </View>
+
+          {/* DatePicker - Platform specific implementation */}
+          {Platform.OS === 'ios' ? (
+            <View style={styles.datePickerContainer}>
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="inline"
+                onChange={handleDateChange}
+                maximumDate={maxDate}
+                minimumDate={minDate}
+              />
+
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={handleCancel}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, styles.confirmButton]}
+                  onPress={handleConfirm}>
+                  <Text style={styles.confirmButtonText}>Confirm</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          </Modal>
-        ) : (
-          <DateTimePicker
-            value={value}
-            mode={mode}
-            display="default"
-            onChange={handleChange}
-            minimumDate={minimumDate}
-            maximumDate={maximumDate}
-          />
-        ))}
-    </View>
+          ) : (
+            // Android DatePicker
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+              maximumDate={maxDate}
+              minimumDate={minDate}
+            />
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginVertical: theme.spacing.sm,
-  },
-  label: {
-    fontSize: theme.fontSizes.sm,
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing.xs,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.colors.grey[300],
-    borderRadius: theme.roundness,
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.background.paper,
-  },
-  disabled: {
-    backgroundColor: theme.colors.grey[100],
-    opacity: 0.8,
-  },
-  text: {
-    fontSize: theme.fontSizes.md,
-    color: theme.colors.text.primary,
-  },
-  placeholder: {
-    color: theme.colors.text.secondary,
-  },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    backgroundColor: theme.colors.background.paper,
-    borderTopLeftRadius: theme.roundness,
-    borderTopRightRadius: theme.roundness,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: '90%',
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.grey[200],
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  modalButton: {
-    padding: theme.spacing.sm,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212121',
   },
-  modalButtonText: {
-    fontSize: theme.fontSizes.md,
-    color: theme.colors.text.secondary,
+  closeButton: {
+    padding: 4,
   },
-  modalButtonTextDone: {
-    color: theme.colors.primary.main,
+  closeButtonText: {
+    fontSize: 18,
+    color: '#757575',
+  },
+  selectedDateContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#E3F2FD',
+  },
+  selectedDateText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#2196F3',
+  },
+  datePickerContainer: {
+    // On iOS, we need to handle the layout and buttons ourselves
+    alignItems: 'center',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 20,
+  },
+  button: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F5F5F5',
+  },
+  cancelButtonText: {
+    color: '#757575',
     fontWeight: '600',
   },
-  picker: {
-    height: 200,
+  confirmButton: {
+    backgroundColor: '#2196F3',
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });
 

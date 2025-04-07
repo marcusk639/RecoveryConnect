@@ -17,7 +17,6 @@ import {
 import {StackNavigationProp} from '@react-navigation/stack';
 import {useNavigation} from '@react-navigation/native';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import {MainStackParamList, RootStackParamList} from '../../types';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -694,14 +693,13 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Date Picker Modal */}
-      {showDatePicker && (
-        <DatePicker
-          value={recoveryDate ? new Date(recoveryDate) : new Date()}
-          onChange={handleDateSelect}
-          maximumDate={new Date()} // Can't select future dates
-        />
-      )}
+      <DatePicker
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        onSelect={handleDateSelect}
+        initialDate={recoveryDate ? new Date(recoveryDate) : new Date()}
+        maxDate={new Date()} // Can't select future dates
+      />
     </SafeAreaView>
   );
 };

@@ -8,6 +8,7 @@ First name/initial only for anonymity
 Optional recovery date
 Privacy settings during registration
 Terms of service acceptance
+fix date issues (createdat, updatedat, toFirestore)
 
 2. Login and Authentication State
    We'll need to enhance the login functionality and ensure proper authentication state management:
