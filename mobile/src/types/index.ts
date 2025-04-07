@@ -221,6 +221,9 @@ export type MainStackParamList = {
   Announcements: {groupId: string; groupName: string};
   Events: {groupId: string; groupName: string};
   Members: {groupId: string; groupName: string};
+  CreateGroup: undefined;
+  GroupDetails: {groupId: string};
+  GroupMembers: {groupId: string; groupName: string};
 };
 
 export type RootStackParamList = {
