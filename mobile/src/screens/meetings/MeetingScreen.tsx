@@ -274,11 +274,11 @@ const MeetingsScreen: React.FC = () => {
 
     // Apply additional client-side filtering for online/in-person if needed
     if (!filterOptions.showOnline) {
-      filtered = filtered.filter(meeting => !meeting.isOnline);
+      filtered = filtered.filter(meeting => !meeting.online);
     }
 
     if (!filterOptions.showInPerson) {
-      filtered = filtered.filter(meeting => meeting.isOnline);
+      filtered = filtered.filter(meeting => !meeting.online);
     }
 
     // Additional local text search if needed
@@ -371,7 +371,7 @@ const MeetingsScreen: React.FC = () => {
 
   // Format address for display
   const formatAddress = (meeting: Meeting): string => {
-    if (meeting.isOnline) {
+    if (meeting.online) {
       return 'Online Meeting';
     }
 
@@ -433,7 +433,7 @@ const MeetingsScreen: React.FC = () => {
           <View style={styles.formatTag}>
             <Text style={styles.formatTagText}>{item.type}</Text>
           </View>
-          {item.isOnline && (
+          {item.online && (
             <View style={[styles.formatTag, styles.onlineTag]}>
               <Text style={styles.formatTagText}>Online</Text>
             </View>
@@ -689,18 +689,18 @@ const MeetingsScreen: React.FC = () => {
               <View style={styles.detailsSection}>
                 <Text style={styles.detailsLabel}>Location:</Text>
                 <Text style={styles.detailsText}>
-                  {selectedMeeting.isOnline
+                  {selectedMeeting.online
                     ? 'Online Meeting'
                     : selectedMeeting.location ||
                       selectedMeeting.name ||
                       'Location name not specified'}
                 </Text>
-                {!selectedMeeting.isOnline && (
+                {!selectedMeeting.online && (
                   <Text style={styles.detailsSubtext}>
                     {formatAddress(selectedMeeting)}
                   </Text>
                 )}
-                {selectedMeeting.isOnline && selectedMeeting.link && (
+                {selectedMeeting.online && selectedMeeting.link && (
                   <TouchableOpacity
                     style={styles.linkButton}
                     onPress={() => {
@@ -710,7 +710,7 @@ const MeetingsScreen: React.FC = () => {
                     <Text style={styles.linkButtonText}>Join Meeting</Text>
                   </TouchableOpacity>
                 )}
-                {selectedMeeting.isOnline && selectedMeeting.onlineNotes && (
+                {selectedMeeting.online && selectedMeeting.onlineNotes && (
                   <Text style={styles.detailsNotes}>
                     {selectedMeeting.onlineNotes}
                   </Text>
@@ -791,14 +791,14 @@ const MeetingsScreen: React.FC = () => {
                   disabled={
                     !selectedMeeting.lat ||
                     !selectedMeeting.lng ||
-                    selectedMeeting.isOnline
+                    selectedMeeting.online
                   }>
                   <Text
                     style={[
                       styles.directionsButtonText,
                       (!selectedMeeting.lat ||
                         !selectedMeeting.lng ||
-                        selectedMeeting.isOnline) &&
+                        selectedMeeting.online) &&
                         styles.disabledButtonText,
                     ]}>
                     Get Directions
