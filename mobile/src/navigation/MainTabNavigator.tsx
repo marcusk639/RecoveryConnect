@@ -8,6 +8,7 @@ import MeetingsScreen from '../screens/meetings/MeetingScreen';
 import TreasuryScreen from '../screens/treasury/TreasuryScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import HomeGroupNavigator from './HomegroupNavigator';
+import ProfileNavigator from './ProfileNavigator';
 
 // Import icons (would use a library like react-native-vector-icons in a real app)
 // For simplicity, we're using Text components as placeholders
@@ -142,7 +143,7 @@ const MainTabNavigator: React.FC = () => {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileNavigator}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({focused}) => <ProfileIcon focused={focused} />,

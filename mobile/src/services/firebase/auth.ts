@@ -126,7 +126,8 @@ export const getUserProfile = async (userId: string) => {
 
 // Initialize Google Sign-In
 GoogleSignin.configure({
-  webClientId: 'YOUR_WEB_CLIENT_ID', // Get this from Firebase Console
+  webClientId:
+    '421876308052-s558o9vfqjcj5faj1gfogo2sock2enpd.apps.googleusercontent.com', // Get this from Firebase Console
   offlineAccess: true,
 });
 
@@ -353,5 +354,6 @@ const getAnonymousName = (name: string): string => {
   // return firstName.charAt(0) + '.';
 
   // For now, return the first name for better usability
-  return firstName;
+  // return the first name and last initial
+  return firstName + ' ' + parts[1].charAt(0) + '.';
 };
