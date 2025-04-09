@@ -51,7 +51,7 @@ export interface HomeGroup {
   id?: string;
   name: string;
   description: string;
-  meetings: Meeting[];
+  meetings?: Meeting[]; // Optional meetings array
   location?: string;
   address?: string;
   city?: string;

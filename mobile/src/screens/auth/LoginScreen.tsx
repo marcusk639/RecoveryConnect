@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import SocialSignInButton from '../../components/common/SocialSignInButton';
+import {signInWithApple, signInWithGoogle} from '../../services/firebase/auth';
 
 type RootStackParamList = {
   Login: undefined;
@@ -69,22 +71,6 @@ const LoginScreen = () => {
       navigation.replace('Main');
     } catch (error) {
       Alert.alert('Login Failed', 'Invalid email or password');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    try {
-      // In a real app, this would be connected to Firebase Google authentication
-      // For now, we'll just simulate a login
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Navigate to the main app after successful login
-      navigation.replace('Main');
-    } catch (error) {
-      Alert.alert('Google Sign In Failed', 'Please try again later');
     } finally {
       setLoading(false);
     }
@@ -180,12 +166,16 @@ const LoginScreen = () => {
               <View style={styles.dividerLine} />
             </View>
 
-            <TouchableOpacity
-              style={styles.googleButton}
-              onPress={handleGoogleSignIn}
-              disabled={loading}>
-              <Text style={styles.googleButtonText}>Sign in with Google</Text>
-            </TouchableOpacity>
+            <SocialSignInButton
+              provider="google"
+              onPress={() => signInWithGoogle()}
+              disabled={loading}
+            />
+            <SocialSignInButton
+              provider="apple"
+              onPress={() => signInWithApple()}
+              disabled={loading}
+            />
           </View>
 
           <View style={styles.footer}>

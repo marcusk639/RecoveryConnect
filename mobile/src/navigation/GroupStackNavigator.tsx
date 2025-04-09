@@ -15,6 +15,7 @@ import GroupAnnouncementDetailsScreen from '../screens/homegroup/GroupAnnounceme
 import GroupTreasuryScreen from '../screens/homegroup/GroupTreasuryScreen';
 import GroupEditDetailsScreen from '../screens/homegroup/GroupEditDetailsScreen';
 import CreateGroupScreen from '../screens/homegroup/CreateGroupScreen';
+import GroupScheduleScreen from '../screens/homegroup/GroupScheduleScreen';
 // import GroupEventDetailsScreen from '../screens/groups/GroupEventDetailsScreen';
 // import GroupBusinessMeetingScreen from '../screens/groups/GroupBusinessMeetingScreen';
 
@@ -111,6 +112,13 @@ const GroupStackNavigator: React.FC = () => {
         options={{
           title: 'Create Group',
         }}
+      />
+      <Stack.Screen
+        name="GroupSchedule"
+        component={GroupScheduleScreen}
+        options={({route}) => ({
+          title: `${route.params.groupName} - Schedule`,
+        })}
       />
     </Stack.Navigator>
   );

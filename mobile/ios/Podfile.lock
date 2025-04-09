@@ -1508,6 +1508,8 @@ PODS:
   - react-native-geolocation (3.4.0):
     - RCT-Folly (= 2021.07.22.00)
     - React-Core
+  - react-native-get-random-values (1.11.0):
+    - React-Core
   - react-native-google-maps (1.20.1):
     - Google-Maps-iOS-Utils (= 5.0.0)
     - GoogleMaps (= 8.4.0)
@@ -1695,6 +1697,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - react-native-fbsdk-next (from `../node_modules/react-native-fbsdk-next`)
   - "react-native-geolocation (from `../node_modules/@react-native-community/geolocation`)"
+  - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - react-native-google-maps (from `../node_modules/react-native-maps`)
   - react-native-maps (from `../node_modules/react-native-maps`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
@@ -1819,6 +1822,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-fbsdk-next"
   react-native-geolocation:
     :path: "../node_modules/@react-native-community/geolocation"
+  react-native-get-random-values:
+    :path: "../node_modules/react-native-get-random-values"
   react-native-google-maps:
     :path: "../node_modules/react-native-maps"
   react-native-maps:
@@ -1957,6 +1962,7 @@ SPEC CHECKSUMS:
   React-logger: f42d2f2bc4cbb5d19d7c0ce84b8741b1e54e88c8
   react-native-fbsdk-next: 1baeeacf0ecdeb839cca16ca75cb16a9bbbf8e03
   react-native-geolocation: 99e88dbb98e0bc11cadac135a92c67076eee495a
+  react-native-get-random-values: 21325b2244dfa6b58878f51f9aa42821e7ba3d06
   react-native-google-maps: 7cc1184afe41fbd15a3dffd53c924819f6587b69
   react-native-maps: ee1e65647460c3d41e778071be5eda10e3da6225
   react-native-safe-area-context: 0ee144a6170530ccc37a0fd9388e28d06f516a89
@@ -1989,13 +1995,13 @@ SPEC CHECKSUMS:
   RNFBFunctions: a58c249ba8dbdc8ac22b3cf86abdb2283f44e88b
   RNGestureHandler: 7e046cb2ab2e4a7e0161c7665cfeee9e49e27c0f
   RNGoogleSignin: ee2938633d996756819e3212c8e0f7f696b380d0
-  RNPermissions: 8bccf82d4caa70a90ca6cf7f419c75f8c8c725c9
+  RNPermissions: c04523d5933e3d810c42ea3fd97f38abbe1d8e44
   RNScreens: 38a8b0651c2c4430dab18602b2a117b70f7ba3ba
   RNVectorIcons: b0f3ecdf598c397ae0c23e688a121b6eeadcf286
   SexyTooltip: 5c9b4dec52bfb317938cb0488efd9da3717bb6fd
   SocketRocket: f32cd54efbe0f095c4d7594881e52619cfe80b17
   Yoga: eddf2bbe4a896454c248a8f23b4355891eb720a6
 
-PODFILE CHECKSUM: 39e6e5de56a25633a136b202a2961a18814af128
+PODFILE CHECKSUM: 97b210a9f9f18eec7134b465c8858a2212bd0a41
 
 COCOAPODS: 1.16.2
