@@ -1,6 +1,6 @@
 // src/types/index.ts
 
-import {TransactionType} from './domain/treasury';
+import {Transaction, TransactionType} from './domain/treasury';
 
 /**
  * Authentication and User Types
@@ -47,6 +47,23 @@ export interface LoginData {
   rememberMe?: boolean;
 }
 
+export interface TreasurySummary {
+  balance: number;
+  prudentReserve: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  lastUpdated: Date;
+}
+
+export interface Treasury {
+  balance: number;
+  prudentReserve: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  summary: TreasurySummary;
+  transactions: Transaction[];
+}
+
 export interface HomeGroup {
   id?: string;
   name: string;
@@ -67,6 +84,8 @@ export interface HomeGroup {
   isAdmin?: boolean; // For UI state, not stored
   placeName?: string;
   type: MeetingType;
+  treasurers: string[];
+  treasury: Treasury;
 }
 
 export interface GroupMember {

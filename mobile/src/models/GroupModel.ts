@@ -7,6 +7,7 @@ import {
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import {generateMeetingHash} from '../utils/hashUtils';
+import {Transaction} from '../types/domain';
 
 /**
  * Group model for managing group data
@@ -29,6 +30,7 @@ export class GroupModel {
       zip: data.zip,
       lat: data.lat,
       lng: data.lng,
+      treasurers: data.treasurers,
       createdAt: data.createdAt.toDate(),
       updatedAt: data.updatedAt.toDate(),
       foundedDate: data.foundedDate
@@ -36,6 +38,7 @@ export class GroupModel {
         : undefined,
       memberCount: data.memberCount,
       admins: data.admins,
+      treasury: data.treasury,
       placeName: data.placeName,
       meetings: [], // Initialize with empty array, will be populated when needed
     };
@@ -65,44 +68,33 @@ export class GroupModel {
       firestoreData.updatedAt = firestore.Timestamp.fromDate(group.updatedAt);
     }
 
+    if (group.treasurers !== undefined) {
+      firestoreData.treasurers = group.treasurers;
+    }
+
+    if (group.treasury !== undefined) {
+      firestoreData.treasury = group.treasury;
+    }
+
     return firestoreData;
   }
 
   /**
    * Get a group by ID
    */
-  static async getById(groupId: string): Promise<HomeGroup | null> {
+  static async getById(id: string): Promise<HomeGroup | null> {
     try {
-      const doc = await firestore().collection('groups').doc(groupId).get();
-
+      const doc = await firestore().collection('groups').doc(id).get();
       if (!doc.exists) {
         return null;
       }
-
-      const group = GroupModel.fromFirestore({
+      return GroupModel.fromFirestore({
         id: doc.id,
-        data: () => doc.data() as GroupDocument,
+        data: () => doc.data() as any,
       });
-
-      // Fetch meetings for this group
-      const meetingsSnapshot = await firestore()
-        .collection('meetings')
-        .where('groupId', '==', groupId)
-        .get();
-
-      const meetings = meetingsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Meeting[];
-
-      // Add meetings to the group object
-      return {
-        ...group,
-        meetings,
-      };
     } catch (error) {
-      console.error('Error getting group:', error);
-      throw error;
+      console.error('Error getting group by ID:', error);
+      return null;
     }
   }
 
@@ -127,6 +119,21 @@ export class GroupModel {
         updatedAt: now,
         memberCount: 1,
         admins: [currentUser.uid],
+        treasurers: [currentUser.uid],
+        treasury: {
+          balance: 0,
+          prudentReserve: 0,
+          monthlyIncome: 0,
+          monthlyExpenses: 0,
+          transactions: [],
+          summary: {
+            balance: 0,
+            prudentReserve: 0,
+            monthlyIncome: 0,
+            monthlyExpenses: 0,
+            lastUpdated: now,
+          },
+        },
         type: 'AA',
         meetings: [], // Initialize with empty array
       };

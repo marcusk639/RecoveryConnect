@@ -337,12 +337,9 @@ const CreateGroupScreen: React.FC = () => {
 
       await batch.commit();
 
-      navigation.navigate('Home', {
-        screen: 'GroupOverview',
-        params: {
-          groupId: group.id!,
-          groupName: group.name,
-        },
+      navigation.navigate('GroupOverview', {
+        groupId: group.id!,
+        groupName: group.name,
       });
     } catch (error) {
       console.error('Error creating group:', error);

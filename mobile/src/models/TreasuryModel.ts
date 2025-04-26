@@ -3,13 +3,10 @@ import {
   TreasuryStats,
   TransactionType,
 } from '../types/domain/treasury';
-import {
-  FirestoreDocument,
-  TransactionDocument,
-  TreasuryOverviewDocument,
-} from '../types/schema';
+import {FirestoreDocument, TreasuryOverviewDocument} from '../types/schema';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import {TransactionDocument} from '../types/schema';
 
 /**
  * Treasury model for managing financial data
@@ -20,7 +17,6 @@ export class TreasuryModel {
    */
   static fromFirestore(
     doc: FirestoreDocument<TransactionDocument>,
-    groupId: string,
   ): Transaction {
     const data = doc.data();
     return {
@@ -29,9 +25,9 @@ export class TreasuryModel {
       amount: data.amount,
       category: data.category,
       description: data.description,
-      date: data.date.toDate(),
       createdBy: data.createdBy,
-      groupId: groupId,
+      groupId: data.groupId,
+      createdAt: data.createdAt?.toDate(),
     };
   }
 
@@ -50,11 +46,10 @@ export class TreasuryModel {
       firestoreData.category = transaction.category;
     if (transaction.description !== undefined)
       firestoreData.description = transaction.description;
-    if (transaction.date !== undefined) {
-      firestoreData.date = firestore.Timestamp.fromDate(transaction.date);
-    }
     if (transaction.createdBy !== undefined)
       firestoreData.createdBy = transaction.createdBy;
+    if (transaction.groupId !== undefined)
+      firestoreData.groupId = transaction.groupId;
 
     return firestoreData;
   }
@@ -68,21 +63,17 @@ export class TreasuryModel {
   ): Promise<Transaction[]> {
     try {
       const transactionsSnapshot = await firestore()
-        .collection('groups')
-        .doc(groupId)
         .collection('transactions')
+        .where('groupId', '==', groupId)
         .orderBy('date', 'desc')
         .limit(limit)
         .get();
 
       return transactionsSnapshot.docs.map(doc =>
-        TreasuryModel.fromFirestore(
-          {
-            id: doc.id,
-            data: () => doc.data() as TransactionDocument,
-          },
-          groupId,
-        ),
+        TreasuryModel.fromFirestore({
+          id: doc.id,
+          data: () => doc.data() as TransactionDocument,
+        }),
       );
     } catch (error) {
       console.error('Error getting transactions:', error);
@@ -97,10 +88,8 @@ export class TreasuryModel {
     try {
       // Get the treasury overview document
       const overviewDoc = await firestore()
-        .collection('groups')
+        .collection('treasury_overviews')
         .doc(groupId)
-        .collection('treasury')
-        .doc('overview')
         .get();
 
       if (!overviewDoc.exists) {
@@ -110,6 +99,13 @@ export class TreasuryModel {
 
       const data = overviewDoc.data() as TreasuryOverviewDocument;
 
+      // Check if we need to reset monthly stats
+      if (
+        TreasuryModel.shouldResetMonthlyStats(data.lastMonthReset?.toDate())
+      ) {
+        return TreasuryModel.resetMonthlyStats(groupId, data);
+      }
+
       return {
         balance: data.balance,
         monthlyIncome: data.monthlyIncome,
@@ -117,7 +113,8 @@ export class TreasuryModel {
         prudentReserve: data.prudentReserve,
         availableFunds: data.balance - data.prudentReserve,
         lastUpdated: data.lastUpdated.toDate(),
-        groupId: groupId,
+        groupId: data.groupId,
+        lastMonthReset: data.lastMonthReset?.toDate(),
       };
     } catch (error) {
       console.error('Error getting treasury stats:', error);
@@ -126,10 +123,60 @@ export class TreasuryModel {
   }
 
   /**
+   * Check if we should reset monthly stats
+   */
+  private static shouldResetMonthlyStats(lastReset?: Date): boolean {
+    if (!lastReset) return true;
+
+    const now = new Date();
+    // Reset if we're in a different month than the last reset
+    return (
+      now.getMonth() !== lastReset.getMonth() ||
+      now.getFullYear() !== lastReset.getFullYear()
+    );
+  }
+
+  /**
+   * Reset monthly stats
+   */
+  private static async resetMonthlyStats(
+    groupId: string,
+    data: TreasuryOverviewDocument,
+  ): Promise<TreasuryStats> {
+    try {
+      const now = new Date();
+      const overviewRef = firestore()
+        .collection('treasury_overviews')
+        .doc(groupId);
+
+      // Update with reset monthly stats
+      await overviewRef.update({
+        monthlyIncome: 0,
+        monthlyExpenses: 0,
+        lastMonthReset: firestore.Timestamp.fromDate(now),
+        lastUpdated: firestore.Timestamp.fromDate(now),
+      });
+
+      return {
+        balance: data.balance,
+        monthlyIncome: 0,
+        monthlyExpenses: 0,
+        prudentReserve: data.prudentReserve,
+        availableFunds: data.balance - data.prudentReserve,
+        lastUpdated: now,
+        groupId: data.groupId,
+        lastMonthReset: now,
+      };
+    } catch (error) {
+      console.error('Error resetting monthly stats:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Create a transaction
    */
   static async createTransaction(
-    groupId: string,
     transactionData: Partial<Transaction>,
   ): Promise<Transaction> {
     try {
@@ -141,9 +188,8 @@ export class TreasuryModel {
 
       const now = new Date();
       const defaultTransaction: Partial<Transaction> = {
-        date: now,
         createdBy: currentUser.uid,
-        groupId: groupId,
+        createdAt: now,
       };
 
       const newTransaction = {...defaultTransaction, ...transactionData};
@@ -160,28 +206,30 @@ export class TreasuryModel {
         throw new Error('Transaction category is required');
       }
 
-      // Create the transaction
+      if (!newTransaction.groupId) {
+        throw new Error('Group ID is required');
+      }
+
+      // Create the transaction in the top-level collection
       const docRef = await firestore()
-        .collection('groups')
-        .doc(groupId)
         .collection('transactions')
-        .add(TreasuryModel.toFirestore(newTransaction));
+        .add({
+          ...TreasuryModel.toFirestore(newTransaction),
+          createdAt: firestore.Timestamp.fromDate(now),
+        });
 
       // Update treasury stats
       await TreasuryModel.updateTreasuryStatsAfterTransaction(
-        groupId,
+        newTransaction.groupId as string,
         newTransaction.type as TransactionType,
         newTransaction.amount as number,
       );
 
       const createdTransaction = await docRef.get();
-      return TreasuryModel.fromFirestore(
-        {
-          id: createdTransaction.id,
-          data: () => createdTransaction.data() as TransactionDocument,
-        },
-        groupId,
-      );
+      return TreasuryModel.fromFirestore({
+        id: createdTransaction.id,
+        data: () => createdTransaction.data() as TransactionDocument,
+      });
     } catch (error) {
       console.error('Error creating transaction:', error);
       throw error;
@@ -192,14 +240,11 @@ export class TreasuryModel {
    * Update a transaction
    */
   static async updateTransaction(
-    groupId: string,
     transactionId: string,
     transactionData: Partial<Transaction>,
   ): Promise<Transaction> {
     try {
       const transactionRef = firestore()
-        .collection('groups')
-        .doc(groupId)
         .collection('transactions')
         .doc(transactionId);
 
@@ -210,6 +255,7 @@ export class TreasuryModel {
       }
 
       const currentData = transactionDoc.data() as TransactionDocument;
+      const groupId = currentData.groupId;
 
       // If amount or type changed, update treasury stats
       if (
@@ -245,13 +291,10 @@ export class TreasuryModel {
       await transactionRef.update(TreasuryModel.toFirestore(transactionData));
 
       const updatedDoc = await transactionRef.get();
-      return TreasuryModel.fromFirestore(
-        {
-          id: updatedDoc.id,
-          data: () => updatedDoc.data() as TransactionDocument,
-        },
-        groupId,
-      );
+      return TreasuryModel.fromFirestore({
+        id: updatedDoc.id,
+        data: () => updatedDoc.data() as TransactionDocument,
+      });
     } catch (error) {
       console.error('Error updating transaction:', error);
       throw error;
@@ -261,14 +304,9 @@ export class TreasuryModel {
   /**
    * Delete a transaction
    */
-  static async deleteTransaction(
-    groupId: string,
-    transactionId: string,
-  ): Promise<void> {
+  static async deleteTransaction(transactionId: string): Promise<void> {
     try {
       const transactionRef = firestore()
-        .collection('groups')
-        .doc(groupId)
         .collection('transactions')
         .doc(transactionId);
 
@@ -279,6 +317,7 @@ export class TreasuryModel {
       }
 
       const data = transactionDoc.data() as TransactionDocument;
+      const groupId = data.groupId;
 
       // Undo transaction effect on treasury stats
       await TreasuryModel.updateTreasuryStatsAfterTransaction(
@@ -311,20 +350,21 @@ export class TreasuryModel {
         availableFunds: -600, // Negative because we start with zero balance
         lastUpdated: now,
         groupId: groupId,
+        lastMonthReset: now,
       };
 
       // Create the overview document
       await firestore()
-        .collection('groups')
+        .collection('treasury_overviews')
         .doc(groupId)
-        .collection('treasury')
-        .doc('overview')
         .set({
           balance: defaultStats.balance,
           monthlyIncome: defaultStats.monthlyIncome,
           monthlyExpenses: defaultStats.monthlyExpenses,
           prudentReserve: defaultStats.prudentReserve,
           lastUpdated: firestore.Timestamp.fromDate(now),
+          lastMonthReset: firestore.Timestamp.fromDate(now),
+          groupId: groupId,
         });
 
       return defaultStats;
@@ -343,18 +383,12 @@ export class TreasuryModel {
     amount: number,
   ): Promise<void> {
     try {
+      // First check if we need to get the current stats (to check for month reset)
+      await TreasuryModel.getTreasuryStats(groupId);
+
       const overviewRef = firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('treasury')
-        .doc('overview');
-
-      const overviewDoc = await overviewRef.get();
-
-      if (!overviewDoc.exists) {
-        // Create default stats first
-        await TreasuryModel.createDefaultTreasuryStats(groupId);
-      }
+        .collection('treasury_overviews')
+        .doc(groupId);
 
       // Update stats based on transaction type
       if (type === 'income') {
