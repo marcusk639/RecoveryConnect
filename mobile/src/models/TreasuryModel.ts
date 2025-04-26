@@ -65,7 +65,7 @@ export class TreasuryModel {
       const transactionsSnapshot = await firestore()
         .collection('transactions')
         .where('groupId', '==', groupId)
-        .orderBy('date', 'desc')
+        .orderBy('createdAt', 'desc')
         .limit(limit)
         .get();
 
