@@ -7,16 +7,27 @@
  */
 
 export type TransactionType = 'income' | 'expense';
+export type TransactionCategory =
+  | '7th Tradition'
+  | 'Literature Sales'
+  | 'Event Income'
+  | 'Other Income'
+  | 'Rent'
+  | 'Literature Purchase'
+  | 'Refreshments'
+  | 'Events'
+  | 'Contributions'
+  | 'Other Expense';
 
 export interface Transaction {
   id: string;
+  groupId: string;
   type: TransactionType;
   amount: number;
-  category: string;
   description: string;
-  date: Date;
+  category: string;
   createdBy: string;
-  groupId: string;
+  createdAt?: Date;
 }
 
 export interface TreasuryStats {
@@ -27,6 +38,7 @@ export interface TreasuryStats {
   availableFunds: number;
   lastUpdated: Date;
   groupId: string;
+  lastMonthReset?: Date;
 }
 
 export type IncomeCategory =

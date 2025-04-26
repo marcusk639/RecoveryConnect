@@ -1,7 +1,7 @@
 // src/types/schema.ts
 
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
-import {Meeting, MeetingType} from '.';
+import {Meeting, MeetingType, Treasury} from '.';
 
 export type Timestamp = FirebaseFirestoreTypes.Timestamp;
 
@@ -17,6 +17,26 @@ export interface FirestoreDocument<T> {
  * This file defines the Firestore schema types and structure
  * to ensure consistency between client and backend.
  */
+
+export interface TransactionDocument {
+  type: 'income' | 'expense';
+  amount: number;
+  description: string;
+  category: string;
+  createdBy: string;
+  createdAt: FirebaseFirestoreTypes.Timestamp;
+  groupId: string;
+}
+
+export interface TreasuryOverviewDocument {
+  balance: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  prudentReserve: number;
+  lastUpdated: FirebaseFirestoreTypes.Timestamp;
+  lastMonthReset?: FirebaseFirestoreTypes.Timestamp;
+  groupId: string;
+}
 
 /**
  * Firestore User Document
@@ -67,6 +87,8 @@ export interface GroupDocument {
   admins: string[];
   placeName?: string;
   type: MeetingType;
+  treasurers: string[];
+  treasury: Treasury;
 }
 
 /**
@@ -111,29 +133,6 @@ export interface EventDocument {
   updatedAt: Timestamp;
   createdBy: string; // User ID
   attendees?: string[]; // Array of user IDs
-}
-
-/**
- * Transaction Sub-Collection Document
- */
-export interface TransactionDocument {
-  type: 'income' | 'expense';
-  amount: number;
-  category: string;
-  description: string;
-  date: Timestamp;
-  createdBy: string; // User ID
-}
-
-/**
- * Treasury Overview Sub-Collection Document
- */
-export interface TreasuryOverviewDocument {
-  balance: number;
-  monthlyIncome: number;
-  monthlyExpenses: number;
-  prudentReserve: number;
-  lastUpdated: Timestamp;
 }
 
 /**

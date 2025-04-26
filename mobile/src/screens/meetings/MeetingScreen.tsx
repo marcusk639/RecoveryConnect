@@ -839,10 +839,6 @@ const MeetingsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Meetings</Text>
-      </View>
-
       <View style={styles.searchFilterContainer}>
         <View style={styles.searchContainer}>
           <TextInput

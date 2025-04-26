@@ -14,24 +14,18 @@ import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
+import {CompositeNavigationProp} from '@react-navigation/native';
+import {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 
 // Import types
-import {GroupStackParamList} from '../../types/navigation';
-
-// Interface for HomeGroup data
-interface HomeGroup {
-  id: string;
-  name: string;
-  description: string;
-  meetingDay: string;
-  meetingTime: string;
-  memberCount: number;
-  isAdmin: boolean;
-}
-
-type GroupsListScreenNavigationProp = StackNavigationProp<
-  GroupStackParamList,
-  'GroupsList'
+import {GroupStackParamList, MainTabParamList} from '../../types/navigation';
+import {GroupDocument, UserDocument} from '../../types/schema';
+import {GroupModel} from '../../models/GroupModel';
+import {HomeGroup} from '../../types';
+import {UserModel} from '../../models/UserModel';
+type GroupsListScreenNavigationProp = CompositeNavigationProp<
+  StackNavigationProp<GroupStackParamList, 'GroupsList'>,
+  BottomTabNavigationProp<MainTabParamList>
 >;
 
 const GroupsListScreen: React.FC = () => {
@@ -55,40 +49,50 @@ const GroupsListScreen: React.FC = () => {
     try {
       setRefreshing(true);
 
-      // In a real app, this would fetch the user's groups from Firestore
-      // For now, we'll use mock data
-      const mockHomeGroups: HomeGroup[] = [
-        {
-          id: 'group1',
-          name: 'Serenity Now Group',
-          description:
-            'A welcoming group focused on practical application of the principles.',
-          meetingDay: 'Tuesday',
-          meetingTime: '7:00 PM',
-          memberCount: 35,
-          isAdmin: true,
-        },
-        {
-          id: 'group2',
-          name: 'Recovery Warriors',
-          description: 'A solution-focused homegroup with rotating speakers.',
-          meetingDay: 'Friday',
-          meetingTime: '8:00 PM',
-          memberCount: 42,
-          isAdmin: false,
-        },
-        {
-          id: 'group3',
-          name: 'Hope and Healing',
-          description: 'Focused on the spiritual aspects of recovery.',
-          meetingDay: 'Sunday',
-          meetingTime: '10:00 AM',
-          memberCount: 28,
-          isAdmin: false,
-        },
+      // Get current user
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view groups');
+        return;
+      }
+
+      // Fetch the user document to get their group IDs
+      const userDoc = await UserModel.getById(currentUser.uid);
+      const userGroupIds = userDoc?.homeGroups || [];
+
+      // Fetch groups where the user is an admin
+      const adminGroupsSnapshot = await firestore()
+        .collection('groups')
+        .where('admins', 'array-contains', currentUser.uid)
+        .get();
+
+      // Combine group IDs
+      const allGroupIds = [
+        ...new Set([
+          ...userGroupIds,
+          ...adminGroupsSnapshot.docs.map(doc => doc.id),
+        ]),
       ];
 
-      setHomeGroups(mockHomeGroups);
+      // Fetch the actual group documents
+      const groupPromises = allGroupIds.map(groupId =>
+        firestore().collection('groups').doc(groupId).get(),
+      );
+
+      const groupSnapshots = await Promise.all(groupPromises);
+      const validGroupSnapshots = groupSnapshots.filter(
+        snapshot => snapshot.exists,
+      );
+
+      // Map Firestore documents to HomeGroup objects
+      const groups: HomeGroup[] = validGroupSnapshots.map(doc =>
+        GroupModel.fromFirestore({
+          id: doc.id,
+          data: () => doc.data() as GroupDocument,
+        }),
+      );
+
+      setHomeGroups(groups);
     } catch (error) {
       console.error('Error loading home data:', error);
       Alert.alert('Error', 'Failed to load groups. Please try again later.');
@@ -99,9 +103,13 @@ const GroupsListScreen: React.FC = () => {
 
   const navigateToGroupDetails = (group: HomeGroup) => {
     navigation.navigate('GroupOverview', {
-      groupId: group.id,
+      groupId: group.id!,
       groupName: group.name,
     });
+  };
+
+  const navigateToCreateGroup = () => {
+    navigation.navigate('CreateGroup', {});
   };
 
   const renderHomeGroupItem = ({item}: {item: HomeGroup}) => (
@@ -118,9 +126,6 @@ const GroupsListScreen: React.FC = () => {
       </View>
       <Text style={styles.homeGroupDescription}>{item.description}</Text>
       <View style={styles.homeGroupFooter}>
-        <Text style={styles.homeGroupMeetingTime}>
-          {item.meetingDay}s at {item.meetingTime}
-        </Text>
         <Text style={styles.homeGroupMemberCount}>
           {item.memberCount} members
         </Text>
@@ -147,22 +152,24 @@ const GroupsListScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Your Home Groups</Text>
-            <TouchableOpacity
-              onPress={() =>
-                Alert.alert(
-                  'Join Group',
-                  'This feature will allow you to join new groups.',
-                )
-              }>
-              <Text style={styles.seeAllText}>Join New</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity
+                style={styles.createGroupButton}
+                onPress={navigateToCreateGroup}>
+                <Text style={styles.createGroupButtonText}>Create</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('GroupSearch')}>
+                <Text style={styles.seeAllText}>Join New</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {homeGroups.length > 0 ? (
             <FlatList
               data={homeGroups}
               renderItem={renderHomeGroupItem}
-              keyExtractor={item => item.id}
+              keyExtractor={item => item.id!}
               horizontal={false}
               showsHorizontalScrollIndicator={false}
               scrollEnabled={false}
@@ -175,12 +182,7 @@ const GroupsListScreen: React.FC = () => {
               </Text>
               <TouchableOpacity
                 style={styles.joinGroupButton}
-                onPress={() =>
-                  Alert.alert(
-                    'Join Group',
-                    'This feature will allow you to join new groups.',
-                  )
-                }>
+                onPress={() => navigation.navigate('GroupSearch')}>
                 <Text style={styles.joinGroupButtonText}>Find a Group</Text>
               </TouchableOpacity>
             </View>
@@ -224,10 +226,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#212121',
+  },
+  createGroupButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  createGroupButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   seeAllText: {
     fontSize: 14,

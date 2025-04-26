@@ -15,6 +15,8 @@ import GroupAnnouncementDetailsScreen from '../screens/homegroup/GroupAnnounceme
 import GroupTreasuryScreen from '../screens/homegroup/GroupTreasuryScreen';
 import GroupEditDetailsScreen from '../screens/homegroup/GroupEditDetailsScreen';
 import CreateGroupScreen from '../screens/homegroup/CreateGroupScreen';
+import GroupScheduleScreen from '../screens/homegroup/GroupScheduleScreen';
+import AddTransactionScreen from '../screens/homegroup/AddTransactionScreen';
 // import GroupEventDetailsScreen from '../screens/groups/GroupEventDetailsScreen';
 // import GroupBusinessMeetingScreen from '../screens/groups/GroupBusinessMeetingScreen';
 
@@ -110,6 +112,21 @@ const GroupStackNavigator: React.FC = () => {
         component={CreateGroupScreen}
         options={{
           title: 'Create Group',
+        }}
+      />
+      <Stack.Screen
+        name="GroupSchedule"
+        component={GroupScheduleScreen}
+        options={({route}) => ({
+          title: `${route.params.groupName} - Schedule`,
+        })}
+      />
+      <Stack.Screen
+        name="AddTransaction"
+        component={AddTransactionScreen}
+        options={{
+          presentation: 'modal',
+          title: 'Add Transaction',
         }}
       />
     </Stack.Navigator>

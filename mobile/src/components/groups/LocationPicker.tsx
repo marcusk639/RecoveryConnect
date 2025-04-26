@@ -1,6 +1,7 @@
 // src/components/groups/LocationPicker.tsx
 
 import React, {useState, useEffect, useRef} from 'react';
+import 'react-native-get-random-values';
 import {
   View,
   Text,

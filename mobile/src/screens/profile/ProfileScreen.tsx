@@ -358,10 +358,6 @@ const ProfileScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
-
       <ScrollView style={styles.scrollView}>
         {/* Profile Section */}
         <View style={styles.section}>
@@ -421,7 +417,7 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notification Settings</Text>
 
-          <View style={styles.settingItem}>
+          {/* <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Meeting Reminders</Text>
               <Text style={styles.settingDescription}>
@@ -437,7 +433,7 @@ const ProfileScreen: React.FC = () => {
                 userProfile.notifications.meetings ? '#2196F3' : '#FFFFFF'
               }
             />
-          </View>
+          </View> */}
 
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
@@ -480,7 +476,7 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Privacy Settings</Text>
 
-          <View style={styles.settingItem}>
+          {/* <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Show Recovery Date</Text>
               <Text style={styles.settingDescription}>
@@ -498,7 +494,7 @@ const ProfileScreen: React.FC = () => {
                   : '#FFFFFF'
               }
             />
-          </View>
+          </View> */}
 
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
@@ -542,7 +538,7 @@ const ProfileScreen: React.FC = () => {
             <Text style={styles.accountActionText}>Edit Profile</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.accountAction}
             onPress={() =>
               Alert.alert(
@@ -551,7 +547,7 @@ const ProfileScreen: React.FC = () => {
               )
             }>
             <Text style={styles.accountActionText}>Manage Linked Groups</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           <TouchableOpacity
             style={[styles.accountAction, styles.signOutAction]}

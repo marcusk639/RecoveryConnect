@@ -202,6 +202,13 @@ const GroupOverviewScreen: React.FC = () => {
     });
   };
 
+  const navigateToGroupSchedule = () => {
+    navigation.navigate('GroupSchedule', {
+      groupId,
+      groupName,
+    });
+  };
+
   const navigateToGroupLiterature = () => {
     navigation.navigate('GroupLiterature', {
       groupId,
@@ -306,6 +313,15 @@ const GroupOverviewScreen: React.FC = () => {
             <Text style={styles.navTileIconText}>💰</Text>
           </View>
           <Text style={styles.navTileText}>Treasury</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTile}
+          onPress={navigateToGroupSchedule}>
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>📅</Text>
+          </View>
+          <Text style={styles.navTileText}>Schedule</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

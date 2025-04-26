@@ -7,6 +7,7 @@ import {
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import {generateMeetingHash} from '../utils/hashUtils';
+import {Transaction} from '../types/domain';
 
 /**
  * Group model for managing group data
@@ -22,7 +23,6 @@ export class GroupModel {
       type: data.type,
       name: data.name,
       description: data.description,
-      meetings: data.meetings || [],
       location: data.location || '',
       address: data.address,
       city: data.city,
@@ -30,6 +30,7 @@ export class GroupModel {
       zip: data.zip,
       lat: data.lat,
       lng: data.lng,
+      treasurers: data.treasurers,
       createdAt: data.createdAt.toDate(),
       updatedAt: data.updatedAt.toDate(),
       foundedDate: data.foundedDate
@@ -37,7 +38,9 @@ export class GroupModel {
         : undefined,
       memberCount: data.memberCount,
       admins: data.admins,
+      treasury: data.treasury,
       placeName: data.placeName,
+      meetings: [], // Initialize with empty array, will be populated when needed
     };
   }
 
@@ -50,7 +53,6 @@ export class GroupModel {
     if (group.name !== undefined) firestoreData.name = group.name;
     if (group.description !== undefined)
       firestoreData.description = group.description;
-    if (group.meetings !== undefined) firestoreData.meetings = group.meetings;
     if (group.foundedDate !== undefined) {
       firestoreData.foundedDate = group.foundedDate
         ? firestore.Timestamp.fromDate(new Date(group.foundedDate))
@@ -66,27 +68,33 @@ export class GroupModel {
       firestoreData.updatedAt = firestore.Timestamp.fromDate(group.updatedAt);
     }
 
+    if (group.treasurers !== undefined) {
+      firestoreData.treasurers = group.treasurers;
+    }
+
+    if (group.treasury !== undefined) {
+      firestoreData.treasury = group.treasury;
+    }
+
     return firestoreData;
   }
 
   /**
    * Get a group by ID
    */
-  static async getById(groupId: string): Promise<HomeGroup | null> {
+  static async getById(id: string): Promise<HomeGroup | null> {
     try {
-      const doc = await firestore().collection('groups').doc(groupId).get();
-
+      const doc = await firestore().collection('groups').doc(id).get();
       if (!doc.exists) {
         return null;
       }
-
       return GroupModel.fromFirestore({
         id: doc.id,
-        data: () => doc.data() as GroupDocument,
+        data: () => doc.data() as any,
       });
     } catch (error) {
-      console.error('Error getting group:', error);
-      throw error;
+      console.error('Error getting group by ID:', error);
+      return null;
     }
   }
 
@@ -106,17 +114,33 @@ export class GroupModel {
         id: '',
         name: '',
         description: '',
-        meetings: [],
         location: '',
         createdAt: now,
         updatedAt: now,
         memberCount: 1,
         admins: [currentUser.uid],
+        treasurers: [currentUser.uid],
+        treasury: {
+          balance: 0,
+          prudentReserve: 0,
+          monthlyIncome: 0,
+          monthlyExpenses: 0,
+          transactions: [],
+          summary: {
+            balance: 0,
+            prudentReserve: 0,
+            monthlyIncome: 0,
+            monthlyExpenses: 0,
+            lastUpdated: now,
+          },
+        },
         type: 'AA',
+        meetings: [], // Initialize with empty array
       };
 
       const newGroup = {...defaultGroup, ...groupData};
       delete newGroup.id; // Remove ID as Firestore will generate one
+      delete newGroup.meetings; // Remove meetings as they're stored separately
 
       const docRef = await firestore()
         .collection('groups')
@@ -152,6 +176,7 @@ export class GroupModel {
           data: () => createdGroup.data() as GroupDocument,
         }),
         id: docRef.id,
+        meetings: [], // Initialize with empty array
       };
     } catch (error) {
       console.error('Error creating group:', error);
@@ -742,8 +767,28 @@ export class GroupModel {
         groups.push(...batchGroups);
       }
 
+      // Fetch meetings for all groups
+      const meetingsPromises = groups.map(async group => {
+        const meetingsSnapshot = await firestore()
+          .collection('meetings')
+          .where('groupId', '==', group.id)
+          .get();
+
+        const meetings = meetingsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Meeting[];
+
+        return {
+          ...group,
+          meetings,
+        };
+      });
+
+      const groupsWithMeetings = await Promise.all(meetingsPromises);
+
       // Sort groups by name
-      return groups.sort((a, b) => a.name.localeCompare(b.name));
+      return groupsWithMeetings.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error('Error getting user groups:', error);
       throw error;
@@ -844,14 +889,9 @@ export class GroupModel {
       }
 
       const now = new Date();
-      const groupMeeting: Meeting = {
-        ...meeting,
-        id: meeting.id || generateMeetingHash(meeting),
-      };
       const groupData: Partial<HomeGroup> = {
         name: `${meeting.name} Group`,
         description: `A recovery group that meets at ${meeting.name}`,
-        meetings: [groupMeeting],
         location: meeting.location,
         address: meeting.address,
         lat: meeting.lat,
@@ -906,18 +946,6 @@ export class GroupModel {
       if (!groupDoc.exists) {
         throw new Error('Group not found');
       }
-
-      const groupData = groupDoc.data();
-      const meetings = groupData?.meetings || [];
-
-      // Add the new meeting to the meetings array
-      meetings.push(meeting);
-
-      // Update the group document
-      await groupRef.update({
-        meetings: meetings,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      });
 
       // Update the meeting with the group ID
       await this.updateMeetingGroupId(meeting.id!, groupId);

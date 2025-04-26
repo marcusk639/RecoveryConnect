@@ -13,17 +13,10 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {MainTabParamList} from '../../types/navigation';
-
-interface Group {
-  id: string;
-  name: string;
-  description: string;
-  meetingDay: string;
-  meetingTime: string;
-  location: string;
-  memberCount: number;
-  isJoined: boolean;
-}
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import {GroupModel} from '../../models/GroupModel';
+import {HomeGroup} from '../../types';
 
 // Define a more specific type for the Home tab navigation
 type HomeTabParams = {
@@ -51,12 +44,14 @@ type GroupSearchScreenNavigationProp = StackNavigationProp<
 const GroupSearchScreen: React.FC = () => {
   const navigation = useNavigation<GroupSearchScreenNavigationProp>();
   const [searchQuery, setSearchQuery] = useState('');
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [filteredGroups, setFilteredGroups] = useState<Group[]>([]);
+  const [groups, setGroups] = useState<HomeGroup[]>([]);
+  const [filteredGroups, setFilteredGroups] = useState<HomeGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [joining, setJoining] = useState<string | null>(null);
+  const [userJoinedGroups, setUserJoinedGroups] = useState<string[]>([]);
 
   useEffect(() => {
+    loadUserJoinedGroups();
     loadGroups();
   }, []);
 
@@ -69,78 +64,56 @@ const GroupSearchScreen: React.FC = () => {
         group =>
           group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           group.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          group.location.toLowerCase().includes(searchQuery.toLowerCase()),
+          (group.location &&
+            group.location.toLowerCase().includes(searchQuery.toLowerCase())),
       );
       setFilteredGroups(filtered);
     }
   }, [searchQuery, groups]);
 
+  const loadUserJoinedGroups = async () => {
+    try {
+      const currentUser = auth().currentUser;
+      if (!currentUser) return;
+
+      const userDoc = await firestore()
+        .collection('users')
+        .doc(currentUser.uid)
+        .get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        setUserJoinedGroups(userData?.homeGroups || []);
+      }
+    } catch (error) {
+      console.error('Error loading user joined groups:', error);
+    }
+  };
+
   const loadGroups = async () => {
     try {
       setLoading(true);
 
-      // In a real app, this would fetch all available groups from Firestore
-      // and compare with user's joined groups
-      // For now, we'll use mock data
+      // Fetch all groups from Firestore
+      const groupsSnapshot = await firestore().collection('groups').get();
 
-      // Mock data for available groups
-      const mockGroups: Group[] = [
-        {
-          id: 'group1',
-          name: 'Serenity Now Group',
-          description:
-            'A welcoming group focused on practical application of the principles.',
-          meetingDay: 'Tuesday',
-          meetingTime: '7:00 PM',
-          location: 'Community Center, Room 101, 123 Main St.',
-          memberCount: 35,
-          isJoined: true,
-        },
-        {
-          id: 'group2',
-          name: 'Recovery Warriors',
-          description: 'A solution-focused home group with rotating speakers.',
-          meetingDay: 'Friday',
-          meetingTime: '8:00 PM',
-          location: 'Main Street Church, Basement Level, 456 Main St.',
-          memberCount: 42,
-          isJoined: false,
-        },
-        {
-          id: 'group3',
-          name: 'Hope and Healing',
-          description: 'Focused on the spiritual aspects of recovery.',
-          meetingDay: 'Sunday',
-          meetingTime: '10:00 AM',
-          location: 'Community Hospital, Conference Room B, 789 Health Dr.',
-          memberCount: 28,
-          isJoined: false,
-        },
-        {
-          id: 'group4',
-          name: 'New Beginnings',
-          description: 'A group for those in their first year of recovery.',
-          meetingDay: 'Monday',
-          meetingTime: '6:30 PM',
-          location: 'Recovery Center, Suite 101, 234 Hope Ave.',
-          memberCount: 15,
-          isJoined: false,
-        },
-        {
-          id: 'group5',
-          name: 'Freedom Fellowship',
-          description:
-            'Discussion-based meetings with a focus on living in freedom.',
-          meetingDay: 'Thursday',
-          meetingTime: '7:30 PM',
-          location: 'Community Library, Meeting Room 3, 567 Book St.',
-          memberCount: 32,
-          isJoined: false,
-        },
-      ];
+      const fetchedGroups = groupsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name,
+          description: data.description,
+          location: data.location || '',
+          memberCount: data.memberCount || 0,
+          type: data.type || 'AA',
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          admins: data.admins || [],
+          meetings: [], // Will be populated when needed
+        } as HomeGroup;
+      });
 
-      setGroups(mockGroups);
-      setFilteredGroups(mockGroups);
+      setGroups(fetchedGroups);
+      setFilteredGroups(fetchedGroups);
     } catch (error) {
       console.error('Error loading groups:', error);
       Alert.alert('Error', 'Failed to load groups. Please try again later.');
@@ -149,17 +122,54 @@ const GroupSearchScreen: React.FC = () => {
     }
   };
 
-  const handleJoinGroup = async (group: Group) => {
+  const handleJoinGroup = async (group: HomeGroup) => {
     try {
-      setJoining(group.id);
+      setJoining(group.id!);
 
-      // In a real app, this would update Firestore to add the user to the group
-      // and the group to the user's groups
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to join a group.');
+        return;
+      }
+
+      // Add user to group's members collection
+      await firestore()
+        .collection('groups')
+        .doc(group.id)
+        .collection('members')
+        .doc(currentUser.uid)
+        .set({
+          id: currentUser.uid,
+          displayName: currentUser.displayName || 'Anonymous',
+          joinedAt: firestore.FieldValue.serverTimestamp(),
+          isAdmin: false,
+          showSobrietyDate: false,
+        });
+
+      // Increment member count
+      await firestore()
+        .collection('groups')
+        .doc(group.id)
+        .update({
+          memberCount: firestore.FieldValue.increment(1),
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+
+      // Add group to user's homeGroups
+      await firestore()
+        .collection('users')
+        .doc(currentUser.uid)
+        .update({
+          homeGroups: firestore.FieldValue.arrayUnion(group.id),
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
 
       // Update local state
+      setUserJoinedGroups(prev => [...prev, group.id!]);
       setGroups(prevGroups =>
-        prevGroups.map(g => (g.id === group.id ? {...g, isJoined: true} : g)),
+        prevGroups.map(g =>
+          g.id === group.id ? {...g, memberCount: g.memberCount + 1} : g,
+        ),
       );
 
       Alert.alert('Success', `You've joined ${group.name}!`, [
@@ -169,7 +179,7 @@ const GroupSearchScreen: React.FC = () => {
             navigation.navigate('Home', {
               screen: 'GroupOverview',
               params: {
-                groupId: group.id,
+                groupId: group.id!,
                 groupName: group.name,
               },
             }),
@@ -187,11 +197,15 @@ const GroupSearchScreen: React.FC = () => {
     }
   };
 
-  const renderGroupItem = ({item}: {item: Group}) => (
+  const isUserJoinedGroup = (groupId: string) => {
+    return userJoinedGroups.includes(groupId);
+  };
+
+  const renderGroupItem = ({item}: {item: HomeGroup}) => (
     <View style={styles.groupCard}>
       <View style={styles.groupHeader}>
         <Text style={styles.groupName}>{item.name}</Text>
-        {item.isJoined ? (
+        {isUserJoinedGroup(item.id!) ? (
           <View style={styles.joinedBadge}>
             <Text style={styles.joinedBadgeText}>Joined</Text>
           </View>
@@ -213,12 +227,8 @@ const GroupSearchScreen: React.FC = () => {
 
       <View style={styles.groupDetails}>
         <Text style={styles.groupDetailText}>
-          <Text style={styles.groupDetailLabel}>Meets: </Text>
-          {item.meetingDay}s at {item.meetingTime}
-        </Text>
-        <Text style={styles.groupDetailText}>
           <Text style={styles.groupDetailLabel}>Location: </Text>
-          {item.location}
+          {item.location || 'Not specified'}
         </Text>
         <Text style={styles.groupDetailText}>
           <Text style={styles.groupDetailLabel}>Members: </Text>
@@ -232,7 +242,7 @@ const GroupSearchScreen: React.FC = () => {
           navigation.navigate('Home', {
             screen: 'GroupOverview',
             params: {
-              groupId: item.id,
+              groupId: item.id!,
               groupName: item.name,
             },
           })
@@ -268,7 +278,7 @@ const GroupSearchScreen: React.FC = () => {
         <FlatList
           data={filteredGroups}
           renderItem={renderGroupItem}
-          keyExtractor={item => item.id}
+          keyExtractor={item => item.id!}
           contentContainerStyle={styles.groupList}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>

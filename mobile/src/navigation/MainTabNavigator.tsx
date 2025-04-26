@@ -1,6 +1,7 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {Text, View} from 'react-native';
+import {Text, View, Platform} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 // Import types
 import {MainTabParamList} from '../types/navigation';
@@ -116,6 +117,8 @@ const GroupSearchIcon = ({focused}: {focused: boolean}) => (
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const MainTabNavigator: React.FC = () => {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -124,8 +127,8 @@ const MainTabNavigator: React.FC = () => {
         tabBarStyle: {
           borderTopWidth: 1,
           borderTopColor: '#EEEEEE',
-          height: 60,
-          paddingBottom: 8,
+          height: Platform.OS === 'ios' ? 60 + insets.bottom : 60,
+          paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8,
           paddingTop: 8,
         },
       }}>

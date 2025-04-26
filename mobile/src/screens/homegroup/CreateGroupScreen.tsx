@@ -337,7 +337,7 @@ const CreateGroupScreen: React.FC = () => {
 
       await batch.commit();
 
-      navigation.navigate('GroupMembers', {
+      navigation.navigate('GroupOverview', {
         groupId: group.id!,
         groupName: group.name,
       });
@@ -697,15 +697,6 @@ const CreateGroupScreen: React.FC = () => {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Group</Text>
-        </View>
-
         <ProgressIndicator />
 
         <ScrollView
@@ -827,7 +818,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    flex: 1,
+    flexGrow: 1,
   },
   stepContainer: {
     backgroundColor: '#FFFFFF',
