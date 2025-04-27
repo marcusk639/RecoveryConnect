@@ -1643,6 +1643,8 @@ PODS:
     - React-Core
   - RNCClipboard (1.16.2):
     - React-Core
+  - RNCPicker (2.11.0):
+    - React-Core
   - RNDateTimePicker (7.6.2):
     - React-Core
   - RNFBAnalytics (18.9.0):
@@ -1738,6 +1740,7 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - "RNAppleAuthentication (from `../node_modules/@invertase/react-native-apple-authentication`)"
   - "RNCClipboard (from `../node_modules/@react-native-clipboard/clipboard`)"
+  - "RNCPicker (from `../node_modules/@react-native-picker/picker`)"
   - "RNDateTimePicker (from `../node_modules/@react-native-community/datetimepicker`)"
   - "RNFBAnalytics (from `../node_modules/@react-native-firebase/analytics`)"
   - "RNFBApp (from `../node_modules/@react-native-firebase/app`)"
@@ -1891,6 +1894,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@invertase/react-native-apple-authentication"
   RNCClipboard:
     :path: "../node_modules/@react-native-clipboard/clipboard"
+  RNCPicker:
+    :path: "../node_modules/@react-native-picker/picker"
   RNDateTimePicker:
     :path: "../node_modules/@react-native-community/datetimepicker"
   RNFBAnalytics:
@@ -2012,6 +2017,7 @@ SPEC CHECKSUMS:
   RecaptchaInterop: 7d1a4a01a6b2cb1610a47ef3f85f0c411434cb21
   RNAppleAuthentication: b2d8b5ccba86b5b1e55a1a2e858f7ac6d8a21816
   RNCClipboard: 4411a880506f11fbcbdc03b5093eb8ffb246d900
+  RNCPicker: 4f6d5e8d107064be32dfc8f1bcb5a3741135db0b
   RNDateTimePicker: fc2e4f2795877d45e84d85659bebe627eba5c931
   RNFBAnalytics: 060449c01949e2a009dcaf37f6c0b17d2b219852
   RNFBApp: dc4c1e7c3753d0515f612223f21801a3730d6384

@@ -9,6 +9,7 @@ import auth from '@react-native-firebase/auth';
 import {calculateDistance} from '../utils/locationUtils';
 import {Transaction} from '../types/domain';
 import {MemberModel} from './MemberModel';
+import {MeetingModel} from './MeetingModel';
 
 /**
  * Group model for managing group data
@@ -220,7 +221,7 @@ export class GroupModel {
         newGroup.lng = groupData.lng;
         hasLocationData = true;
       } else if (groupData.address) {
-        // If no lat/lng but we have an address, we should geocode it
+        // TODO: no lat/lng but we have an address, we should geocode it
         // For now, log a warning - in a real implementation, you would
         // call a geocoding service here to get lat/lng from the address
         console.warn('Group created with address but no lat/lng coordinates');
@@ -231,6 +232,8 @@ export class GroupModel {
       const docRef = await firestore()
         .collection('groups')
         .add(GroupModel.toFirestore(newGroup));
+
+      await MeetingModel.createBatch(newGroup.meetings || []);
 
       // Get user data
       const userDoc = await firestore()

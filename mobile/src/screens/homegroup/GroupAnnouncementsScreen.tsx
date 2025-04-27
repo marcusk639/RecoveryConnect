@@ -90,10 +90,12 @@ const GroupAnnouncementsScreen: React.FC = () => {
     dispatch(fetchAnnouncementsForGroup(groupId))
       .unwrap()
       .catch(error => {
-        Alert.alert(
-          'Error',
-          'Failed to load announcements. Please try again later.',
-        );
+        if (error && error.name !== 'ConditionError') {
+          Alert.alert(
+            'Error',
+            'Failed to load announcements. Please try again later.',
+          );
+        }
       })
       .finally(() => {
         setRefreshing(false);

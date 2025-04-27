@@ -331,7 +331,7 @@ const GroupSearchScreen: React.FC = () => {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        <View style={styles.pickerContainer}>
+        {/* <View style={styles.pickerContainer}>
           <Picker
             selectedValue={selectedTypeFilter}
             onValueChange={(itemValue: MeetingType | 'All') =>
@@ -344,7 +344,7 @@ const GroupSearchScreen: React.FC = () => {
               <Picker.Item key={type} label={type} value={type} />
             ))}
           </Picker>
-        </View>
+        </View> */}
       </View>
 
       {loading ? (

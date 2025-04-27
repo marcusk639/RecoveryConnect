@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   FlatList,
   TextInput,
+  Modal,
 } from 'react-native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp, useNavigation, useRoute} from '@react-navigation/native';
@@ -62,6 +63,12 @@ const CreateGroupScreen: React.FC = () => {
   );
   const [foundedDate, setFoundedDate] = useState<string>('');
   const [placeName, setPlaceName] = useState<string>('');
+  const [groupType, setGroupType] = useState<MeetingType>(
+    initialMeeting ? initialMeeting.type : 'AA',
+  );
+  const [showCustomTypeInput, setShowCustomTypeInput] =
+    useState<boolean>(false);
+  const [customType, setCustomType] = useState<string>('');
 
   // Meetings state
   const [meetings, setMeetings] = useState<MeetingFormData[]>(
@@ -99,6 +106,7 @@ const CreateGroupScreen: React.FC = () => {
     location: '',
     address: '',
     link: '',
+    groupType: '',
   });
 
   // Show Redux errors
@@ -128,6 +136,13 @@ const CreateGroupScreen: React.FC = () => {
       isValid = false;
     } else {
       newErrors.groupDescription = '';
+    }
+
+    if (!groupType.trim()) {
+      newErrors.groupType = 'Group type is required';
+      isValid = false;
+    } else {
+      newErrors.groupType = '';
     }
 
     setErrors(newErrors);
@@ -294,6 +309,26 @@ const CreateGroupScreen: React.FC = () => {
     setMeetings(updatedMeetings);
   };
 
+  // Handle group type selection
+  const handleGroupTypeSelect = (type: string) => {
+    if (type === 'custom') {
+      setShowCustomTypeInput(true);
+    } else {
+      setGroupType(type as MeetingType);
+      setShowCustomTypeInput(false);
+    }
+  };
+
+  // Submit custom type
+  const submitCustomType = () => {
+    if (customType.trim()) {
+      setGroupType(customType.trim() as MeetingType);
+      setShowCustomTypeInput(false);
+    } else {
+      Alert.alert('Error', 'Please enter a custom group type');
+    }
+  };
+
   // Create the group using Redux
   const handleCreateGroup = (): void => {
     const currentUser = auth().currentUser;
@@ -306,7 +341,7 @@ const CreateGroupScreen: React.FC = () => {
     const groupData: Partial<HomeGroup> = {
       name: groupName,
       description: groupDescription,
-      type: meetings[0].type,
+      type: groupType,
       location: meetings[0].location,
       address: meetings[0].address,
       city: meetings[0].city,
@@ -427,6 +462,115 @@ const CreateGroupScreen: React.FC = () => {
         multiline
         numberOfLines={3}
       />
+
+      {/* Group Type Selector */}
+      <View style={styles.groupTypeContainer}>
+        <Text style={styles.sectionLabel}>Group Type</Text>
+        {errors.groupType ? (
+          <Text style={styles.errorText}>{errors.groupType}</Text>
+        ) : null}
+
+        <View style={styles.typeButtons}>
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              groupType === 'AA' &&
+                !showCustomTypeInput &&
+                styles.selectedTypeButton,
+            ]}
+            onPress={() => handleGroupTypeSelect('AA')}>
+            <Text
+              style={[
+                styles.typeButtonText,
+                groupType === 'AA' &&
+                  !showCustomTypeInput &&
+                  styles.selectedTypeButtonText,
+              ]}>
+              Alcoholics Anonymous
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              groupType === 'NA' &&
+                !showCustomTypeInput &&
+                styles.selectedTypeButton,
+            ]}
+            onPress={() => handleGroupTypeSelect('NA')}>
+            <Text
+              style={[
+                styles.typeButtonText,
+                groupType === 'NA' &&
+                  !showCustomTypeInput &&
+                  styles.selectedTypeButtonText,
+              ]}>
+              Narcotics Anonymous
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              groupType === 'Celebrate Recovery' &&
+                !showCustomTypeInput &&
+                styles.selectedTypeButton,
+            ]}
+            onPress={() => handleGroupTypeSelect('Celebrate Recovery')}>
+            <Text
+              style={[
+                styles.typeButtonText,
+                groupType === 'Celebrate Recovery' &&
+                  !showCustomTypeInput &&
+                  styles.selectedTypeButtonText,
+              ]}>
+              Celebrate Recovery
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              showCustomTypeInput && styles.selectedTypeButton,
+            ]}
+            onPress={() => handleGroupTypeSelect('custom')}>
+            <Text
+              style={[
+                styles.typeButtonText,
+                showCustomTypeInput && styles.selectedTypeButtonText,
+              ]}>
+              Custom
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showCustomTypeInput && (
+          <View style={styles.customTypeContainer}>
+            <Input
+              label="Custom Group Type"
+              value={customType}
+              onChangeText={setCustomType}
+              placeholder="Enter custom group type"
+              containerStyle={{width: '75%'}}
+            />
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Save"
+                onPress={submitCustomType}
+                size="small"
+                style={styles.customTypeButton}
+              />
+            </View>
+          </View>
+        )}
+
+        {groupType && !showCustomTypeInput && (
+          <View style={styles.selectedTypeDisplay}>
+            <Text style={styles.selectedTypeText}>Selected: {groupType}</Text>
+          </View>
+        )}
+      </View>
+
       <DatePicker
         visible={false}
         onClose={() => {}}
@@ -923,6 +1067,72 @@ const styles = StyleSheet.create({
   removeMeetingButtonText: {
     color: '#F44336',
     fontSize: 12,
+  },
+  groupTypeContainer: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 8,
+  },
+  typeButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  typeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#E0E0E0',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  selectedTypeButton: {
+    backgroundColor: '#2196F3',
+  },
+  typeButtonText: {
+    color: '#757575',
+    fontSize: 14,
+  },
+  selectedTypeButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  customTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    justifyContent: 'space-between',
+  },
+  buttonContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 0,
+    marginTop: 5,
+  },
+  customTypeButton: {
+    height: 38,
+    width: '80%',
+  },
+  selectedTypeDisplay: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+  },
+  selectedTypeText: {
+    color: '#1976D2',
+    fontWeight: 'bold',
+  },
+  errorText: {
+    color: '#F44336',
+    fontSize: 12,
+    marginBottom: 8,
   },
 });
 

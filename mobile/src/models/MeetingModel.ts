@@ -1,6 +1,7 @@
 import {Meeting, Location, MeetingSearchInput} from '../types';
 import {FirestoreDocument, MeetingDocument} from '../types/schema';
 import {firestore, auth, functions} from '../services/firebase/config';
+import {generateMeetingHash} from '../utils/hashUtils';
 
 /**
  * Meeting model for managing meeting data
@@ -85,6 +86,32 @@ export class MeetingModel {
   }
 
   /**
+   * Create a batch of meetings
+   */
+  static async createBatch(
+    meetingData: Partial<Meeting>[],
+  ): Promise<Meeting[]> {
+    const batch = firestore.batch();
+    const meetings: Meeting[] = [];
+
+    for (const meeting of meetingData) {
+      const id = generateMeetingHash(meeting as Meeting);
+      batch.set(
+        firestore.collection('meetings').doc(id),
+        MeetingModel.toFirestore(meeting),
+      );
+      meetings.push({
+        ...meeting,
+        id,
+      } as Meeting);
+    }
+
+    await batch.commit();
+
+    return meetings;
+  }
+
+  /**
    * Create a new meeting
    */
   static async create(meetingData: Partial<Meeting>): Promise<Meeting> {
@@ -99,6 +126,7 @@ export class MeetingModel {
 
       const newMeeting = {
         ...meetingData,
+        id: generateMeetingHash(meetingData as Meeting),
         verified: false, // New meetings start unverified
         addedBy: currentUser.uid,
         createdAt: now,

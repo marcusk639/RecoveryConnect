@@ -127,9 +127,11 @@ export const createGroup = createAsyncThunk(
       const group = await GroupModel.create(groupData);
 
       // Create or update all meetings linked to this group
-      for (const meeting of meetings) {
-        await GroupModel.addMeetingToGroup(group.id!, meeting);
-      }
+      await Promise.all(
+        meetings.map(meeting =>
+          GroupModel.addMeetingToGroup(group.id!, meeting),
+        ),
+      );
 
       // Call onSuccess callback if provided
       if (onSuccess && typeof onSuccess === 'function') {

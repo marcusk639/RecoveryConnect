@@ -589,7 +589,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
 
           {/* Account Security, Data & Privacy, Policy Sections remain the same */}
           {/* Account Security */}
-          <View style={styles.section}>
+          {/* <View style={styles.section}>
             <Text style={styles.sectionTitle}>Account Security</Text>
             <TouchableOpacity
               style={styles.securityOption}
@@ -604,7 +604,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
               </Text>
               <Text style={styles.securityOptionArrow}>→</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Data & Privacy */}
           <View style={styles.section}>

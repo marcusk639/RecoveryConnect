@@ -11,6 +11,7 @@ import GroupStackNavigator from './GroupStackNavigator';
 import MeetingsScreen from '../screens/meetings/MeetingScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import GroupSearchScreen from '../screens/homegroup/GroupSearchScreen';
+import ProfileNavigator from './ProfileNavigator';
 
 // Tab Icons
 const HomeIcon = ({focused}: {focused: boolean}) => (
@@ -160,7 +161,7 @@ const MainTabNavigator: React.FC = () => {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileNavigator}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({focused}) => <ProfileIcon focused={focused} />,

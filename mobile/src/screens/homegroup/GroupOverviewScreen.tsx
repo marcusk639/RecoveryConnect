@@ -93,12 +93,14 @@ const GroupOverviewScreen: React.FC = () => {
         dispatch(fetchGroupMeetings(groupId)).unwrap(),
         dispatch(fetchGroupMilestones({groupId})).unwrap(),
       ]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading group data:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load group data. Please try again later.',
-      );
+      if (error && error.name !== 'ConditionError') {
+        Alert.alert(
+          'Error',
+          'Failed to load group data. Please try again later.',
+        );
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -213,13 +215,13 @@ const GroupOverviewScreen: React.FC = () => {
 
         <View style={styles.groupInfoContainer}>
           <Text style={styles.meetingTimeText}>
-            {group.type || 'Various'} Group
+            {group.type || '12 Step'} Group
           </Text>
           <Text style={styles.locationText}>
-            {group.location || 'Location TBD'}
+            {group.location || 'Location Unknown'}
           </Text>
           <Text style={styles.meetingTypeText}>
-            {group.type || 'Various'} Meeting
+            {group.type || '12 Step'} Meeting
           </Text>
           <Text style={styles.memberCountText}>
             {group.memberCount} Members • Founded{' '}
@@ -232,7 +234,7 @@ const GroupOverviewScreen: React.FC = () => {
       </View>
 
       {/* Members section */}
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={styles.section}
         onPress={() =>
           navigation.navigate('GroupMembers', {
@@ -250,7 +252,8 @@ const GroupOverviewScreen: React.FC = () => {
         <View style={styles.arrow}>
           <Text style={styles.arrowText}>→</Text>
         </View>
-      </TouchableOpacity>
+
+      </TouchableOpacity> */}
 
       {/* Navigation Tiles */}
       <View style={styles.navTilesContainer}>

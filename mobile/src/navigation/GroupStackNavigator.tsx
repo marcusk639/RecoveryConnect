@@ -34,7 +34,7 @@ const GroupStackNavigator: React.FC = () => {
         name="GroupsList"
         component={GroupsListScreen}
         options={{
-          title: 'My Groups',
+          headerShown: false,
         }}
       />
       <Stack.Screen
