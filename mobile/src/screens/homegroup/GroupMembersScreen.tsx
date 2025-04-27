@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
+import auth from '@react-native-firebase/auth';
 
 // Import types
 import {GroupStackParamList} from '../../types/navigation';
@@ -18,15 +19,19 @@ import {GroupStackParamList} from '../../types/navigation';
 // Import components
 import GroupInviteModal from '../../components/groups/GroupInviteModal';
 import {getAnonymizedName} from '../../utils/anonymous';
-
-// Types for members
-interface GroupMember {
-  id: string;
-  name: string;
-  sobrietyDate?: string;
-  position?: string; // secretary, treasurer, etc.
-  isAdmin: boolean;
-}
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  fetchGroupMembers,
+  selectMembersByGroupId,
+  selectGroupAdmins,
+  selectMembersStatus,
+  selectMembersError,
+  GroupMember,
+} from '../../store/slices/membersSlice';
+import {
+  selectGroupById,
+  selectGroupsStatus,
+} from '../../store/slices/groupsSlice';
 
 type GroupMembersScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -39,11 +44,21 @@ const GroupMembersScreen: React.FC = () => {
   const route = useRoute<GroupMembersScreenRouteProp>();
   const navigation = useNavigation<GroupMembersScreenNavigationProp>();
   const {groupId} = route.params;
+  const dispatch = useAppDispatch();
 
-  const [loading, setLoading] = useState(true);
+  // Get data from Redux store
+  const members = useAppSelector(state =>
+    selectMembersByGroupId(state, groupId),
+  );
+  const admins = useAppSelector(state => selectGroupAdmins(state, groupId));
+  const group = useAppSelector(state => selectGroupById(state, groupId));
+  const membersStatus = useAppSelector(selectMembersStatus);
+  const membersError = useAppSelector(selectMembersError);
+  const groupsStatus = useAppSelector(selectGroupsStatus);
+
+  const loading = membersStatus === 'loading' || groupsStatus === 'loading';
   const [refreshing, setRefreshing] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
-  const [members, setMembers] = useState<GroupMember[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [groupName, setGroupName] = useState('');
 
@@ -51,86 +66,33 @@ const GroupMembersScreen: React.FC = () => {
     loadMembers();
   }, [groupId]);
 
+  // Update group name when group data is loaded
+  useEffect(() => {
+    if (group) {
+      setGroupName(group.name);
+
+      // Check if current user is admin
+      const currentUser = auth().currentUser;
+      if (currentUser) {
+        setIsAdmin(group.admins?.includes(currentUser.uid) || false);
+      }
+    }
+  }, [group]);
+
+  // Show errors from Redux
+  useEffect(() => {
+    if (membersError) {
+      Alert.alert('Error', membersError);
+    }
+  }, [membersError]);
+
   const loadMembers = async () => {
+    setRefreshing(true);
     try {
-      setLoading(true);
-
-      // In a real app, this would fetch data from Firestore
-      // For now, we'll use mock data
-
-      // Get the group data
-      const mockGroup = {
-        id: groupId,
-        name: 'Serenity Now Group',
-        isAdmin: true,
-      };
-
-      setGroupName(mockGroup.name);
-      setIsAdmin(mockGroup.isAdmin);
-
-      // Mock members data
-      const mockMembers: GroupMember[] = [
-        {
-          id: '1',
-          name: 'Marcus Klein',
-          sobrietyDate: '2020-06-12',
-          position: 'Secretary',
-          isAdmin: true,
-        },
-        {
-          id: '2',
-          name: 'Jack Doe',
-          sobrietyDate: '2015-03-22',
-          position: 'Treasurer',
-          isAdmin: true,
-        },
-        {
-          id: '3',
-          name: 'S.',
-          sobrietyDate: '2019-11-05',
-          position: 'GSR',
-          isAdmin: true,
-        },
-        {
-          id: '4',
-          name: 'T.',
-          sobrietyDate: '2023-09-01',
-          isAdmin: false,
-        },
-        {
-          id: '5',
-          name: 'L.',
-          sobrietyDate: '2018-04-30',
-          isAdmin: false,
-        },
-        {
-          id: '6',
-          name: 'R.',
-          sobrietyDate: '2021-12-10',
-          isAdmin: false,
-        },
-        {
-          id: '7',
-          name: 'K.',
-          sobrietyDate: '2022-05-15',
-          isAdmin: false,
-        },
-        {
-          id: '8',
-          name: 'P.',
-          isAdmin: false,
-        },
-      ];
-
-      setMembers(mockMembers);
+      await dispatch(fetchGroupMembers(groupId)).unwrap();
     } catch (error) {
-      console.error('Error loading members:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load group members. Please try again later.',
-      );
+      // Error is already handled in the useEffect above
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
@@ -228,7 +190,7 @@ const GroupMembersScreen: React.FC = () => {
     );
   };
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />

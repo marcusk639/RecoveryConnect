@@ -16,6 +16,13 @@ import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {CompositeNavigationProp} from '@react-navigation/native';
 import {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  fetchUserGroups,
+  selectUserGroups,
+  selectGroupsStatus,
+  selectGroupsError,
+} from '../../store/slices/groupsSlice';
 
 // Import types
 import {GroupStackParamList, MainTabParamList} from '../../types/navigation';
@@ -30,8 +37,14 @@ type GroupsListScreenNavigationProp = CompositeNavigationProp<
 
 const GroupsListScreen: React.FC = () => {
   const navigation = useNavigation<GroupsListScreenNavigationProp>();
-  const [homeGroups, setHomeGroups] = useState<HomeGroup[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const dispatch = useAppDispatch();
+
+  // Get groups from Redux store
+  const groups = useAppSelector(selectUserGroups);
+  const status = useAppSelector(selectGroupsStatus);
+  const error = useAppSelector(selectGroupsError);
+  const isLoading = status === 'loading';
+
   const [userName, setUserName] = useState('');
 
   useEffect(() => {
@@ -41,64 +54,25 @@ const GroupsListScreen: React.FC = () => {
       setUserName(currentUser.displayName);
     }
 
-    // Load initial data
-    loadData();
+    // Load groups if not already loaded or if empty
+    if (status === 'idle' || (groups.length === 0 && status !== 'loading')) {
+      loadData();
+    }
   }, []);
 
-  const loadData = async () => {
-    try {
-      setRefreshing(true);
-
-      // Get current user
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        Alert.alert('Error', 'You must be logged in to view groups');
-        return;
-      }
-
-      // Fetch the user document to get their group IDs
-      const userDoc = await UserModel.getById(currentUser.uid);
-      const userGroupIds = userDoc?.homeGroups || [];
-
-      // Fetch groups where the user is an admin
-      const adminGroupsSnapshot = await firestore()
-        .collection('groups')
-        .where('admins', 'array-contains', currentUser.uid)
-        .get();
-
-      // Combine group IDs
-      const allGroupIds = [
-        ...new Set([
-          ...userGroupIds,
-          ...adminGroupsSnapshot.docs.map(doc => doc.id),
-        ]),
-      ];
-
-      // Fetch the actual group documents
-      const groupPromises = allGroupIds.map(groupId =>
-        firestore().collection('groups').doc(groupId).get(),
-      );
-
-      const groupSnapshots = await Promise.all(groupPromises);
-      const validGroupSnapshots = groupSnapshots.filter(
-        snapshot => snapshot.exists,
-      );
-
-      // Map Firestore documents to HomeGroup objects
-      const groups: HomeGroup[] = validGroupSnapshots.map(doc =>
-        GroupModel.fromFirestore({
-          id: doc.id,
-          data: () => doc.data() as GroupDocument,
-        }),
-      );
-
-      setHomeGroups(groups);
-    } catch (error) {
-      console.error('Error loading home data:', error);
-      Alert.alert('Error', 'Failed to load groups. Please try again later.');
-    } finally {
-      setRefreshing(false);
+  useEffect(() => {
+    // Show error if there's one
+    if (error) {
+      Alert.alert('Error', error);
     }
+  }, [error]);
+
+  const loadData = async () => {
+    dispatch(fetchUserGroups());
+  };
+
+  const handleRefresh = () => {
+    loadData();
   };
 
   const navigateToGroupDetails = (group: HomeGroup) => {
@@ -133,12 +107,25 @@ const GroupsListScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
+  const renderEmptyComponent = () => (
+    <View style={styles.emptyHomeGroups}>
+      <Text style={styles.emptyStateText}>
+        You haven't joined any home groups yet
+      </Text>
+      <TouchableOpacity
+        style={styles.joinGroupButton}
+        onPress={() => navigation.navigate('GroupSearch')}>
+        <Text style={styles.joinGroupButtonText}>Find a Group</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={loadData} />
+          <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
         }>
         {/* Welcome Section */}
         <View style={styles.welcomeSection}>
@@ -165,15 +152,16 @@ const GroupsListScreen: React.FC = () => {
             </View>
           </View>
 
-          {homeGroups.length > 0 ? (
+          {groups.length > 0 ? (
             <FlatList
-              data={homeGroups}
+              data={groups}
               renderItem={renderHomeGroupItem}
               keyExtractor={item => item.id!}
               horizontal={false}
               showsHorizontalScrollIndicator={false}
               scrollEnabled={false}
               contentContainerStyle={styles.homeGroupsList}
+              ListEmptyComponent={renderEmptyComponent}
             />
           ) : (
             <View style={styles.emptyHomeGroups}>

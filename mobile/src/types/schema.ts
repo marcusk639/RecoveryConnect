@@ -64,6 +64,7 @@ export interface UserDocument {
   homeGroups: string[]; // Array of group IDs
   role: 'user' | 'admin';
   favoriteMeetings?: string[]; // Array of meeting IDs
+  photoUrl?: string;
 }
 
 /**
@@ -92,11 +93,14 @@ export interface GroupDocument {
 }
 
 /**
- * Group Member Sub-Collection Document
+ * Group Member Document (top-level collection)
  */
 export interface GroupMemberDocument {
   id: string; // User ID
+  groupId: string; // Group ID
   displayName: string;
+  email?: string;
+  photoURL?: string;
   joinedAt: Timestamp;
   sobrietyDate?: Timestamp;
   position?: string; // Position in the group (secretary, treasurer, etc.)
@@ -116,6 +120,7 @@ export interface AnnouncementDocument {
   createdBy: string; // User ID
   authorName: string; // Display name for efficiency
   expiresAt?: Timestamp;
+  groupId: string; // Group ID that this announcement belongs to
 }
 
 /**
@@ -323,11 +328,12 @@ export interface DirectMessageDocument {
 export const COLLECTION_PATHS = {
   USERS: 'users',
   GROUPS: 'groups',
-  GROUP_MEMBERS: (groupId: string) => `groups/${groupId}/members`,
-  ANNOUNCEMENTS: (groupId: string) => `groups/${groupId}/announcements`,
+  MEMBERS: 'members', // New top-level members collection
+  GROUP_MEMBERS: 'members', // Legacy path, will be migrated
+  ANNOUNCEMENTS: 'announcements', // Updated to top-level collection
   EVENTS: (groupId: string) => `groups/${groupId}/events`,
-  TRANSACTIONS: (groupId: string) => `groups/${groupId}/transactions`,
-  TREASURY_OVERVIEW: (groupId: string) => `groups/${groupId}/treasury`,
+  TRANSACTIONS: `transactions`,
+  TREASURY_OVERVIEW: `treasury_overviews`,
   MEETINGS: 'meetings',
   NOTIFICATIONS: 'notifications',
   BUSINESS_MEETINGS: 'business_meetings',

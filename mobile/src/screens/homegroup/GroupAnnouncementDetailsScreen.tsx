@@ -17,17 +17,16 @@ import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 
 import {GroupStackParamList} from '../../types/navigation';
-
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  isPinned: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
-  authorName: string;
-}
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  fetchAnnouncementById,
+  updateAnnouncement,
+  deleteAnnouncement,
+  selectAnnouncementById,
+  selectAnnouncementsStatus,
+  selectAnnouncementsError,
+  Announcement,
+} from '../../store/slices/announcementsSlice';
 
 type GroupAnnouncementDetailsScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -41,63 +40,78 @@ const GroupAnnouncementDetailsScreen: React.FC = () => {
   const navigation =
     useNavigation<GroupAnnouncementDetailsScreenNavigationProp>();
   const {groupId, announcementId} = route.params;
+  const dispatch = useAppDispatch();
 
-  const [loading, setLoading] = useState(true);
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isAuthor, setIsAuthor] = useState(false);
+  // Get announcement from Redux store
+  const announcement = useAppSelector(state =>
+    selectAnnouncementById(state, announcementId),
+  );
+  const status = useAppSelector(selectAnnouncementsStatus);
+  const error = useAppSelector(selectAnnouncementsError);
+
+  const loading = status === 'loading';
 
   // Edit mode state
   const [editMode, setEditMode] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isPinned, setIsPinned] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+
+  // Check if current user is admin or author
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthor, setIsAuthor] = useState(false);
 
   useEffect(() => {
     loadAnnouncementDetails();
   }, [groupId, announcementId]);
 
-  const loadAnnouncementDetails = async () => {
-    try {
-      setLoading(true);
-
-      // In a real app, this would fetch the announcement from Firestore
-      // For now, we'll use mock data
-      const mockAnnouncement: Announcement = {
-        id: announcementId,
-        title: 'Group Inventory',
-        content:
-          "We will be conducting our annual group inventory after the meeting on May 15th. All members are encouraged to attend and participate. This is an important opportunity for us to assess how our group is functioning, what we're doing well, and where we can improve.\n\nPlease come prepared with any thoughts or suggestions you have about our group format, meeting atmosphere, or how we're carrying the message. This is a chance for every member to be heard.\n\nThe inventory will start immediately after our regular meeting and should last about an hour. Light refreshments will be provided.",
-        isPinned: true,
-        createdAt: new Date('2024-04-30'),
-        updatedAt: new Date('2024-04-30'),
-        createdBy: 'user1',
-        authorName: 'J.',
-      };
-
-      setAnnouncement(mockAnnouncement);
-
-      // Initialize form values for editing
-      setTitle(mockAnnouncement.title);
-      setContent(mockAnnouncement.content);
-      setIsPinned(mockAnnouncement.isPinned);
+  useEffect(() => {
+    // Initialize form values for editing when announcement is loaded
+    if (announcement) {
+      setTitle(announcement.title);
+      setContent(announcement.content);
+      setIsPinned(announcement.isPinned);
 
       // Check if current user is admin or author
       const currentUser = auth().currentUser;
-      // For demo, just set as admin and author
-      setIsAdmin(true);
-      setIsAuthor(true);
+      if (currentUser) {
+        // Check if user is the author
+        setIsAuthor(announcement.createdBy === currentUser.uid);
+
+        // Check if user is an admin - this would need to be determined from the group data
+        // For now, use a placeholder implementation
+        checkIfUserIsAdmin(groupId, currentUser.uid);
+      }
+    }
+  }, [announcement]);
+
+  // Show Redux errors
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Error', error);
+    }
+  }, [error]);
+
+  const checkIfUserIsAdmin = async (groupId: string, userId: string) => {
+    try {
+      const groupDoc = await firestore()
+        .collection('groups')
+        .doc(groupId)
+        .get();
+      if (groupDoc.exists) {
+        const groupData = groupDoc.data();
+        setIsAdmin(groupData?.admins?.includes(userId) || false);
+      }
     } catch (error) {
-      console.error('Error loading announcement details:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load announcement details. Please try again later.',
-      );
-    } finally {
-      setLoading(false);
+      console.error('Error checking admin status:', error);
+    }
+  };
+
+  const loadAnnouncementDetails = () => {
+    // Fetch announcement from Redux if not already in store
+    if (!announcement) {
+      dispatch(fetchAnnouncementById({groupId, announcementId}));
     }
   };
 
@@ -107,52 +121,41 @@ const GroupAnnouncementDetailsScreen: React.FC = () => {
       return;
     }
 
-    try {
-      setSaving(true);
-
-      // In a real app, this would update Firestore
-      // For now, we'll simulate a network delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Update local state
-      if (announcement) {
-        const updatedAnnouncement: Announcement = {
-          ...announcement,
-          title,
-          content,
-          isPinned,
-          updatedAt: new Date(),
-        };
-
-        setAnnouncement(updatedAnnouncement);
-      }
-
-      setEditMode(false);
-      Alert.alert('Success', 'Announcement updated successfully.');
-    } catch (error) {
-      console.error('Error updating announcement:', error);
-      Alert.alert('Error', 'Failed to update announcement. Please try again.');
-    } finally {
-      setSaving(false);
-    }
+    dispatch(
+      updateAnnouncement({
+        announcementId,
+        title,
+        content,
+        isPinned,
+      }),
+    )
+      .unwrap()
+      .then(() => {
+        setEditMode(false);
+        Alert.alert('Success', 'Announcement updated successfully.');
+      })
+      .catch(error => {
+        Alert.alert(
+          'Error',
+          error || 'Failed to update announcement. Please try again.',
+        );
+      });
   };
 
   const handleDelete = async () => {
-    try {
-      setDeleting(true);
-
-      // In a real app, this would delete from Firestore
-      // For now, we'll simulate a network delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      navigation.goBack();
-      Alert.alert('Success', 'Announcement deleted successfully.');
-    } catch (error) {
-      console.error('Error deleting announcement:', error);
-      Alert.alert('Error', 'Failed to delete announcement. Please try again.');
-      setDeleting(false);
-      setDeleteConfirmVisible(false);
-    }
+    dispatch(deleteAnnouncement(announcementId))
+      .unwrap()
+      .then(() => {
+        navigation.goBack();
+        Alert.alert('Success', 'Announcement deleted successfully.');
+      })
+      .catch(error => {
+        Alert.alert(
+          'Error',
+          error || 'Failed to delete announcement. Please try again.',
+        );
+        setDeleteConfirmVisible(false);
+      });
   };
 
   const formatDate = (date: Date): string => {
@@ -236,8 +239,8 @@ const GroupAnnouncementDetailsScreen: React.FC = () => {
               <TouchableOpacity
                 style={[styles.editButton, styles.saveButton]}
                 onPress={handleSave}
-                disabled={saving}>
-                {saving ? (
+                disabled={loading}>
+                {loading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.saveButtonText}>Save</Text>
@@ -309,14 +312,14 @@ const GroupAnnouncementDetailsScreen: React.FC = () => {
               <TouchableOpacity
                 style={[styles.confirmButton, styles.cancelConfirmButton]}
                 onPress={() => setDeleteConfirmVisible(false)}
-                disabled={deleting}>
+                disabled={loading}>
                 <Text style={styles.cancelConfirmText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.confirmButton, styles.deleteConfirmButton]}
                 onPress={handleDelete}
-                disabled={deleting}>
-                {deleting ? (
+                disabled={loading}>
+                {loading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.deleteConfirmText}>Delete</Text>

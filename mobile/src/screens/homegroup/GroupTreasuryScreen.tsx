@@ -21,6 +21,25 @@ import {GroupModel} from '../../models/GroupModel';
 import {HomeGroup} from '../../types';
 import {Transaction} from '../../types/domain/treasury';
 import {TreasuryModel} from '../../models/TreasuryModel';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  fetchGroupById,
+  selectGroupById,
+  selectGroupsStatus,
+  selectGroupsError,
+} from '../../store/slices/groupsSlice';
+import {
+  fetchGroupTransactions,
+  selectGroupTransactions,
+  selectTransactionsStatus,
+  selectTransactionsError,
+} from '../../store/slices/transactionsSlice';
+import {
+  fetchTreasuryStats,
+  selectTreasuryStatsByGroupId,
+  selectTreasuryStatus,
+  selectTreasuryError,
+} from '../../store/slices/treasurySlice';
 
 type GroupTreasuryScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -46,88 +65,98 @@ const GroupTreasuryScreen: React.FC = () => {
   const route = useRoute<GroupTreasuryScreenRouteProp>();
   const navigation = useNavigation<GroupTreasuryScreenNavigationProp>();
   const {groupId, groupName} = route.params;
+  const dispatch = useAppDispatch();
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [group, setGroup] = useState<HomeGroup | null>(null);
+  // Get data from Redux store
+  const group = useAppSelector(state => selectGroupById(state, groupId));
+  const transactions = useAppSelector(state =>
+    selectGroupTransactions(state, groupId),
+  );
+  const treasuryStats = useAppSelector(state =>
+    selectTreasuryStatsByGroupId(state, groupId),
+  );
+
+  // Get loading and error states
+  const groupsStatus = useAppSelector(selectGroupsStatus);
+  const groupsError = useAppSelector(selectGroupsError);
+  const transactionsStatus = useAppSelector(selectTransactionsStatus);
+  const transactionsError = useAppSelector(selectTransactionsError);
+  const treasuryStatus = useAppSelector(selectTreasuryStatus);
+  const treasuryError = useAppSelector(selectTreasuryError);
+
+  const isLoading =
+    groupsStatus === 'loading' ||
+    transactionsStatus === 'loading' ||
+    treasuryStatus === 'loading' ||
+    !group ||
+    !treasuryStats;
+
+  const refreshing =
+    transactionsStatus === 'loading' || treasuryStatus === 'loading';
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [isTreasurer, setIsTreasurer] = useState(false);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [summary, setSummary] = useState<TreasuryStats>({
-    balance: 0,
-    prudentReserve: 0,
-    monthlyIncome: 0,
-    monthlyExpenses: 0,
-    lastUpdated: new Date(),
-  });
-  const [showAddTransaction, setShowAddTransaction] = useState(false);
 
   useEffect(() => {
     loadGroupData();
   }, [groupId]);
 
-  const loadGroupData = async () => {
-    try {
-      setLoading(true);
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        Alert.alert('Error', 'You must be logged in to view treasury');
-        return;
-      }
-
-      // Get group data
-      const groupDoc = await GroupModel.getById(groupId);
-
-      if (!groupDoc) {
-        Alert.alert('Error', 'Group not found');
-        return;
-      }
-
-      setGroup(groupDoc);
-
-      // Check if user is admin or treasurer
-      const isUserAdmin = groupDoc.admins.includes(currentUser.uid);
-      const isUserTreasurer =
-        groupDoc.treasurers?.includes(currentUser.uid) || false;
-
-      // setIsAdmin(isUserAdmin);
-      // setIsTreasurer(isUserTreasurer);
-
-      setIsAdmin(true);
-      setIsTreasurer(true);
-
-      // Load treasury data
-      await loadTreasuryData();
-    } catch (error) {
-      console.error('Error loading group data:', error);
-      Alert.alert('Error', 'Failed to load group data');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (group) {
+      checkUserPermissions(group);
     }
+  }, [group]);
+
+  useEffect(() => {
+    const error = groupsError || transactionsError || treasuryError;
+    if (error) {
+      Alert.alert('Error', error);
+    }
+  }, [groupsError, transactionsError, treasuryError]);
+
+  const loadGroupData = async () => {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to view treasury');
+      return;
+    }
+
+    if (!group || groupsStatus === 'idle') {
+      dispatch(fetchGroupById(groupId));
+    }
+
+    loadTreasuryData();
   };
 
   const loadTreasuryData = async () => {
-    try {
-      setRefreshing(true);
-      const currentUser = auth().currentUser;
-      if (!currentUser) return;
+    if (transactions.length === 0 || transactionsStatus === 'idle') {
+      dispatch(fetchGroupTransactions({groupId}));
+    }
 
-      // Get treasury data using TreasuryModel
-      const treasuryStats = await TreasuryModel.getTreasuryStats(groupId);
-      const transactions = await TreasuryModel.getTransactions(groupId, 50);
-
-      setSummary(treasuryStats);
-      setTransactions(transactions);
-    } catch (error) {
-      console.error('Error loading treasury data:', error);
-      Alert.alert('Error', 'Failed to load treasury data');
-    } finally {
-      setRefreshing(false);
+    if (!treasuryStats || treasuryStatus === 'idle') {
+      dispatch(fetchTreasuryStats(groupId));
     }
   };
 
-  const onRefresh = async () => {
-    await loadTreasuryData();
+  const checkUserPermissions = (groupData: HomeGroup) => {
+    const currentUser = auth().currentUser;
+    if (!currentUser) return;
+
+    const isUserAdmin = groupData.admins.includes(currentUser.uid);
+    const isUserTreasurer =
+      groupData.treasurers?.includes(currentUser.uid) || false;
+
+    // Uncomment for production
+    // setIsAdmin(isUserAdmin);
+    // setIsTreasurer(isUserTreasurer);
+
+    // For development, set both to true
+    setIsAdmin(true);
+    setIsTreasurer(true);
+  };
+
+  const onRefresh = () => {
+    loadTreasuryData();
   };
 
   const renderTransactionItem = ({item}: {item: Transaction}) => (
@@ -150,41 +179,47 @@ const GroupTreasuryScreen: React.FC = () => {
     </View>
   );
 
-  const renderTreasurySummary = () => (
-    <View style={styles.summaryContainer}>
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Current Balance</Text>
-          <Text style={styles.summaryValue}>${summary.balance.toFixed(2)}</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Prudent Reserve</Text>
-          <Text style={styles.summaryValue}>
-            ${summary.prudentReserve.toFixed(2)}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Monthly Income</Text>
-          <Text style={[styles.summaryValue, {color: '#4CAF50'}]}>
-            ${summary.monthlyIncome.toFixed(2)}
-          </Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Monthly Expenses</Text>
-          <Text style={[styles.summaryValue, {color: '#F44336'}]}>
-            ${summary.monthlyExpenses.toFixed(2)}
-          </Text>
-        </View>
-      </View>
-      <Text style={styles.lastUpdated}>
-        Last updated: {summary.lastUpdated.toLocaleDateString()}
-      </Text>
-    </View>
-  );
+  const renderTreasurySummary = () => {
+    if (!treasuryStats) return null;
 
-  if (loading) {
+    return (
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Current Balance</Text>
+            <Text style={styles.summaryValue}>
+              ${treasuryStats.balance.toFixed(2)}
+            </Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Prudent Reserve</Text>
+            <Text style={styles.summaryValue}>
+              ${treasuryStats.prudentReserve.toFixed(2)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Monthly Income</Text>
+            <Text style={[styles.summaryValue, {color: '#4CAF50'}]}>
+              ${treasuryStats.monthlyIncome.toFixed(2)}
+            </Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Monthly Expenses</Text>
+            <Text style={[styles.summaryValue, {color: '#F44336'}]}>
+              ${treasuryStats.monthlyExpenses.toFixed(2)}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.lastUpdated}>
+          Last updated: {treasuryStats.lastUpdated.toLocaleDateString()}
+        </Text>
+      </View>
+    );
+  };
+
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>

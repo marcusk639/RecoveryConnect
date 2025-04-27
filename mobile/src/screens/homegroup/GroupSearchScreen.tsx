@@ -9,14 +9,19 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {MainTabParamList} from '../../types/navigation';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import {GroupModel} from '../../models/GroupModel';
-import {HomeGroup} from '../../types';
+import {HomeGroup, MeetingType} from '../../types';
+import Geolocation from '@react-native-community/geolocation';
+import {Picker} from '@react-native-picker/picker';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {selectUserData, fetchUserData} from '../../store/slices/authSlice';
 
 // Define a more specific type for the Home tab navigation
 type HomeTabParams = {
@@ -43,136 +48,181 @@ type GroupSearchScreenNavigationProp = StackNavigationProp<
 
 const GroupSearchScreen: React.FC = () => {
   const navigation = useNavigation<GroupSearchScreenNavigationProp>();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [groups, setGroups] = useState<HomeGroup[]>([]);
-  const [filteredGroups, setFilteredGroups] = useState<HomeGroup[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [joining, setJoining] = useState<string | null>(null);
-  const [userJoinedGroups, setUserJoinedGroups] = useState<string[]>([]);
+  const dispatch = useAppDispatch();
 
+  // Local state for UI and filtering
+  const [searchQuery, setSearchQuery] = useState('');
+  const [allGroups, setAllGroups] = useState<HomeGroup[]>([]);
+  const [filteredGroups, setFilteredGroups] = useState<HomeGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [joining, setJoining] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<
+    MeetingType | 'All'
+  >('All');
+
+  // Get user data from Redux
+  const userData = useAppSelector(selectUserData);
+  const userJoinedGroups = userData?.homeGroups || [];
+
+  // Define Meeting Types for Picker
+  const meetingTypes: (MeetingType | 'All')[] = [
+    'All',
+    'AA',
+    'NA',
+    'IOP',
+    'Religious',
+    'Celebrate Recovery',
+    'Custom',
+  ];
+
+  // Fetch Location and Groups on Mount
   useEffect(() => {
-    loadUserJoinedGroups();
-    loadGroups();
+    requestLocationPermission();
   }, []);
 
+  // Load groups once location is available
   useEffect(() => {
-    // Filter groups based on search query
-    if (searchQuery.trim() === '') {
-      setFilteredGroups(groups);
-    } else {
-      const filtered = groups.filter(
-        group =>
-          group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          group.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (group.location &&
-            group.location.toLowerCase().includes(searchQuery.toLowerCase())),
-      );
-      setFilteredGroups(filtered);
+    if (userLocation) {
+      loadNearbyGroups();
     }
-  }, [searchQuery, groups]);
+    // If location fails, don't load groups initially, show message in empty state
+    else if (locationError) {
+      setLoading(false);
+      setAllGroups([]);
+      setFilteredGroups([]);
+      Alert.alert(
+        'Location Error',
+        'Could not get your location. Please enable location services to find nearby groups.',
+      );
+    }
+  }, [userLocation, locationError]);
 
-  const loadUserJoinedGroups = async () => {
-    try {
-      const currentUser = auth().currentUser;
-      if (!currentUser) return;
+  // Filter groups whenever dependencies change
+  useEffect(() => {
+    filterGroups();
+  }, [searchQuery, allGroups, selectedTypeFilter]);
 
-      const userDoc = await firestore()
-        .collection('users')
-        .doc(currentUser.uid)
-        .get();
-      if (userDoc.exists) {
-        const userData = userDoc.data();
-        setUserJoinedGroups(userData?.homeGroups || []);
+  const requestLocationPermission = async () => {
+    if (Platform.OS === 'ios') {
+      getOneTimeLocation();
+    } else {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Access Required',
+            message:
+              'This app needs to access your location to find nearby groups.',
+            buttonPositive: 'OK',
+          },
+        );
+        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+          getOneTimeLocation();
+        } else {
+          setLocationError('Location permission denied');
+          setLoading(false);
+        }
+      } catch (err) {
+        console.warn(err);
+        setLocationError('Error requesting location permission');
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading user joined groups:', error);
     }
   };
 
-  const loadGroups = async () => {
+  const getOneTimeLocation = () => {
+    setLocationError(null);
+    Geolocation.getCurrentPosition(
+      position => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      error => {
+        setLocationError(error.message);
+        console.error('Geolocation Error:', error);
+        setLoading(false);
+      },
+      {enableHighAccuracy: false, timeout: 30000, maximumAge: 1000 * 60 * 5},
+    );
+  };
+
+  const loadNearbyGroups = async () => {
+    if (!userLocation) return;
     try {
       setLoading(true);
-
-      // Fetch all groups from Firestore
-      const groupsSnapshot = await firestore().collection('groups').get();
-
-      const fetchedGroups = groupsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name,
-          description: data.description,
-          location: data.location || '',
-          memberCount: data.memberCount || 0,
-          type: data.type || 'AA',
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-          admins: data.admins || [],
-          meetings: [], // Will be populated when needed
-        } as HomeGroup;
-      });
-
-      setGroups(fetchedGroups);
-      setFilteredGroups(fetchedGroups);
+      const nearbyGroups = await GroupModel.searchGroupsByLocation(
+        userLocation.latitude,
+        userLocation.longitude,
+        25,
+      );
+      setAllGroups(nearbyGroups);
     } catch (error) {
-      console.error('Error loading groups:', error);
-      Alert.alert('Error', 'Failed to load groups. Please try again later.');
+      console.error('Error loading nearby groups:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load nearby groups. Please try again later.',
+      );
+      setAllGroups([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const filterGroups = () => {
+    let tempFiltered = [...allGroups];
+
+    if (selectedTypeFilter !== 'All') {
+      tempFiltered = tempFiltered.filter(
+        group => group.type === selectedTypeFilter,
+      );
+    }
+
+    if (searchQuery.trim() !== '') {
+      const lowerQuery = searchQuery.toLowerCase();
+      tempFiltered = tempFiltered.filter(
+        group =>
+          group.name.toLowerCase().includes(lowerQuery) ||
+          group.description.toLowerCase().includes(lowerQuery) ||
+          (group.location &&
+            group.location.toLowerCase().includes(lowerQuery)) ||
+          (group.city && group.city.toLowerCase().includes(lowerQuery)) ||
+          (group.state && group.state.toLowerCase().includes(lowerQuery)),
+      );
+    }
+
+    setFilteredGroups(tempFiltered);
+  };
+
   const handleJoinGroup = async (group: HomeGroup) => {
+    if (!group.id) return;
     try {
-      setJoining(group.id!);
+      setJoining(group.id);
 
       const currentUser = auth().currentUser;
       if (!currentUser) {
         Alert.alert('Error', 'You must be logged in to join a group.');
+        setJoining(null);
         return;
       }
 
-      // Add user to group's members collection
-      await firestore()
-        .collection('groups')
-        .doc(group.id)
-        .collection('members')
-        .doc(currentUser.uid)
-        .set({
-          id: currentUser.uid,
-          displayName: currentUser.displayName || 'Anonymous',
-          joinedAt: firestore.FieldValue.serverTimestamp(),
-          isAdmin: false,
-          showSobrietyDate: false,
-        });
+      await GroupModel.addMember(group.id, currentUser.uid);
 
-      // Increment member count
-      await firestore()
-        .collection('groups')
-        .doc(group.id)
-        .update({
-          memberCount: firestore.FieldValue.increment(1),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
-
-      // Add group to user's homeGroups
-      await firestore()
-        .collection('users')
-        .doc(currentUser.uid)
-        .update({
-          homeGroups: firestore.FieldValue.arrayUnion(group.id),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
-
-      // Update local state
-      setUserJoinedGroups(prev => [...prev, group.id!]);
-      setGroups(prevGroups =>
+      setAllGroups(prevGroups =>
         prevGroups.map(g =>
           g.id === group.id ? {...g, memberCount: g.memberCount + 1} : g,
         ),
       );
 
-      Alert.alert('Success', `You've joined ${group.name}!`, [
+      await dispatch(fetchUserData(currentUser.uid)).unwrap();
+
+      Alert.alert('Success', `You\'ve joined ${group.name}!`, [
         {
           text: 'View Group',
           onPress: () =>
@@ -189,15 +239,19 @@ const GroupSearchScreen: React.FC = () => {
           style: 'cancel',
         },
       ]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error joining group:', error);
-      Alert.alert('Error', 'Failed to join group. Please try again.');
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to join group. Please try again.',
+      );
     } finally {
       setJoining(null);
     }
   };
 
-  const isUserJoinedGroup = (groupId: string) => {
+  const isUserJoinedGroup = (groupId?: string) => {
+    if (!groupId) return false;
     return userJoinedGroups.includes(groupId);
   };
 
@@ -205,7 +259,7 @@ const GroupSearchScreen: React.FC = () => {
     <View style={styles.groupCard}>
       <View style={styles.groupHeader}>
         <Text style={styles.groupName}>{item.name}</Text>
-        {isUserJoinedGroup(item.id!) ? (
+        {isUserJoinedGroup(item.id) ? (
           <View style={styles.joinedBadge}>
             <Text style={styles.joinedBadgeText}>Joined</Text>
           </View>
@@ -227,8 +281,15 @@ const GroupSearchScreen: React.FC = () => {
 
       <View style={styles.groupDetails}>
         <Text style={styles.groupDetailText}>
+          <Text style={styles.groupDetailLabel}>Type: </Text>
+          {item.type}
+        </Text>
+        <Text style={styles.groupDetailText}>
           <Text style={styles.groupDetailLabel}>Location: </Text>
-          {item.location || 'Not specified'}
+          {item.location ||
+            (item.city && item.state
+              ? `${item.city}, ${item.state}`
+              : 'Not specified')}
         </Text>
         <Text style={styles.groupDetailText}>
           <Text style={styles.groupDetailLabel}>Members: </Text>
@@ -257,17 +318,33 @@ const GroupSearchScreen: React.FC = () => {
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Find Groups</Text>
         <Text style={styles.headerSubtitle}>
-          Join local recovery groups in your community
+          {userLocation
+            ? 'Showing groups within 25 miles'
+            : 'Enable location to find nearby groups'}
         </Text>
       </View>
 
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by name, description, or location"
+          placeholder="Search name, description, location..."
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
+        {/* <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedTypeFilter}
+            onValueChange={(itemValue: MeetingType | 'All') =>
+              setSelectedTypeFilter(itemValue)
+            }
+            style={styles.picker}
+            itemStyle={styles.pickerItem}
+            dropdownIconColor="#2196F3">
+            {meetingTypes.map(type => (
+              <Picker.Item key={type} label={type} value={type} />
+            ))}
+          </Picker>
+        </View> */}
       </View>
 
       {loading ? (
@@ -283,9 +360,11 @@ const GroupSearchScreen: React.FC = () => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
-                {searchQuery.trim() !== ''
-                  ? 'No groups match your search'
-                  : 'No groups available in your area'}
+                {!userLocation && !locationError
+                  ? 'Enable location services to find nearby groups'
+                  : allGroups.length === 0 && userLocation
+                  ? 'No groups found within 25 miles'
+                  : 'No groups match your current filters'}
               </Text>
             </View>
           }
@@ -316,6 +395,7 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     padding: 16,
+    paddingBottom: 8,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
@@ -326,7 +406,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
+    marginBottom: 12,
   },
+  pickerContainer: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+  },
+  pickerItem: {},
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -357,6 +448,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#212121',
     flex: 1,
+    marginRight: 8,
   },
   joinButton: {
     backgroundColor: '#2196F3',

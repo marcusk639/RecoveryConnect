@@ -26,6 +26,11 @@ export interface Group {
   memberCount: number;
   admins: string[]; // Array of user IDs
   isAdmin?: boolean; // Computed property for the current user
+  lat?: number; // Latitude coordinate
+  lng?: number; // Longitude coordinate
+  latitude?: number; // Normalized latitude (used by Cloud Functions)
+  longitude?: number; // Normalized longitude (used by Cloud Functions)
+  geohash?: string; // Geohash for location-based queries
 }
 
 export interface GroupCreationData {
@@ -39,6 +44,8 @@ export interface GroupCreationData {
   isOnline: boolean;
   onlineLink?: string;
   foundedDate?: string;
+  lat?: number; // Latitude coordinate
+  lng?: number; // Longitude coordinate
 }
 
 export interface GroupUpdateData {
@@ -52,4 +59,6 @@ export interface GroupUpdateData {
   isOnline?: boolean;
   onlineLink?: string;
   foundedDate?: string;
+  lat?: number; // Latitude coordinate
+  lng?: number; // Longitude coordinate
 }

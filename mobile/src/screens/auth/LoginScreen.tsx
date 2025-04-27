@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,13 @@ import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import SocialSignInButton from '../../components/common/SocialSignInButton';
 import {signInWithApple, signInWithGoogle} from '../../services/firebase/auth';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  signIn,
+  selectAuthStatus,
+  selectAuthError,
+  clearError,
+} from '../../store/slices/authSlice';
 
 type RootStackParamList = {
   Login: undefined;
@@ -27,11 +34,33 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const LoginScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const dispatch = useAppDispatch();
+  const status = useAppSelector(selectAuthStatus);
+  const authError = useAppSelector(selectAuthError);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({email: '', password: ''});
+
+  // Clear previous auth errors when screen mounts
+  useEffect(() => {
+    dispatch(clearError());
+  }, []);
+
+  // Show backend errors
+  useEffect(() => {
+    if (authError) {
+      Alert.alert('Login Failed', authError);
+    }
+  }, [authError]);
+
+  // Navigate to main app on successful login
+  useEffect(() => {
+    if (status === 'succeeded' && !authError) {
+      navigation.replace('Main');
+    }
+  }, [status, authError]);
 
   const validateForm = () => {
     let isValid = true;
@@ -61,19 +90,8 @@ const LoginScreen = () => {
       return;
     }
 
-    setLoading(true);
-    try {
-      // In a real app, this would be connected to Firebase authentication
-      // For now, we'll just simulate a login
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Navigate to the main app after successful login
-      navigation.replace('Main');
-    } catch (error) {
-      Alert.alert('Login Failed', 'Invalid email or password');
-    } finally {
-      setLoading(false);
-    }
+    // Dispatch the sign in action
+    dispatch(signIn({email, password}));
   };
 
   return (
@@ -152,8 +170,8 @@ const LoginScreen = () => {
             <TouchableOpacity
               style={styles.loginButton}
               onPress={handleLogin}
-              disabled={loading}>
-              {loading ? (
+              disabled={status === 'loading'}>
+              {status === 'loading' ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <Text style={styles.loginButtonText}>Sign in</Text>
@@ -169,12 +187,12 @@ const LoginScreen = () => {
             <SocialSignInButton
               provider="google"
               onPress={() => signInWithGoogle()}
-              disabled={loading}
+              disabled={status === 'loading'}
             />
             <SocialSignInButton
               provider="apple"
               onPress={() => signInWithApple()}
-              disabled={loading}
+              disabled={status === 'loading'}
             />
           </View>
 

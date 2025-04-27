@@ -20,6 +20,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import LocationPicker, {
   LocationProps,
 } from '../../components/groups/LocationPicker';
+import {updateGroup} from '../../store/slices/groupsSlice';
+import {useAppDispatch} from '../../store';
 
 type GroupEditDetailsScreenProps = {
   navigation: StackNavigationProp<GroupStackParamList, 'GroupEditDetails'>;
@@ -36,7 +38,7 @@ const GroupEditDetailsScreen: React.FC<GroupEditDetailsScreenProps> = ({
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-
+  const dispatch = useAppDispatch();
   // Form state
   const [name, setName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
@@ -121,6 +123,19 @@ const GroupEditDetailsScreen: React.FC<GroupEditDetailsScreenProps> = ({
         lng: location.longitude,
         placeName: location.placeName,
       });
+
+      dispatch(
+        updateGroup({
+          groupId,
+          groupData: {
+            name: name.trim(),
+            description: description.trim(),
+            location: location.address.trim(),
+            lat: location.latitude,
+            lng: location.longitude,
+          },
+        }),
+      );
 
       Alert.alert('Success', 'Group details updated successfully');
       navigation.goBack();

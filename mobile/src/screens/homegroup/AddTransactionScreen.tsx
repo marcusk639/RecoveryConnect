@@ -19,6 +19,12 @@ import {GroupStackParamList} from '../../types/navigation';
 import {GroupModel} from '../../models/GroupModel';
 import {Transaction} from '../../types/domain';
 import {TreasuryModel} from '../../models/TreasuryModel';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  addTransaction,
+  selectTransactionsStatus,
+  selectTransactionsError,
+} from '../../store/slices/transactionsSlice';
 
 type AddTransactionScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -34,8 +40,13 @@ const AddTransactionScreen: React.FC = () => {
   const route = useRoute<AddTransactionScreenRouteProp>();
   const navigation = useNavigation<AddTransactionScreenNavigationProp>();
   const {groupId, groupName} = route.params;
+  const dispatch = useAppDispatch();
 
-  const [loading, setLoading] = useState(false);
+  // Get status from Redux store
+  const status = useAppSelector(selectTransactionsStatus);
+  const error = useAppSelector(selectTransactionsError);
+  const isLoading = status === 'loading';
+
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>(
     'income',
   );
@@ -55,36 +66,32 @@ const AddTransactionScreen: React.FC = () => {
       return;
     }
 
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to add transactions');
+      return;
+    }
+
+    // Create the transaction document
+    const transactionId = firestore().collection('groups').doc().id;
+    const transaction: Transaction = {
+      id: transactionId,
+      type: transactionType,
+      amount: numericAmount,
+      category,
+      description,
+      createdAt: new Date(),
+      createdBy: currentUser.uid,
+      groupId: groupId,
+    };
+
+    // Dispatch the create transaction action
     try {
-      setLoading(true);
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        Alert.alert('Error', 'You must be logged in to add transactions');
-        return;
-      }
-
-      // Create the transaction document
-      const transactionId = firestore().collection('groups').doc().id;
-      const transaction: Transaction = {
-        id: transactionId,
-        type: transactionType,
-        amount: numericAmount,
-        category,
-        description,
-        createdAt: new Date(),
-        createdBy: currentUser.uid,
-        groupId: groupId,
-      };
-
-      // Add the transaction using TreasuryModel
-      await TreasuryModel.createTransaction(transaction);
+      await dispatch(addTransaction(transaction)).unwrap();
       Alert.alert('Success', 'Transaction added successfully');
       navigation.goBack();
-    } catch (error) {
-      console.error('Error adding transaction:', error);
-      Alert.alert('Error', 'Failed to add transaction');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      Alert.alert('Error', error || 'Failed to add transaction');
     }
   };
 
@@ -168,8 +175,8 @@ const AddTransactionScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSave}
-            disabled={loading}>
-            {loading ? (
+            disabled={isLoading}>
+            {isLoading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text style={styles.saveButtonText}>Save Transaction</Text>

@@ -9,9 +9,9 @@ import {MainTabParamList} from '../types/navigation';
 // Import screens and navigators
 import GroupStackNavigator from './GroupStackNavigator';
 import MeetingsScreen from '../screens/meetings/MeetingScreen';
-import TreasuryScreen from '../screens/treasury/TreasuryScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import GroupSearchScreen from '../screens/homegroup/GroupSearchScreen';
+import ProfileNavigator from './ProfileNavigator';
 
 // Tab Icons
 const HomeIcon = ({focused}: {focused: boolean}) => (
@@ -161,7 +161,7 @@ const MainTabNavigator: React.FC = () => {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileNavigator}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({focused}) => <ProfileIcon focused={focused} />,

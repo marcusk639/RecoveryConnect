@@ -19,6 +19,7 @@ export interface User {
   homeGroups: string[];
   role: 'user' | 'admin';
   favoriteMeetings?: string[];
+  photoUrl?: string;
 }
 
 export interface NotificationSettings {
@@ -90,10 +91,15 @@ export interface HomeGroup {
 
 export interface GroupMember {
   id: string;
+  groupId: string;
   name: string;
-  sobrietyDate?: string;
-  position?: string;
+  email?: string;
+  photoURL?: string;
   isAdmin: boolean;
+  position?: string;
+  sobrietyDate?: string;
+  joinedAt: Date;
+  showSobrietyDate: boolean;
 }
 
 export interface SobrietyMilestone {

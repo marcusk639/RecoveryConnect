@@ -12,13 +12,13 @@ import {
   ActivityIndicator,
   FlatList,
   TextInput,
+  Modal,
 } from 'react-native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp, useNavigation, useRoute} from '@react-navigation/native';
 import {MainStackParamList, Meeting, MeetingType, HomeGroup} from '../../types';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
-import {GroupModel} from '../../models/GroupModel';
 import DayPicker from '../../components/groups/DayPicker';
 import TimePicker from '../../components/groups/TimePicker';
 import MeetingTypeSelector from '../../components/groups/MeetingTypeSelector';
@@ -26,8 +26,13 @@ import LocationPicker from '../../components/groups/LocationPicker';
 import DatePicker from '../../components/common/DatePicker';
 import {generateMeetingHash} from '../../utils/hashUtils';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import {GroupStackParamList} from '../../types/navigation';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  createGroup,
+  selectGroupsStatus,
+  selectGroupsError,
+} from '../../store/slices/groupsSlice';
 
 // Interface for meeting form data
 type MeetingFormData = Meeting;
@@ -37,10 +42,15 @@ const CreateGroupScreen: React.FC = () => {
     useNavigation<StackNavigationProp<GroupStackParamList, 'CreateGroup'>>();
   const route = useRoute<RouteProp<GroupStackParamList, 'CreateGroup'>>();
   const initialMeeting = route.params?.meeting;
+  const dispatch = useAppDispatch();
+
+  // Redux state
+  const status = useAppSelector(selectGroupsStatus);
+  const error = useAppSelector(selectGroupsError);
+  const isLoading = status === 'loading';
 
   // Step management
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [loading, setLoading] = useState<boolean>(false);
 
   // Group details form state
   const [groupName, setGroupName] = useState<string>(
@@ -53,6 +63,12 @@ const CreateGroupScreen: React.FC = () => {
   );
   const [foundedDate, setFoundedDate] = useState<string>('');
   const [placeName, setPlaceName] = useState<string>('');
+  const [groupType, setGroupType] = useState<MeetingType>(
+    initialMeeting ? initialMeeting.type : 'AA',
+  );
+  const [showCustomTypeInput, setShowCustomTypeInput] =
+    useState<boolean>(false);
+  const [customType, setCustomType] = useState<string>('');
 
   // Meetings state
   const [meetings, setMeetings] = useState<MeetingFormData[]>(
@@ -90,7 +106,15 @@ const CreateGroupScreen: React.FC = () => {
     location: '',
     address: '',
     link: '',
+    groupType: '',
   });
+
+  // Show Redux errors
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Error', error);
+    }
+  }, [error]);
 
   // Validate step 1 (basic info)
   const validateStep1 = (): boolean => {
@@ -112,6 +136,13 @@ const CreateGroupScreen: React.FC = () => {
       isValid = false;
     } else {
       newErrors.groupDescription = '';
+    }
+
+    if (!groupType.trim()) {
+      newErrors.groupType = 'Group type is required';
+      isValid = false;
+    } else {
+      newErrors.groupType = '';
     }
 
     setErrors(newErrors);
@@ -182,7 +213,7 @@ const CreateGroupScreen: React.FC = () => {
     } else if (currentStep === 2 && validateStep2()) {
       setCurrentStep(3);
     } else if (currentStep === 3 && validateStep3()) {
-      createGroup();
+      handleCreateGroup();
     }
   };
 
@@ -278,73 +309,63 @@ const CreateGroupScreen: React.FC = () => {
     setMeetings(updatedMeetings);
   };
 
-  // Create the group in Firestore
-  const createGroup = async (): Promise<void> => {
-    try {
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        throw new Error('No authenticated user');
-      }
-
-      // Prepare group data
-      const groupData: Partial<HomeGroup> = {
-        name: groupName,
-        description: groupDescription,
-        type: meetings[0].type,
-        meetings: meetings.map(meeting => ({
-          id: meeting.id,
-          name: meeting.name,
-          type: meeting.type,
-          day: meeting.day,
-          time: meeting.time,
-          location: meeting.location,
-          address: meeting.address,
-          city: meeting.city,
-          state: meeting.state,
-          zip: meeting.zip,
-          types: [meeting.type],
-          online: meeting.online,
-          link: meeting.link,
-          verified: true,
-          addedBy: currentUser.uid,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-        location: meetings[0].location,
-        address: meetings[0].address,
-        city: meetings[0].city,
-        state: meetings[0].state,
-        zip: meetings[0].zip,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        memberCount: 1,
-        admins: [currentUser.uid],
-      };
-
-      // Create the group
-      const group = await GroupModel.create(groupData);
-
-      // Update all meetings with the new group ID
-      const batch = firestore().batch();
-      for (const meeting of meetings) {
-        const meetingRef = firestore().collection('meetings').doc(meeting.id);
-        batch.set(meetingRef, {
-          groupId: group.id,
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-          ...meeting,
-        });
-      }
-
-      await batch.commit();
-
-      navigation.navigate('GroupOverview', {
-        groupId: group.id!,
-        groupName: group.name,
-      });
-    } catch (error) {
-      console.error('Error creating group:', error);
-      Alert.alert('Error', 'Failed to create group. Please try again.');
+  // Handle group type selection
+  const handleGroupTypeSelect = (type: string) => {
+    if (type === 'custom') {
+      setShowCustomTypeInput(true);
+    } else {
+      setGroupType(type as MeetingType);
+      setShowCustomTypeInput(false);
     }
+  };
+
+  // Submit custom type
+  const submitCustomType = () => {
+    if (customType.trim()) {
+      setGroupType(customType.trim() as MeetingType);
+      setShowCustomTypeInput(false);
+    } else {
+      Alert.alert('Error', 'Please enter a custom group type');
+    }
+  };
+
+  // Create the group using Redux
+  const handleCreateGroup = (): void => {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to create a group');
+      return;
+    }
+
+    // Prepare group data
+    const groupData: Partial<HomeGroup> = {
+      name: groupName,
+      description: groupDescription,
+      type: groupType,
+      location: meetings[0].location,
+      address: meetings[0].address,
+      city: meetings[0].city,
+      state: meetings[0].state,
+      zip: meetings[0].zip,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      memberCount: 1,
+      admins: [currentUser.uid],
+    };
+
+    // Dispatch the action to create the group
+    dispatch(
+      createGroup({
+        groupData,
+        meetings,
+        onSuccess: group => {
+          navigation.navigate('GroupOverview', {
+            groupId: group.id!,
+            groupName: group.name,
+          });
+        },
+      }),
+    );
   };
 
   // Component to render progress indicator
@@ -441,6 +462,115 @@ const CreateGroupScreen: React.FC = () => {
         multiline
         numberOfLines={3}
       />
+
+      {/* Group Type Selector */}
+      <View style={styles.groupTypeContainer}>
+        <Text style={styles.sectionLabel}>Group Type</Text>
+        {errors.groupType ? (
+          <Text style={styles.errorText}>{errors.groupType}</Text>
+        ) : null}
+
+        <View style={styles.typeButtons}>
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              groupType === 'AA' &&
+                !showCustomTypeInput &&
+                styles.selectedTypeButton,
+            ]}
+            onPress={() => handleGroupTypeSelect('AA')}>
+            <Text
+              style={[
+                styles.typeButtonText,
+                groupType === 'AA' &&
+                  !showCustomTypeInput &&
+                  styles.selectedTypeButtonText,
+              ]}>
+              Alcoholics Anonymous
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              groupType === 'NA' &&
+                !showCustomTypeInput &&
+                styles.selectedTypeButton,
+            ]}
+            onPress={() => handleGroupTypeSelect('NA')}>
+            <Text
+              style={[
+                styles.typeButtonText,
+                groupType === 'NA' &&
+                  !showCustomTypeInput &&
+                  styles.selectedTypeButtonText,
+              ]}>
+              Narcotics Anonymous
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              groupType === 'Celebrate Recovery' &&
+                !showCustomTypeInput &&
+                styles.selectedTypeButton,
+            ]}
+            onPress={() => handleGroupTypeSelect('Celebrate Recovery')}>
+            <Text
+              style={[
+                styles.typeButtonText,
+                groupType === 'Celebrate Recovery' &&
+                  !showCustomTypeInput &&
+                  styles.selectedTypeButtonText,
+              ]}>
+              Celebrate Recovery
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              showCustomTypeInput && styles.selectedTypeButton,
+            ]}
+            onPress={() => handleGroupTypeSelect('custom')}>
+            <Text
+              style={[
+                styles.typeButtonText,
+                showCustomTypeInput && styles.selectedTypeButtonText,
+              ]}>
+              Custom
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showCustomTypeInput && (
+          <View style={styles.customTypeContainer}>
+            <Input
+              label="Custom Group Type"
+              value={customType}
+              onChangeText={setCustomType}
+              placeholder="Enter custom group type"
+              containerStyle={{width: '75%'}}
+            />
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Save"
+                onPress={submitCustomType}
+                size="small"
+                style={styles.customTypeButton}
+              />
+            </View>
+          </View>
+        )}
+
+        {groupType && !showCustomTypeInput && (
+          <View style={styles.selectedTypeDisplay}>
+            <Text style={styles.selectedTypeText}>Selected: {groupType}</Text>
+          </View>
+        )}
+      </View>
+
       <DatePicker
         visible={false}
         onClose={() => {}}
@@ -720,20 +850,20 @@ const CreateGroupScreen: React.FC = () => {
               title="Back"
               onPress={prevStep}
               variant="secondary"
-              disabled={loading}
+              disabled={isLoading}
             />
           )}
           <Button
             style={{height: 50, width: '48%'}}
             title={currentStep === 3 ? 'Create Group' : 'Next'}
             onPress={nextStep}
-            disabled={loading}
+            disabled={isLoading}
             size="medium"
             fullWidth={false}
           />
         </View>
 
-        {loading && (
+        {isLoading && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#2196F3" />
           </View>
@@ -937,6 +1067,72 @@ const styles = StyleSheet.create({
   removeMeetingButtonText: {
     color: '#F44336',
     fontSize: 12,
+  },
+  groupTypeContainer: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 8,
+  },
+  typeButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  typeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#E0E0E0',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  selectedTypeButton: {
+    backgroundColor: '#2196F3',
+  },
+  typeButtonText: {
+    color: '#757575',
+    fontSize: 14,
+  },
+  selectedTypeButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  customTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    justifyContent: 'space-between',
+  },
+  buttonContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 0,
+    marginTop: 5,
+  },
+  customTypeButton: {
+    height: 38,
+    width: '80%',
+  },
+  selectedTypeDisplay: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+  },
+  selectedTypeText: {
+    color: '#1976D2',
+    fontWeight: 'bold',
+  },
+  errorText: {
+    color: '#F44336',
+    fontSize: 12,
+    marginBottom: 8,
   },
 });
 
