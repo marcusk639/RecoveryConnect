@@ -27,7 +27,7 @@ const GroupStackNavigator: React.FC = () => {
     <Stack.Navigator
       initialRouteName="GroupsList"
       screenOptions={{
-        headerBackTitle: undefined,
+        headerBackTitle: 'Back',
         headerTitleAlign: 'center',
       }}>
       <Stack.Screen
@@ -76,7 +76,7 @@ const GroupStackNavigator: React.FC = () => {
         name="GroupMemberDetails"
         component={GroupMemberDetailsScreen}
         options={{
-          title: 'Member Details',
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -118,7 +118,7 @@ const GroupStackNavigator: React.FC = () => {
         name="GroupSchedule"
         component={GroupScheduleScreen}
         options={({route}) => ({
-          title: `${route.params.groupName} - Schedule`,
+          title: `${route.params.groupName} - Meetings`,
         })}
       />
       <Stack.Screen

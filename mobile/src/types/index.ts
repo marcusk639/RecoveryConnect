@@ -172,6 +172,7 @@ export interface Meeting {
   day: string;
   time: string;
   address?: string;
+  country?: string;
   city?: string;
   state?: string;
   street?: string;

@@ -10,6 +10,7 @@ import * as admin from "firebase-admin";
 import * as geofire from "geofire-common";
 // Import the v1 namespace specifically
 import * as functionsV1 from "firebase-functions/v1";
+import { migrateGeohashes } from "./migrations/migrateGeohashes";
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
@@ -150,7 +151,7 @@ export const searchGroupsByLocation = functions.https.onCall(
 
       const latitude = Number(data.lat);
       const longitude = Number(data.lng);
-      const radius = Number(data.radius);
+      const radius = data.radius ? Number(data.radius) : 25;
       const radiusInM = radius * 1000; // Convert km to meters
 
       // Find groups within the given radius
@@ -269,6 +270,65 @@ export const ensureGroupGeolocation = functions.https.onCall(
   }
 );
 
+export const setGroupGeolocation = functionsV1.firestore
+  .document("groups/{groupId}")
+  .onCreate(async (snapshot, context) => {
+    try {
+      const groupId = context.params.groupId;
+
+      if (!groupId) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Missing required parameter: groupId"
+        );
+      }
+
+      // Get the group document
+      const groupRef = admin.firestore().collection("groups").doc(groupId);
+      const groupDoc = await groupRef.get();
+
+      if (!groupDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Group not found");
+      }
+
+      const groupData = groupDoc.data();
+
+      // Check if the document has latitude and longitude
+      if (!groupData?.lat || !groupData?.lng) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Group does not have lat/lng coordinates"
+        );
+      }
+
+      // Generate a geohash for the group
+      const lat = Number(groupData.lat);
+      const lng = Number(groupData.lng);
+      const geohash = geofire.geohashForLocation([lat, lng]);
+
+      functions.logger.info(
+        `Generated geohash ${geohash} for group ${groupId}`
+      );
+
+      // Update the document with the geohash
+      await groupRef.update({
+        geohash,
+        // Ensure we have numeric latitude and longitude
+        lat,
+        lng,
+      });
+
+      return { success: true, geohash };
+    } catch (error) {
+      functions.logger.error("Error in ensureGroupGeolocation:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Error updating group geolocation data",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  });
+
 /**
  * Cloud Function: Fetches AA meetings from the Meeting Guide API when a new group is created
  * and creates corresponding meeting documents in Firestore
@@ -359,7 +419,7 @@ export const fetchMeetingsForNewGroup = functionsV1.firestore
 /**
  * Helper function to format a meeting from the Meeting Guide API into a Firestore document
  */
-function formatMeetingForFirestore(meeting: any) {
+function formatMeetingForFirestore(meeting: any): Meeting {
   // Extract the relevant fields from the Meeting Guide API response
   // and format them for storage in Firestore
   return {
@@ -370,17 +430,16 @@ function formatMeetingForFirestore(meeting: any) {
     address: meeting.address || "",
     city: meeting.city || "",
     state: meeting.state || "",
-    postal_code: meeting.postal_code || "",
+    street: meeting.street || "",
+    zip: meeting.postal_code || "",
     country: meeting.country || "USA",
     lat: parseFloat(meeting.latitude) || null,
     lng: parseFloat(meeting.longitude) || null,
     type: "AA", // Since these are from the AA API
     format: meeting.types || "",
-    notes: meeting.location_notes || "",
+    onlineNotes: meeting.location_notes || "",
     online: !!meeting.conference_url, // If there's a URL, it's likely online
-    url: meeting.conference_url || null,
-    externalId: meeting.id?.toString() || null,
-    source: "meeting_guide_api",
+    link: meeting.conference_url || null,
   };
 }
 

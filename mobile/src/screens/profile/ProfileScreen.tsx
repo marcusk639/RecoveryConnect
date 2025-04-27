@@ -420,22 +420,6 @@ const ProfileScreen: React.FC = () => {
               }}>
               <Text style={styles.editButtonText}>Edit Profile</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setEditNameVisible(true)}>
-              <Text style={styles.editButtonText}>Edit Name</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setEditDateVisible(true)}>
-              <Text style={styles.editButtonText}>
-                {userProfile.recoveryDate
-                  ? 'Edit Recovery Date'
-                  : 'Add Recovery Date'}
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {userProfile.recoveryDate && (

@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
@@ -129,12 +130,38 @@ const GroupMembersScreen: React.FC = () => {
     }
   };
 
+  // Helper function to get initials from name
+  const getInitials = (name: string): string => {
+    if (!name) return '?';
+
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) {
+      return parts[0].charAt(0).toUpperCase();
+    }
+
+    return (
+      parts[0].charAt(0) + parts[parts.length - 1].charAt(0)
+    ).toUpperCase();
+  };
+
   const renderMemberItem = ({item}: {item: GroupMember}) => (
     <TouchableOpacity
       style={styles.memberItem}
       onPress={() => handleMemberPress(item)}>
       <View style={styles.memberInitialContainer}>
-        <Text style={styles.memberInitial}>{getAnonymizedName(item.name)}</Text>
+        {item.photoURL ? (
+          <Image
+            source={{uri: item.photoURL}}
+            style={styles.memberPhoto}
+            onError={() => {
+              console.log(`Failed to load photo for ${item.name}`);
+              // If we could set state here to fall back to initials, we would,
+              // but since this is a functional component, we'll just show the broken image
+            }}
+          />
+        ) : (
+          <Text style={styles.memberInitial}>{getInitials(item.name)}</Text>
+        )}
       </View>
 
       <View style={styles.memberDetailsContainer}>
@@ -339,15 +366,21 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#3498db',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
+  },
+  memberPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E1E1E1',
   },
   memberInitial: {
-    fontSize: 18,
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#2196F3',
   },
   memberDetailsContainer: {
     flex: 1,

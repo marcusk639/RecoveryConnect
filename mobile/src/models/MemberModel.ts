@@ -525,4 +525,133 @@ export class MemberModel {
       throw error;
     }
   }
+
+  /**
+   * Get all member documents for a specific user across all groups
+   * This retrieves all membership documents where the user is a member,
+   * efficiently querying based on document ID pattern ${groupId}_${userId}
+   */
+  static async getAllUserMemberDocuments(
+    userId: string,
+  ): Promise<GroupMember[]> {
+    try {
+      console.log(`Fetching all member documents for user: ${userId}`);
+
+      // Try the compound query first, which is more efficient if possible
+      try {
+        // Using a compound query with startAt and endAt to filter documents where ID ends with _userId
+        const membersSnapshot = await firestore()
+          .collection('members')
+          .where(firestore.FieldPath.documentId(), '>=', `_${userId}`)
+          .where(firestore.FieldPath.documentId(), '<=', `_${userId}\uf8ff`)
+          .get();
+
+        console.log(
+          `Found ${membersSnapshot.docs.length} member documents for user ${userId} using optimized query`,
+        );
+
+        if (membersSnapshot.docs.length > 0) {
+          return membersSnapshot.docs.map(doc => this.fromFirestore(doc));
+        }
+      } catch (queryError) {
+        console.warn(
+          'Compound query failed, falling back to collection scan:',
+          queryError,
+        );
+      }
+
+      // Fallback approach: Scan the collection in batches
+      // This is less efficient but more reliable
+      const documents: any[] = [];
+      let lastDoc = null;
+      const batchSize = 100;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = firestore().collection('members').limit(batchSize);
+
+        if (lastDoc) {
+          query = query.startAfter(lastDoc);
+        }
+
+        const snapshot = await query.get();
+
+        if (snapshot.empty || snapshot.docs.length < batchSize) {
+          hasMore = false;
+        } else {
+          lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        }
+
+        // Filter documents where ID contains _userId
+        const matchingDocs = snapshot.docs.filter(doc =>
+          doc.id.includes(`_${userId}`),
+        );
+        documents.push(...matchingDocs);
+      }
+
+      console.log(
+        `Found ${documents.length} member documents for user ${userId} using collection scan`,
+      );
+
+      // Convert to GroupMember objects
+      return documents.map(doc => this.fromFirestore(doc));
+    } catch (error) {
+      console.error('Error getting user member documents:', error);
+      throw new Error(
+        `Failed to get member documents for user ${userId}: ${error}`,
+      );
+    }
+  }
+
+  /**
+   * Update a user's photo URL across all their member documents
+   * This is useful when a user updates their profile photo
+   */
+  static async updateUserPhotoURL(
+    userId: string,
+    photoURL: string | null,
+  ): Promise<void> {
+    try {
+      console.log(
+        `Updating photo URL for user ${userId} across all member documents`,
+      );
+
+      // Get all member documents for this user using the direct query
+      const membersSnapshot = await firestore()
+        .collection('members')
+        .where(firestore.FieldPath.documentId(), '>=', `_${userId}`)
+        .where(firestore.FieldPath.documentId(), '<=', `_${userId}\uf8ff`)
+        .get();
+
+      if (membersSnapshot.empty) {
+        console.log(`No member documents found for user ${userId}`);
+        return;
+      }
+
+      console.log(
+        `Updating photo URL for ${membersSnapshot.size} member documents`,
+      );
+
+      // Batch update all documents
+      const batch = firestore().batch();
+
+      membersSnapshot.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          photoURL: photoURL,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+      });
+
+      // Commit the batch
+      await batch.commit();
+      console.log(
+        `Successfully updated photo URL for ${membersSnapshot.size} member documents`,
+      );
+    } catch (error) {
+      console.error('Error updating user photo URL:', error);
+      throw new Error(
+        `Failed to update photo URL for user ${userId}: ${error}`,
+      );
+    }
+  }
 }

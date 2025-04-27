@@ -113,10 +113,13 @@ export const createAnnouncement = createAsyncThunk(
         return rejectWithValue('User not authenticated');
       }
 
-      const announcementData = {
+      const announcementData: Omit<Announcement, 'id'> = {
+        groupId,
         title,
         content,
         isPinned,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         createdBy: currentUser.uid,
         authorName: currentUser.displayName || 'Anonymous',
       };

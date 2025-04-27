@@ -10,9 +10,6 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  FlatList,
-  TextInput,
-  Modal,
   Switch,
 } from 'react-native';
 import {StackNavigationProp} from '@react-navigation/stack';
@@ -91,6 +88,7 @@ const CreateGroupScreen: React.FC = () => {
             zip: initialMeeting.zip || '',
             link: initialMeeting.link || '',
             type: initialMeeting.type,
+            country: initialMeeting.country || 'USA',
           },
         ]
       : [],
@@ -901,6 +899,11 @@ const CreateGroupScreen: React.FC = () => {
                     // Add location name if not already set and available
                     if (location.placeName && !currentMeeting.location) {
                       locationUpdates.location = location.placeName;
+                    }
+
+                    // Add country if not already set and available
+                    if (location.country && !currentMeeting.country) {
+                      locationUpdates.country = location.country;
                     }
 
                     // Check if we need to parse components from the address string

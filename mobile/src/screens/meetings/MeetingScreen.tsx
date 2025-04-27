@@ -310,11 +310,11 @@ const MeetingsScreen: React.FC = () => {
             </Text>
           )}
         </View>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.favoriteButton}
           onPress={() => item.id && handleToggleFavorite(item.id)}>
           <Text style={styles.favoriteIcon}>{item.isFavorite ? '★' : '☆'}</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       <View style={styles.meetingContent}>
@@ -613,21 +613,6 @@ const MeetingsScreen: React.FC = () => {
                 <Text style={styles.detailsText}>{selectedMeeting.type}</Text>
               </View>
 
-              {selectedMeeting.types && selectedMeeting.types.length > 0 && (
-                <View style={styles.detailsSection}>
-                  <Text style={styles.detailsLabel}>Meeting Format:</Text>
-                  <View style={styles.detailsTags}>
-                    {selectedMeeting.types.map(
-                      (type: string, index: number) => (
-                        <View key={index} style={styles.detailsTag}>
-                          <Text style={styles.detailsTagText}>{type}</Text>
-                        </View>
-                      ),
-                    )}
-                  </View>
-                </View>
-              )}
-
               {selectedMeeting.lat && selectedMeeting.lng && userLocation && (
                 <View style={styles.detailsSection}>
                   <Text style={styles.detailsLabel}>Distance:</Text>
@@ -699,7 +684,7 @@ const MeetingsScreen: React.FC = () => {
             </ScrollView>
 
             <View style={styles.detailsFooter}>
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 style={[
                   styles.detailsActionButton,
                   selectedMeeting.isFavorite
@@ -716,7 +701,7 @@ const MeetingsScreen: React.FC = () => {
                     ? 'Remove from My Meetings'
                     : 'Add to My Meetings'}
                 </Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </View>
           </View>
         </View>

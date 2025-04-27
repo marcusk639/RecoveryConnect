@@ -14,8 +14,6 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
   Announcement,
@@ -155,7 +153,6 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
 
       setCreateModalVisible(false);
       resetForm();
-      Alert.alert('Success', 'Announcement created successfully!');
     } catch (err: any) {
       console.error('Error creating announcement:', err);
       Alert.alert(
@@ -296,45 +293,37 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Announcements</Text>
-        {isAdmin && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setCreateModalVisible(true)}>
-            <Text style={styles.addButtonText}>+</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
       {status === 'loading' && announcements.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2196F3" />
         </View>
       ) : (
-        <FlatList
-          data={announcements} // Use data from Redux
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No announcements yet</Text>
-              {isAdmin && (
-                <TouchableOpacity
-                  style={styles.createButton}
-                  onPress={() => setCreateModalVisible(true)}>
-                  <Text style={styles.createButtonText}>
-                    Create Announcement
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          }
-        />
+        <>
+          <FlatList
+            data={announcements} // Use data from Redux
+            renderItem={renderItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContainer}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No announcements yet</Text>
+              </View>
+            }
+          />
+
+          {isAdmin && (
+            <TouchableOpacity
+              style={styles.createButtonBottom}
+              onPress={() => setCreateModalVisible(true)}>
+              <Text style={styles.createButtonText}>
+                Create New Announcement
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
 
       {renderCreateAnnouncementModal()}
@@ -444,9 +433,24 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
   },
+  createButtonBottom: {
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   createButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: 16,
   },
   modalContainer: {
     flex: 1,

@@ -71,6 +71,7 @@ export interface UserDocument {
  * Firestore Group Document
  */
 export interface GroupDocument {
+  id: string;
   name: string;
   description: string;
   meetings: Meeting[];
@@ -147,6 +148,7 @@ export interface MeetingDocument {
   name: string;
   type: string; // AA, NA, etc.
   day: string;
+  country: string;
   time: string;
   street?: string;
   address?: string;

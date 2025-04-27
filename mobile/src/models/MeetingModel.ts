@@ -2,6 +2,7 @@ import {Meeting, Location, MeetingSearchInput} from '../types';
 import {FirestoreDocument, MeetingDocument} from '../types/schema';
 import {firestore, auth, functions} from '../services/firebase/config';
 import {generateMeetingHash} from '../utils/hashUtils';
+import Firestore from '@react-native-firebase/firestore';
 
 /**
  * Meeting model for managing meeting data
@@ -21,6 +22,7 @@ export class MeetingModel {
       street: data.street || '',
       address: data.address || '',
       groupId: data.groupId,
+      country: data.country,
       city: data.city,
       state: data.state,
       zip: data.zip,
@@ -59,10 +61,28 @@ export class MeetingModel {
     if (meeting.onlineNotes !== undefined)
       firestoreData.onlineNotes = meeting.onlineNotes;
     if (meeting.verified !== undefined)
-      firestoreData.verified = meeting.verified;
-    if (meeting.addedBy !== undefined) firestoreData.addedBy = meeting.addedBy;
+      if (meeting.addedBy !== undefined)
+        firestoreData.addedBy = meeting.addedBy;
     if (meeting.groupId !== undefined) firestoreData.groupId = meeting.groupId;
+    if (meeting.createdAt) {
+      try {
+        firestoreData.createdAt = Firestore.Timestamp.fromDate(
+          new Date(meeting.createdAt),
+        );
+      } catch (error) {
+        console.warn('Invalid createdAt date format:', meeting.createdAt);
+      }
+    }
 
+    if (meeting.updatedAt) {
+      try {
+        firestoreData.updatedAt = Firestore.Timestamp.fromDate(
+          new Date(meeting.updatedAt),
+        );
+      } catch (error) {
+        console.warn('Invalid updatedAt date format:', meeting.updatedAt);
+      }
+    }
     return firestoreData;
   }
 

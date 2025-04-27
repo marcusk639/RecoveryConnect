@@ -44,6 +44,7 @@ interface LocationPickerProps {
     city?: string;
     state?: string;
     zip?: string;
+    country?: string;
   }) => void;
   error?: string;
   label?: string;
