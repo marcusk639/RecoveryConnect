@@ -13,6 +13,7 @@ import {
   FlatList,
   TextInput,
   Modal,
+  Switch,
 } from 'react-native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp, useNavigation, useRoute} from '@react-navigation/native';
@@ -33,6 +34,8 @@ import {
   selectGroupsStatus,
   selectGroupsError,
 } from '../../store/slices/groupsSlice';
+import {streetTypes} from '../../utils/locationUtils';
+import ErrorBoundary from '../../components/error/ErrorBoundary';
 
 // Interface for meeting form data
 type MeetingFormData = Meeting;
@@ -88,7 +91,6 @@ const CreateGroupScreen: React.FC = () => {
             zip: initialMeeting.zip || '',
             link: initialMeeting.link || '',
             type: initialMeeting.type,
-            types: initialMeeting.types || [],
           },
         ]
       : [],
@@ -96,6 +98,7 @@ const CreateGroupScreen: React.FC = () => {
 
   // Current meeting being edited
   const [currentMeetingIndex, setCurrentMeetingIndex] = useState<number>(0);
+  const currentMeeting = meetings[currentMeetingIndex];
 
   // Form validation errors
   const [errors, setErrors] = useState({
@@ -107,6 +110,26 @@ const CreateGroupScreen: React.FC = () => {
     address: '',
     link: '',
     groupType: '',
+    groupLocation: '',
+  });
+
+  // Add state for group location
+  const [useCustomGroupLocation, setUseCustomGroupLocation] =
+    useState<boolean>(false);
+  const [groupLocation, setGroupLocation] = useState<{
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+    latitude?: number;
+    longitude?: number;
+    locationName: string;
+  }>({
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
+    locationName: '',
   });
 
   // Show Redux errors
@@ -153,14 +176,13 @@ const CreateGroupScreen: React.FC = () => {
   const validateStep2 = (): boolean => {
     let isValid = true;
     const newErrors = {...errors};
+    const allValidationErrors = [];
 
     // Check if we have any meetings
     if (meetings.length === 0) {
       Alert.alert('Error', 'Please add at least one meeting.');
       return false;
     }
-
-    const currentMeeting = meetings[currentMeetingIndex];
 
     if (!currentMeeting) {
       Alert.alert('Error', 'Invalid meeting selection.');
@@ -169,6 +191,7 @@ const CreateGroupScreen: React.FC = () => {
 
     if (!currentMeeting.day) {
       newErrors.meetingDay = 'Meeting day is required';
+      allValidationErrors.push('Meeting day is required');
       isValid = false;
     } else {
       newErrors.meetingDay = '';
@@ -176,24 +199,19 @@ const CreateGroupScreen: React.FC = () => {
 
     if (!currentMeeting.time) {
       newErrors.meetingTime = 'Meeting time is required';
+      allValidationErrors.push('Meeting time is required');
       isValid = false;
     } else {
       newErrors.meetingTime = '';
     }
 
-    setErrors(newErrors);
-    return isValid;
-  };
-
-  // Validate step 3 (location info)
-  const validateStep3 = (): boolean => {
-    let isValid = true;
-    const newErrors = {...errors};
-    const currentMeeting = meetings[currentMeetingIndex];
-
+    // Validate meeting location/link
     if (currentMeeting.online) {
       if (!currentMeeting.link?.trim()) {
         newErrors.link = 'Meeting link is required for online meetings';
+        allValidationErrors.push(
+          'Meeting link is required for online meetings',
+        );
         isValid = false;
       } else {
         newErrors.link = '';
@@ -201,6 +219,7 @@ const CreateGroupScreen: React.FC = () => {
     } else {
       if (!currentMeeting.location?.trim()) {
         newErrors.location = 'Location name is required';
+        allValidationErrors.push('Location name is required');
         isValid = false;
       } else {
         newErrors.location = '';
@@ -208,10 +227,48 @@ const CreateGroupScreen: React.FC = () => {
 
       if (!currentMeeting.address?.trim()) {
         newErrors.address = 'Address is required';
+        allValidationErrors.push('Address is required');
         isValid = false;
       } else {
         newErrors.address = '';
       }
+    }
+
+    setErrors(newErrors);
+
+    // Show all validation errors in one alert if needed
+    if (allValidationErrors.length > 0) {
+      Alert.alert('Please Fix These Errors', allValidationErrors.join('\n'));
+    }
+
+    return isValid;
+  };
+
+  // Validate step 3 (location info)
+  const validateStep3 = (): boolean => {
+    let isValid = true;
+    const newErrors = {...errors};
+
+    // Validate group location if using custom location
+    if (useCustomGroupLocation) {
+      if (!groupLocation.address) {
+        newErrors.groupLocation = 'Group address is required';
+        Alert.alert('Error', 'Group address is required');
+        isValid = false;
+      } else if (!groupLocation.locationName) {
+        newErrors.groupLocation = 'Group location name is required';
+        Alert.alert('Error', 'Group location name is required');
+        isValid = false;
+      } else {
+        newErrors.groupLocation = '';
+      }
+    } else if (meetings.length === 0) {
+      // If we're not using custom location, ensure we have at least one meeting
+      Alert.alert(
+        'Error',
+        'You must add at least one meeting or specify a custom group location',
+      );
+      isValid = false;
     }
 
     setErrors(newErrors);
@@ -231,7 +288,6 @@ const CreateGroupScreen: React.FC = () => {
             day: '',
             time: '',
             location: '',
-            types: [groupType],
             online: false,
             verified: true,
             addedBy: auth().currentUser?.uid || '',
@@ -250,7 +306,6 @@ const CreateGroupScreen: React.FC = () => {
           zip: '',
           link: '',
           type: groupType,
-          types: [groupType],
         };
         setMeetings([defaultMeeting]);
       }
@@ -285,7 +340,6 @@ const CreateGroupScreen: React.FC = () => {
       zip: '',
       onlineLink: '',
       type: 'AA' as MeetingType,
-      types: [],
     };
 
     const meetingId = generateMeetingHash({
@@ -295,7 +349,6 @@ const CreateGroupScreen: React.FC = () => {
       day: baseMeeting.day,
       time: baseMeeting.time,
       location: baseMeeting.location,
-      types: [baseMeeting.type],
       online: baseMeeting.online,
       verified: true,
       addedBy: auth().currentUser?.uid || '',
@@ -317,7 +370,6 @@ const CreateGroupScreen: React.FC = () => {
       zip: baseMeeting.zip,
       link: baseMeeting.link,
       type: baseMeeting.type,
-      types: [baseMeeting.type],
     };
 
     setMeetings([...meetings, newMeeting]);
@@ -343,14 +395,25 @@ const CreateGroupScreen: React.FC = () => {
 
   // Update current meeting
   const updateCurrentMeeting = (
-    field: keyof MeetingFormData,
-    value: any,
+    field: keyof MeetingFormData | Partial<MeetingFormData>,
+    value?: any,
   ): void => {
     const updatedMeetings = [...meetings];
-    updatedMeetings[currentMeetingIndex] = {
-      ...updatedMeetings[currentMeetingIndex],
-      [field]: value,
-    };
+
+    if (typeof field === 'object') {
+      // Handle case where field is an object of updates
+      updatedMeetings[currentMeetingIndex] = {
+        ...updatedMeetings[currentMeetingIndex],
+        ...field,
+      };
+    } else {
+      // Handle case where field is a single key and value is provided
+      updatedMeetings[currentMeetingIndex] = {
+        ...updatedMeetings[currentMeetingIndex],
+        [field]: value,
+      };
+    }
+
     setMeetings(updatedMeetings);
   };
 
@@ -387,22 +450,52 @@ const CreateGroupScreen: React.FC = () => {
       name: groupName,
       description: groupDescription,
       type: groupType,
-      location: meetings[0].location,
-      address: meetings[0].address,
-      city: meetings[0].city,
-      state: meetings[0].state,
-      zip: meetings[0].zip,
       createdAt: new Date(),
       updatedAt: new Date(),
       memberCount: 1,
       admins: [currentUser.uid],
     };
 
+    // Set location data based on mode
+    if (useCustomGroupLocation) {
+      // Use custom group location if specified
+      groupData.location = groupLocation.locationName;
+      groupData.address = groupLocation.address;
+      groupData.city = groupLocation.city;
+      groupData.state = groupLocation.state;
+      groupData.zip = groupLocation.zip;
+      if (groupLocation.latitude && groupLocation.longitude) {
+        groupData.lat = groupLocation.latitude;
+        groupData.lng = groupLocation.longitude;
+      }
+    } else if (meetings.length > 0) {
+      // Use first meeting's location if available
+      const firstMeeting = meetings[0];
+      groupData.location = firstMeeting.location;
+      groupData.address = firstMeeting.address;
+      groupData.city = firstMeeting.city;
+      groupData.state = firstMeeting.state;
+      groupData.zip = firstMeeting.zip;
+      if (firstMeeting.lat && firstMeeting.lng) {
+        groupData.lat = firstMeeting.lat;
+        groupData.lng = firstMeeting.lng;
+      }
+    } else {
+      // Should never get here due to validation, but just in case
+      Alert.alert(
+        'Error',
+        'A group must have a location specified or at least one meeting.',
+      );
+      return;
+    }
+
+    // Store meetings in the groupData for the GroupModel to use
+    groupData.meetings = meetings;
+
     // Dispatch the action to create the group
     dispatch(
       createGroup({
         groupData,
-        meetings,
         onSuccess: group => {
           navigation.navigate('GroupOverview', {
             groupId: group.id!,
@@ -665,12 +758,10 @@ const CreateGroupScreen: React.FC = () => {
         {/* Meeting selector */}
         <View style={styles.meetingSelector}>
           <Text style={styles.meetingSelectorLabel}>Meetings:</Text>
-          <FlatList
-            data={meetings}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            renderItem={({item, index}) => (
+          <View style={styles.meetingTabsContainer}>
+            {meetings.map((item, index) => (
               <TouchableOpacity
+                key={`meeting-${index}`}
                 style={[
                   styles.meetingTab,
                   currentMeetingIndex === index && styles.activeMeetingTab,
@@ -685,9 +776,8 @@ const CreateGroupScreen: React.FC = () => {
                   Meeting {index + 1}
                 </Text>
               </TouchableOpacity>
-            )}
-            keyExtractor={(item, index) => `meeting-${index}`}
-          />
+            ))}
+          </View>
           <TouchableOpacity
             style={styles.addMeetingButton}
             onPress={addMeeting}>
@@ -710,29 +800,206 @@ const CreateGroupScreen: React.FC = () => {
             )}
           </View>
 
-          <Input
-            label="Meeting Name"
-            value={currentMeeting.name}
-            onChangeText={value => updateCurrentMeeting('name', value)}
-            placeholder="Enter meeting name"
-          />
+          {/* Meeting Basic Info */}
+          <View style={styles.formSection}>
+            <Text style={styles.formSectionTitle}>Basic Info</Text>
 
-          <DayPicker
-            selectedDay={currentMeeting.day}
-            onSelectDay={value => updateCurrentMeeting('day', value)}
-          />
+            <Input
+              label="Meeting Name"
+              value={currentMeeting.name}
+              onChangeText={value => updateCurrentMeeting('name', value)}
+              placeholder="Enter meeting name"
+            />
 
-          <TimePicker
-            selectedTime={currentMeeting.time}
-            onSelectTime={value => updateCurrentMeeting('time', value)}
-          />
+            <DayPicker
+              selectedDay={currentMeeting.day}
+              onSelectDay={value => updateCurrentMeeting('day', value)}
+            />
 
-          <Input
-            label="Format"
-            value={currentMeeting.format}
-            onChangeText={value => updateCurrentMeeting('format', value)}
-            placeholder="Enter meeting format"
-          />
+            <TimePicker
+              selectedTime={currentMeeting.time}
+              onSelectTime={value => updateCurrentMeeting('time', value)}
+            />
+
+            <Input
+              label="Format"
+              value={currentMeeting.format}
+              onChangeText={value => updateCurrentMeeting('format', value)}
+              placeholder="Enter meeting format"
+            />
+          </View>
+
+          {/* Meeting Location */}
+          <View style={styles.formSection}>
+            <Text style={styles.formSectionTitle}>Meeting Location</Text>
+
+            <View style={styles.onlineToggle}>
+              <Text style={styles.onlineToggleLabel}>Online Meeting</Text>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  currentMeeting.online ? styles.toggleButtonActive : {},
+                ]}
+                onPress={() =>
+                  updateCurrentMeeting('online', !currentMeeting.online)
+                }>
+                <Text
+                  style={[
+                    styles.toggleButtonText,
+                    currentMeeting.online ? styles.toggleButtonTextActive : {},
+                  ]}>
+                  {currentMeeting.online ? 'Yes' : 'No'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {currentMeeting.online ? (
+              <Input
+                label="Online Meeting Link"
+                value={currentMeeting.link}
+                onChangeText={value => updateCurrentMeeting('link', value)}
+                error={errors.link}
+                placeholder="Enter online meeting link"
+              />
+            ) : (
+              <>
+                <Input
+                  label="Location Name"
+                  value={currentMeeting.location}
+                  onChangeText={value =>
+                    updateCurrentMeeting('location', value)
+                  }
+                  error={errors.location}
+                  placeholder="Enter location name"
+                />
+
+                <LocationPicker
+                  label="Address"
+                  initialAddress={getMeetingAddress(currentMeeting)}
+                  initialLocation={
+                    currentMeeting.lat && currentMeeting.lng
+                      ? {
+                          latitude: currentMeeting.lat,
+                          longitude: currentMeeting.lng,
+                        }
+                      : undefined
+                  }
+                  onLocationSelect={location => {
+                    console.log('LocationPicker selected location:', location);
+
+                    // Prepare updates object with initial values
+                    const locationUpdates: Partial<MeetingFormData> = {
+                      address: location.address || '',
+                    };
+
+                    // Add coordinates if they exist
+                    if (location.latitude)
+                      locationUpdates.lat = location.latitude;
+                    if (location.longitude)
+                      locationUpdates.lng = location.longitude;
+
+                    // Add location name if not already set and available
+                    if (location.placeName && !currentMeeting.location) {
+                      locationUpdates.location = location.placeName;
+                    }
+
+                    // Check if we need to parse components from the address string
+                    if (
+                      location.address &&
+                      (!location.city || !location.state || !location.zip)
+                    ) {
+                      // Parse the address string: "123 Main St, City, State Zip, Country"
+                      const addressParts = location.address
+                        .split(',')
+                        .map(part => part.trim());
+
+                      const firstPart = addressParts[0];
+                      // check if the first part is a street property
+                      if (
+                        streetTypes.some(type =>
+                          firstPart.toLowerCase().includes(type),
+                        )
+                      ) {
+                        // The first part is likely the street address
+                        locationUpdates.street = firstPart;
+                      } else {
+                        // The first part is likely the city
+                        locationUpdates.city = firstPart;
+                      }
+
+                      // Try to parse city, state, and zip from the remaining parts
+                      if (addressParts.length > 1) {
+                        // If city isn't provided directly, it's likely the second component
+                        if (!location.city && addressParts.length > 1) {
+                          locationUpdates.city = addressParts[1] || '';
+                        } else if (location.city) {
+                          locationUpdates.city = location.city;
+                        }
+
+                        // If state/zip isn't provided directly, try to parse from the third component
+                        if (
+                          (!location.state || !location.zip) &&
+                          addressParts.length > 2
+                        ) {
+                          const stateZipPart = addressParts[2] || '';
+                          const stateZipMatch = stateZipPart.match(
+                            /([A-Z]{2})\s*(\d{5})?/,
+                          );
+
+                          if (stateZipMatch) {
+                            // Extract state if found and not already set
+                            if (!location.state && stateZipMatch[1]) {
+                              locationUpdates.state = stateZipMatch[1];
+                            }
+
+                            // Extract zip if found and not already set
+                            if (!location.zip && stateZipMatch[2]) {
+                              locationUpdates.zip = stateZipMatch[2];
+                            }
+                          } else {
+                            // If no match, use the whole part as state if not set
+                            if (!location.state) {
+                              locationUpdates.state =
+                                stateZipPart.split(' ')[0] || '';
+                            }
+                          }
+                        } else {
+                          // Use provided values if available
+                          if (location.state)
+                            locationUpdates.state = location.state;
+                          if (location.zip) locationUpdates.zip = location.zip;
+                        }
+                      }
+                    } else {
+                      // Use provided values if available
+                      if (location.city) locationUpdates.city = location.city;
+                      if (location.state)
+                        locationUpdates.state = location.state;
+                      if (location.zip) locationUpdates.zip = location.zip;
+                    }
+
+                    // Apply all updates at once
+                    updateCurrentMeeting(locationUpdates);
+
+                    // Double check address is set properly after all the updates
+                    setTimeout(() => {
+                      const updatedMeeting = meetings[currentMeetingIndex];
+                      console.log(
+                        'Final meeting after location updates:',
+                        updatedMeeting,
+                      );
+
+                      // If address is still empty but we have street, set address = street as fallback
+                      if (!updatedMeeting.address && updatedMeeting.street) {
+                        console.log('Setting address from street as fallback');
+                        updateCurrentMeeting('address', updatedMeeting.street);
+                      }
+                    }, 200);
+                  }}
+                />
+              </>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -742,135 +1009,75 @@ const CreateGroupScreen: React.FC = () => {
     if (meeting.online) {
       return meeting.link;
     }
-    return `${meeting.address}, ${meeting.city}, ${meeting.state} ${meeting.zip}`;
+    return meeting.address;
   };
 
   // Render step 3 (location)
   const renderStep3 = () => {
-    const currentMeeting = meetings[currentMeetingIndex];
-
     return (
       <View style={styles.stepContainer}>
-        <Text style={styles.stepTitle}>Meeting Location</Text>
+        <Text style={styles.stepTitle}>Group Location</Text>
 
-        {/* Meeting selector */}
-        <View style={styles.meetingSelector}>
-          <Text style={styles.meetingSelectorLabel}>Meetings:</Text>
-          <FlatList
-            data={meetings}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            renderItem={({item, index}) => (
-              <TouchableOpacity
-                style={[
-                  styles.meetingTab,
-                  currentMeetingIndex === index && styles.activeMeetingTab,
-                ]}
-                onPress={() => setCurrentMeetingIndex(index)}>
-                <Text
-                  style={[
-                    styles.meetingTabText,
-                    currentMeetingIndex === index &&
-                      styles.activeMeetingTabText,
-                  ]}>
-                  Meeting {index + 1}
-                </Text>
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item, index) => `meeting-${index}`}
+        <View style={styles.switchContainer}>
+          <Text style={styles.switchLabel}>Set specific group location</Text>
+          <Switch
+            value={useCustomGroupLocation}
+            onValueChange={setUseCustomGroupLocation}
+            trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+            thumbColor={useCustomGroupLocation ? '#2196F3' : '#FFFFFF'}
           />
         </View>
 
-        {/* Location details */}
-        <View style={styles.meetingDetails}>
-          <View style={styles.meetingHeader}>
-            <Text style={styles.meetingTitle}>
-              Meeting {currentMeetingIndex + 1} Location
-            </Text>
-          </View>
+        <Text style={styles.helperText}>
+          {useCustomGroupLocation
+            ? 'Specify a location for the group'
+            : 'If not specified, the location of the first meeting will be used as the group location'}
+        </Text>
 
-          <View style={styles.onlineToggle}>
-            <Text style={styles.onlineToggleLabel}>Online Meeting</Text>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                currentMeeting.online ? styles.toggleButtonActive : {},
-              ]}
-              onPress={() =>
-                updateCurrentMeeting('online', !currentMeeting.online)
-              }>
-              <Text
-                style={[
-                  styles.toggleButtonText,
-                  currentMeeting.online ? styles.toggleButtonTextActive : {},
-                ]}>
-                {currentMeeting.online ? 'Yes' : 'No'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        {useCustomGroupLocation && (
+          <>
+            {errors.groupLocation ? (
+              <Text style={styles.errorText}>{errors.groupLocation}</Text>
+            ) : null}
 
-          {currentMeeting.online ? (
             <Input
-              label="Online Meeting Link"
-              value={currentMeeting.link}
-              onChangeText={value => updateCurrentMeeting('link', value)}
-              error={errors.link}
-              placeholder="Enter online meeting link"
+              label="Location Name"
+              value={groupLocation.locationName}
+              onChangeText={text =>
+                setGroupLocation({...groupLocation, locationName: text})
+              }
+              placeholder="Enter location name"
             />
-          ) : (
-            <>
-              <Input
-                label="Location Name"
-                value={currentMeeting.location}
-                onChangeText={value => updateCurrentMeeting('location', value)}
-                error={errors.location}
-                placeholder="Enter location name"
-              />
 
-              <LocationPicker
-                label="Address"
-                initialAddress={getMeetingAddress(currentMeeting)}
-                initialLocation={
-                  currentMeeting.lat && currentMeeting.lng
-                    ? {
-                        latitude: currentMeeting.lat,
-                        longitude: currentMeeting.lng,
-                      }
-                    : undefined
-                }
-                onLocationSelect={location =>
-                  updateCurrentMeeting('address', location.address)
-                }
-              />
+            <LocationPicker
+              label="Group Address"
+              initialAddress={
+                groupLocation.address
+                  ? `${groupLocation.address}, ${groupLocation.city}, ${groupLocation.state} ${groupLocation.zip}`
+                  : ''
+              }
+              onLocationSelect={location => {
+                setGroupLocation({
+                  ...groupLocation,
+                  address: location.address || '',
+                  city: location.city || '',
+                  state: location.state || '',
+                  zip: location.zip || '',
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  locationName:
+                    location.placeName || groupLocation.locationName,
+                });
+              }}
+            />
+          </>
+        )}
 
-              <Input
-                label="City"
-                value={currentMeeting.city}
-                onChangeText={value => updateCurrentMeeting('city', value)}
-                placeholder="Enter city"
-              />
-
-              <View style={styles.row}>
-                <View style={styles.halfWidth}>
-                  <Input
-                    label="State"
-                    value={currentMeeting.state}
-                    onChangeText={value => updateCurrentMeeting('state', value)}
-                    placeholder="State"
-                  />
-                </View>
-
-                <View style={styles.halfWidth}>
-                  <Input
-                    label="ZIP"
-                    value={currentMeeting.zip}
-                    onChangeText={value => updateCurrentMeeting('zip', value)}
-                    placeholder="ZIP"
-                  />
-                </View>
-              </View>
-            </>
-          )}
+        <View style={styles.stepDescription}>
+          <Text style={styles.stepDescriptionText}>
+            This will be the central location for your group and will be used
+            for member searches and group discovery.
+          </Text>
         </View>
       </View>
     );
@@ -891,53 +1098,55 @@ const CreateGroupScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}>
-        <ProgressIndicator />
+    <ErrorBoundary>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}>
+          <ProgressIndicator />
 
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}>
-          {renderStepContent()}
-        </ScrollView>
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={styles.contentContainer}>
+            {renderStepContent()}
+          </ScrollView>
 
-        <View
-          style={{
-            ...styles.footer,
-            flexDirection: 'row',
-            justifyContent: 'space-evenly',
-            alignItems: 'center',
-          }}>
-          {currentStep > 1 && (
+          <View
+            style={{
+              ...styles.footer,
+              flexDirection: 'row',
+              justifyContent: 'space-evenly',
+              alignItems: 'center',
+            }}>
+            {currentStep > 1 && (
+              <Button
+                style={{height: 50, width: '48%'}}
+                size="medium"
+                fullWidth={false}
+                title="Back"
+                onPress={prevStep}
+                variant="secondary"
+                disabled={isLoading}
+              />
+            )}
             <Button
               style={{height: 50, width: '48%'}}
+              title={currentStep === 3 ? 'Create Group' : 'Next'}
+              onPress={nextStep}
+              disabled={isLoading}
               size="medium"
               fullWidth={false}
-              title="Back"
-              onPress={prevStep}
-              variant="secondary"
-              disabled={isLoading}
             />
-          )}
-          <Button
-            style={{height: 50, width: '48%'}}
-            title={currentStep === 3 ? 'Create Group' : 'Next'}
-            onPress={nextStep}
-            disabled={isLoading}
-            size="medium"
-            fullWidth={false}
-          />
-        </View>
-
-        {isLoading && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#2196F3" />
           </View>
-        )}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          {isLoading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#2196F3" />
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 
@@ -1088,6 +1297,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#E0E0E0',
     marginRight: 8,
+    marginBottom: 8,
   },
   activeMeetingTab: {
     backgroundColor: '#2196F3',
@@ -1218,6 +1428,60 @@ const styles = StyleSheet.create({
   },
   emptyStateButton: {
     minWidth: 200,
+  },
+  groupLocationContainer: {
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  switchLabel: {
+    fontSize: 16,
+    color: '#424242',
+    flex: 1,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#757575',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 8,
+  },
+  formSection: {
+    marginBottom: 20,
+  },
+  formSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#424242',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+    paddingBottom: 6,
+  },
+  stepDescription: {
+    marginTop: 20,
+    backgroundColor: '#E3F2FD',
+    padding: 15,
+    borderRadius: 8,
+  },
+  stepDescriptionText: {
+    fontSize: 14,
+    color: '#0277BD',
+    lineHeight: 20,
+  },
+  meetingTabsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 8,
   },
 });
 

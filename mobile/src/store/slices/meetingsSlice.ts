@@ -9,6 +9,7 @@ import {
   Location,
   MeetingSearchCriteria,
 } from '../../types';
+import {MeetingModel} from '../../models';
 
 // Define state type
 interface MeetingsState {
@@ -54,18 +55,8 @@ export const fetchGroupMeetings = createAsyncThunk(
   'meetings/fetchGroupMeetings',
   async (groupId: string, {rejectWithValue}) => {
     try {
-      const firestore = require('@react-native-firebase/firestore').default;
-
       // Fetch meetings for the specified group
-      const meetingsSnapshot = await firestore()
-        .collection('meetings')
-        .where('groupId', '==', groupId)
-        .get();
-
-      const meetings = meetingsSnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Meeting[];
+      const meetings = await MeetingModel.getMeetingsByGroupId(groupId);
 
       return {
         meetings,

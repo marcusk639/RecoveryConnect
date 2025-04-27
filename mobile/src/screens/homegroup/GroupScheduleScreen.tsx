@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useEffect} from 'react';
 import {
   View,
   Text,
@@ -13,24 +13,14 @@ import {
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp} from '@react-navigation/native';
 import {GroupStackParamList} from '../../types/navigation';
-import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
-
-// Interface for meeting data
-interface Meeting {
-  id: string;
-  name: string;
-  day: string;
-  time: string;
-  format: string;
-  online: boolean;
-  location?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  link?: string;
-}
+import {Meeting} from '../../types';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  fetchGroupMeetings,
+  selectGroupMeetings,
+  selectMeetingsStatus,
+  selectMeetingsError,
+} from '../../store/slices/meetingsSlice';
 
 type GroupScheduleScreenProps = {
   navigation: StackNavigationProp<GroupStackParamList, 'GroupSchedule'>;
@@ -42,73 +32,57 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
   route,
 }) => {
   const {groupId, groupName} = route.params;
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const dispatch = useAppDispatch();
+
+  // Get data from Redux store
+  const meetings = useAppSelector(state => selectGroupMeetings(state, groupId));
+  const status = useAppSelector(selectMeetingsStatus);
+  const error = useAppSelector(selectMeetingsError);
+  const loading = status === 'loading';
 
   useEffect(() => {
-    loadMeetings();
-  }, [groupId]);
-
-  const loadMeetings = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Fetch meetings from Firestore
-      const meetingsSnapshot = await firestore()
-        .collection('meetings')
-        .where('groupId', '==', groupId)
-        .get();
-
-      const meetingsData: Meeting[] = [];
-      meetingsSnapshot.forEach(doc => {
-        meetingsData.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Meeting);
-      });
-
-      // Sort meetings by day and time
-      const sortedMeetings = sortMeetingsByDayAndTime(meetingsData);
-      setMeetings(sortedMeetings);
-    } catch (err) {
-      console.error('Error loading meetings:', err);
-      setError('Failed to load meeting schedule. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Dispatch the action to fetch meetings for this group
+    dispatch(fetchGroupMeetings(groupId));
+  }, [groupId, dispatch]);
 
   // Helper function to sort meetings by day and time
   const sortMeetingsByDayAndTime = (meetingsList: Meeting[]): Meeting[] => {
     const dayOrder = [
-      'Sunday',
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
     ];
 
     return [...meetingsList].sort((a, b) => {
       // First sort by day
-      const dayA = dayOrder.indexOf(a.day);
-      const dayB = dayOrder.indexOf(b.day);
+      const dayA = dayOrder.indexOf((a.day || '').toLowerCase());
+      const dayB = dayOrder.indexOf((b.day || '').toLowerCase());
 
       if (dayA !== dayB) {
         return dayA - dayB;
       }
 
       // If same day, sort by time
-      return a.time.localeCompare(b.time);
+      return (a.time || '').localeCompare(b.time || '');
     });
   };
 
+  // Get sorted meetings
+  const sortedMeetings = sortMeetingsByDayAndTime(meetings);
+
   // Format time for display (e.g., "7:00 PM")
-  const formatTime = (time: string): string => {
-    return time; // Assuming time is already formatted correctly
+  const formatTime = (time?: string): string => {
+    return time || 'TBD'; // Return 'TBD' if time is undefined
+  };
+
+  // Format day with first letter capitalized
+  const formatDay = (day?: string): string => {
+    if (!day) return 'TBD';
+    return day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
   };
 
   // Render a meeting item
@@ -126,7 +100,7 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
       <View style={styles.meetingDetails}>
         <View style={styles.meetingDetailRow}>
           <Text style={styles.meetingDetailLabel}>Day:</Text>
-          <Text style={styles.meetingDetailValue}>{item.day}</Text>
+          <Text style={styles.meetingDetailValue}>{formatDay(item.day)}</Text>
         </View>
         <View style={styles.meetingDetailRow}>
           <Text style={styles.meetingDetailLabel}>Time:</Text>
@@ -134,7 +108,9 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
         </View>
         <View style={styles.meetingDetailRow}>
           <Text style={styles.meetingDetailLabel}>Format:</Text>
-          <Text style={styles.meetingDetailValue}>{item.format}</Text>
+          <Text style={styles.meetingDetailValue}>
+            {item.format || 'Standard'}
+          </Text>
         </View>
       </View>
 
@@ -175,11 +151,13 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
       ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadMeetings}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => dispatch(fetchGroupMeetings(groupId))}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      ) : meetings.length === 0 ? (
+      ) : sortedMeetings.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
             No meetings scheduled for this group.
@@ -187,9 +165,11 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
         </View>
       ) : (
         <FlatList
-          data={meetings}
+          data={sortedMeetings}
           renderItem={renderMeetingItem}
-          keyExtractor={item => item.id}
+          keyExtractor={item =>
+            item.id || `meeting-${item.name}-${item.day}-${item.time}`
+          }
           contentContainerStyle={styles.meetingsList}
         />
       )}

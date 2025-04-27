@@ -108,11 +108,9 @@ export const createGroup = createAsyncThunk(
   async (
     {
       groupData,
-      meetings,
       onSuccess,
     }: {
       groupData: Partial<HomeGroup>;
-      meetings: Meeting[];
       onSuccess?: (group: HomeGroup) => void;
     },
     {rejectWithValue},
@@ -125,13 +123,6 @@ export const createGroup = createAsyncThunk(
 
       // Create the group
       const group = await GroupModel.create(groupData);
-
-      // Create or update all meetings linked to this group
-      await Promise.all(
-        meetings.map(meeting =>
-          GroupModel.addMeetingToGroup(group.id!, meeting),
-        ),
-      );
 
       // Call onSuccess callback if provided
       if (onSuccess && typeof onSuccess === 'function') {

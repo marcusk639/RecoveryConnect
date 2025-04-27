@@ -32,3 +32,28 @@ export function calculateDistance(
 function deg2rad(deg: number): number {
   return deg * (Math.PI / 180);
 }
+
+export const streetTypes = [
+  'street',
+  'avenue',
+  'drive',
+  'court',
+  'place',
+  'boulevard',
+  'highway',
+  'lane',
+  'road',
+  'trail',
+  'way',
+  'street',
+  'avenue',
+  'drive',
+  'court',
+  'place',
+  'boulevard',
+  'highway',
+  'lane',
+  'road',
+  'trail',
+  'way',
+];

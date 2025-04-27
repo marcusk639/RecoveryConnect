@@ -148,6 +148,7 @@ export interface MeetingDocument {
   type: string; // AA, NA, etc.
   day: string;
   time: string;
+  street?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -155,7 +156,6 @@ export interface MeetingDocument {
   lat?: number;
   lng?: number;
   location: string;
-  types: string[];
   isOnline: boolean;
   onlineLink?: string;
   onlineNotes?: string;
@@ -163,6 +163,7 @@ export interface MeetingDocument {
   addedBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  groupId: string;
 }
 
 /**

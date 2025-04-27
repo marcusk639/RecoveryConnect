@@ -10,6 +10,7 @@ import {calculateDistance} from '../utils/locationUtils';
 import {Transaction} from '../types/domain';
 import {MemberModel} from './MemberModel';
 import {MeetingModel} from './MeetingModel';
+import {cloneDeep} from 'lodash';
 
 /**
  * Group model for managing group data
@@ -210,6 +211,8 @@ export class GroupModel {
 
       const newGroup = {...defaultGroup, ...groupData};
       delete newGroup.id; // Remove ID as Firestore will generate one
+
+      let meetings = cloneDeep(newGroup.meetings);
       delete newGroup.meetings; // Remove meetings as they're stored separately
 
       // Ensure lat, lng, and geohash are set if we have location data
@@ -233,7 +236,12 @@ export class GroupModel {
         .collection('groups')
         .add(GroupModel.toFirestore(newGroup));
 
-      await MeetingModel.createBatch(newGroup.meetings || []);
+      // Add groupId to each meeting
+      meetings = meetings?.map(meeting => ({
+        ...meeting,
+        groupId: docRef.id,
+      }));
+      await MeetingModel.createBatch(meetings || []);
 
       // Get user data
       const userDoc = await firestore()
