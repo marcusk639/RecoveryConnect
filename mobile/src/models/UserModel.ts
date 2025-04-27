@@ -32,6 +32,7 @@ export class UserModel {
       homeGroups: data.homeGroups,
       role: data.role,
       favoriteMeetings: data.favoriteMeetings,
+      photoUrl: data.photoUrl,
     };
   }
 

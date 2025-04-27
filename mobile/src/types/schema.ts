@@ -64,6 +64,7 @@ export interface UserDocument {
   homeGroups: string[]; // Array of group IDs
   role: 'user' | 'admin';
   favoriteMeetings?: string[]; // Array of meeting IDs
+  photoUrl?: string;
 }
 
 /**
@@ -92,11 +93,14 @@ export interface GroupDocument {
 }
 
 /**
- * Group Member Sub-Collection Document
+ * Group Member Document (top-level collection)
  */
 export interface GroupMemberDocument {
   id: string; // User ID
+  groupId: string; // Group ID
   displayName: string;
+  email?: string;
+  photoURL?: string;
   joinedAt: Timestamp;
   sobrietyDate?: Timestamp;
   position?: string; // Position in the group (secretary, treasurer, etc.)
@@ -323,7 +327,8 @@ export interface DirectMessageDocument {
 export const COLLECTION_PATHS = {
   USERS: 'users',
   GROUPS: 'groups',
-  GROUP_MEMBERS: (groupId: string) => `groups/${groupId}/members`,
+  MEMBERS: 'members', // New top-level members collection
+  GROUP_MEMBERS: (groupId: string) => `groups/${groupId}/members`, // Legacy path, will be migrated
   ANNOUNCEMENTS: (groupId: string) => `groups/${groupId}/announcements`,
   EVENTS: (groupId: string) => `groups/${groupId}/events`,
   TRANSACTIONS: (groupId: string) => `groups/${groupId}/transactions`,

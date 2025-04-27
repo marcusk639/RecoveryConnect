@@ -10,7 +10,7 @@ import GroupOverviewScreen from '../screens/homegroup/GroupOverviewScreen';
 import GroupMembersScreen from '../screens/homegroup/GroupMembersScreen';
 import GroupAnnouncementsScreen from '../screens/homegroup/GroupAnnouncementsScreen';
 // import GroupLiteratureScreen from '../screens/groups/GroupLiteratureScreen';
-// import GroupMemberDetailsScreen from '../screens/groups/GroupMemberDetailsScreen';
+import GroupMemberDetailsScreen from '../screens/homegroup/MemberDetailScreen';
 import GroupAnnouncementDetailsScreen from '../screens/homegroup/GroupAnnouncementDetailsScreen';
 import GroupTreasuryScreen from '../screens/homegroup/GroupTreasuryScreen';
 import GroupEditDetailsScreen from '../screens/homegroup/GroupEditDetailsScreen';
@@ -71,14 +71,14 @@ const GroupStackNavigator: React.FC = () => {
         options={({route}) => ({
           title: `${route.params.groupName} - Literature`,
         })}
-      />
-      <Stack.Screen 
-        name="GroupMemberDetails" 
-        component={GroupMemberDetailsScreen} 
+      /> */}
+      <Stack.Screen
+        name="GroupMemberDetails"
+        component={GroupMemberDetailsScreen}
         options={{
           title: 'Member Details',
         }}
-      /> */}
+      />
       <Stack.Screen
         name="GroupAnnouncementDetails"
         component={GroupAnnouncementDetailsScreen}

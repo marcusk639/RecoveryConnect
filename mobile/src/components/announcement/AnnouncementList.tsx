@@ -16,19 +16,28 @@ import {
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  Announcement,
+  fetchAnnouncementsForGroup,
+  createAnnouncement,
+  selectAnnouncementsByGroupId,
+  selectAnnouncementsStatus,
+  selectAnnouncementsError,
+} from '../../store/slices/announcementsSlice';
 
 // Types
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  isPinned: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
-  authorName: string;
-  expiresAt?: Date;
-}
+// interface Announcement {
+//   id: string;
+//   title: string;
+//   content: string;
+//   isPinned: boolean;
+//   createdAt: Date;
+//   updatedAt: Date;
+//   createdBy: string;
+//   authorName: string;
+//   expiresAt?: Date;
+// }
 
 interface AnnouncementListProps {
   groupId: string;
@@ -37,100 +46,97 @@ interface AnnouncementListProps {
 }
 
 // Mock function to fetch announcements (replace with actual API call)
-const fetchAnnouncements = async (groupId: string): Promise<Announcement[]> => {
-  // In a real app, this would hit the API
-  // For now, return mock data
-  return [
-    {
-      id: '1',
-      title: 'Group Inventory Coming Up',
-      content:
-        'We will be conducting our annual group inventory after the meeting on May 15th.',
-      isPinned: true,
-      createdAt: new Date(2025, 2, 15),
-      updatedAt: new Date(2025, 2, 15),
-      createdBy: 'user1',
-      authorName: 'J.',
-    },
-    {
-      id: '2',
-      title: 'New Meeting Format',
-      content:
-        'Starting next month, we will be incorporating a 10-minute meditation at the beginning of our meetings.',
-      isPinned: false,
-      createdAt: new Date(2025, 2, 10),
-      updatedAt: new Date(2025, 2, 10),
-      createdBy: 'user2',
-      authorName: 'M.',
-    },
-    {
-      id: '3',
-      title: 'Literature Order',
-      content:
-        'We will be placing a bulk literature order next week. Please let the literature chair know if you need any specific books or pamphlets.',
-      isPinned: false,
-      createdAt: new Date(2025, 2, 5),
-      updatedAt: new Date(2025, 2, 5),
-      createdBy: 'user3',
-      authorName: 'S.',
-    },
-  ];
-};
+// const fetchAnnouncements = async (groupId: string): Promise<Announcement[]> => {
+//   // In a real app, this would hit the API
+//   // For now, return mock data
+//   return [
+//     {
+//       id: '1',
+//       title: 'Group Inventory Coming Up',
+//       content:
+//         'We will be conducting our annual group inventory after the meeting on May 15th.',
+//       isPinned: true,
+//       createdAt: new Date(2025, 2, 15),
+//       updatedAt: new Date(2025, 2, 15),
+//       createdBy: 'user1',
+//       authorName: 'J.',
+//     },
+//     {
+//       id: '2',
+//       title: 'New Meeting Format',
+//       content:
+//         'Starting next month, we will be incorporating a 10-minute meditation at the beginning of our meetings.',
+//       isPinned: false,
+//       createdAt: new Date(2025, 2, 10),
+//       updatedAt: new Date(2025, 2, 10),
+//       createdBy: 'user2',
+//       authorName: 'M.',
+//     },
+//     {
+//       id: '3',
+//       title: 'Literature Order',
+//       content:
+//         'We will be placing a bulk literature order next week. Please let the literature chair know if you need any specific books or pamphlets.',
+//       isPinned: false,
+//       createdAt: new Date(2025, 2, 5),
+//       updatedAt: new Date(2025, 2, 5),
+//       createdBy: 'user3',
+//       authorName: 'S.',
+//     },
+//   ];
+// };
 
 const AnnouncementList: React.FC<AnnouncementListProps> = ({
   groupId,
   isAdmin,
   onAnnouncementPress,
 }) => {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const dispatch = useAppDispatch();
+
+  // Get data from Redux store
+  const announcements = useAppSelector(state =>
+    selectAnnouncementsByGroupId(state, groupId),
+  );
+  const status = useAppSelector(selectAnnouncementsStatus);
+  const error = useAppSelector(selectAnnouncementsError);
+
+  const loading = status === 'loading';
+  const refreshing = status === 'loading'; // Can use the same status for refresh
+
+  // Local UI state for modal
   const [createModalVisible, setCreateModalVisible] = useState<boolean>(false);
   const [newTitle, setNewTitle] = useState<string>('');
   const [newContent, setNewContent] = useState<string>('');
   const [isPinned, setIsPinned] = useState<boolean>(false);
-  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false); // For the create button loading state
 
-  // Load announcements
+  // Load announcements using Redux
   useEffect(() => {
     loadAnnouncements();
-  }, [groupId]);
+  }, [groupId, dispatch]);
 
-  const loadAnnouncements = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchAnnouncements(groupId);
-      // Sort announcements: pinned first, then by creation date (newest first)
-      const sorted = data.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return b.createdAt.getTime() - a.createdAt.getTime();
-      });
-      setAnnouncements(sorted);
-    } catch (error) {
-      console.error('Error loading announcements:', error);
-      Alert.alert(
-        'Error',
-        'Could not load announcements. Please try again later.',
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const loadAnnouncements = () => {
+    dispatch(fetchAnnouncementsForGroup(groupId));
   };
 
+  // Show error messages
+  useEffect(() => {
+    if (error && status === 'failed') {
+      Alert.alert('Error', error);
+      // Consider clearing the error after showing it
+      // dispatch(clearAnnouncementsError());
+    }
+  }, [error, status]);
+
   const onRefresh = () => {
-    setRefreshing(true);
-    loadAnnouncements();
+    loadAnnouncements(); // Re-fetch data on pull-to-refresh
   };
 
   const handleCreateAnnouncement = async () => {
-    // Validate input
     if (!newTitle.trim()) {
       Alert.alert('Error', 'Please enter a title');
       return;
     }
-
     if (!newContent.trim()) {
       Alert.alert('Error', 'Please enter content');
       return;
@@ -138,42 +144,23 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
 
     try {
       setSubmitting(true);
+      await dispatch(
+        createAnnouncement({
+          groupId,
+          title: newTitle,
+          content: newContent,
+          isPinned,
+        }),
+      ).unwrap(); // unwrap() throws error on rejection
 
-      // In a real app, this would call the API to create the announcement
-      // For now, we'll just simulate it
-      const currentUser = auth().currentUser;
-      const newAnnouncement: Announcement = {
-        id: Date.now().toString(),
-        title: newTitle,
-        content: newContent,
-        isPinned,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy: currentUser?.uid || 'anonymous',
-        authorName: currentUser?.displayName || 'Anonymous',
-      };
-
-      // Add to state
-      const updatedAnnouncements = [newAnnouncement, ...announcements];
-      // Re-sort
-      const sorted = updatedAnnouncements.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return b.createdAt.getTime() - a.createdAt.getTime();
-      });
-      setAnnouncements(sorted);
-
-      // Close modal and reset form
       setCreateModalVisible(false);
       resetForm();
-
-      // Show success message
       Alert.alert('Success', 'Announcement created successfully!');
-    } catch (error) {
-      console.error('Error creating announcement:', error);
+    } catch (err: any) {
+      console.error('Error creating announcement:', err);
       Alert.alert(
         'Error',
-        'Could not create announcement. Please try again later.',
+        err.message || 'Could not create announcement. Please try again.',
       );
     } finally {
       setSubmitting(false);
@@ -186,7 +173,22 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
     setIsPinned(false);
   };
 
-  const formatDate = (date: Date): string => {
+  const formatDate = (dateInput: Date | string): string => {
+    let date: Date | null = null;
+    if (typeof dateInput === 'string') {
+      try {
+        date = new Date(dateInput);
+      } catch (e) {
+        return 'Invalid Date';
+      }
+    } else if (dateInput instanceof Date) {
+      date = dateInput;
+    }
+
+    if (!date || isNaN(date.getTime())) {
+      return 'Date N/A';
+    }
+
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -273,14 +275,13 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
             </TouchableOpacity>
 
             <Text style={styles.helperText}>
-              Pinned announcements will appear at the top of the list. Only 3
-              announcements can be pinned at a time.
+              Pinned announcements will appear at the top of the list.
             </Text>
 
             <TouchableOpacity
               style={styles.submitButton}
               onPress={handleCreateAnnouncement}
-              disabled={submitting}>
+              disabled={submitting || loading}>
               {submitting ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
@@ -306,13 +307,13 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
         )}
       </View>
 
-      {loading ? (
+      {status === 'loading' && announcements.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2196F3" />
         </View>
       ) : (
         <FlatList
-          data={announcements}
+          data={announcements} // Use data from Redux
           renderItem={renderItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContainer}

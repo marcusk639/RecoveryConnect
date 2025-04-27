@@ -63,6 +63,9 @@ target 'RecoveryConnect' do
   use_frameworks! :linkage => :static
 
   pod 'SexyTooltip',:git => 'https://github.com/prscX/SexyTooltip.git'
+
+  pod 'RNFBStorage', :path => '../node_modules/@react-native-firebase/storage'
+  $FirebaseSDKVersion = '10.22.0'
   
   # Google Maps SDK
   # pod 'GoogleMaps'

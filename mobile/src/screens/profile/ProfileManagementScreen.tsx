@@ -13,15 +13,28 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {useNavigation} from '@react-navigation/native';
 import auth from '@react-native-firebase/auth';
+import storage from '@react-native-firebase/storage';
+import {launchImageLibrary} from 'react-native-image-picker';
 import {MainStackParamList, RootStackParamList} from '../../types';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import DatePicker from '../../components/common/DatePicker';
-import {UserModel} from '../../models/UserModel';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  selectUserData,
+  selectAuthStatus,
+  selectAuthError,
+  updateUserDisplayName,
+  updateUserRecoveryDate,
+  updateUserPrivacySettings,
+  updateUserNotificationSettings,
+  updateUserPhoto,
+} from '../../store/slices/authSlice';
 
 type ProfileManagementScreenProps = {
   navigation: StackNavigationProp<MainStackParamList, 'Profile'>;
@@ -32,27 +45,28 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
 }) => {
   const rootNavigation =
     useNavigation<StackNavigationProp<RootStackParamList>>();
-  // User data state
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [saving, setSaving] = useState<boolean>(false);
+  const dispatch = useAppDispatch();
 
-  // Profile edit states
+  // Redux state
+  const userData = useAppSelector(selectUserData);
+  const authStatus = useAppSelector(selectAuthStatus);
+  const authError = useAppSelector(selectAuthError);
+  const loading = authStatus === 'loading';
+
+  // UI state
+  const [uploadingPhoto, setUploadingPhoto] = useState<boolean>(false);
   const [editingName, setEditingName] = useState<boolean>(false);
   const [editingRecoveryDate, setEditingRecoveryDate] =
     useState<boolean>(false);
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
 
-  // Form values
+  // Form values - Maintain local copies for editing
   const [displayName, setDisplayName] = useState<string>('');
   const [useInitialOnly, setUseInitialOnly] = useState<boolean>(false);
   const [recoveryDate, setRecoveryDate] = useState<string>('');
-
-  // Privacy settings
+  const [photoUrl, setPhotoUrl] = useState<string>('');
   const [showRecoveryDate, setShowRecoveryDate] = useState<boolean>(false);
   const [allowDirectMessages, setAllowDirectMessages] = useState<boolean>(true);
-
-  // Notification settings
   const [meetingNotifications, setMeetingNotifications] =
     useState<boolean>(true);
   const [announcementNotifications, setAnnouncementNotifications] =
@@ -60,58 +74,113 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
   const [celebrationNotifications, setCelebrationNotifications] =
     useState<boolean>(true);
 
-  // Load user data
+  // Load user data from Redux store and initialize local state
   useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const currentUser = auth().currentUser;
-
-        if (!currentUser) {
-          rootNavigation.navigate('Auth');
-          return;
-        }
-
-        const userData = await UserModel.getById(currentUser.uid);
-
-        if (userData) {
-          setUser(userData);
-          setDisplayName(userData.displayName || '');
-
-          // Check if using initial only
-          if (
-            userData.displayName &&
-            userData.displayName.length === 2 &&
-            userData.displayName.endsWith('.')
-          ) {
-            setUseInitialOnly(true);
-          }
-
-          setRecoveryDate(userData.recoveryDate || '');
-          setShowRecoveryDate(userData.privacySettings.showRecoveryDate);
-          setAllowDirectMessages(userData.privacySettings.allowDirectMessages);
-
-          // Notification settings
-          setMeetingNotifications(userData.notificationSettings.meetings);
-          setAnnouncementNotifications(
-            userData.notificationSettings.announcements,
-          );
-          setCelebrationNotifications(
-            userData.notificationSettings.celebrations,
-          );
-        }
-      } catch (error) {
-        console.error('Error loading user data:', error);
-        Alert.alert(
-          'Error',
-          'Failed to load your profile data. Please try again later.',
-        );
-      } finally {
-        setLoading(false);
+    if (!userData) {
+      // If userData is not available (e.g., direct navigation), redirect or fetch.
+      // Assuming ProfileScreen handles initial fetching.
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        rootNavigation.navigate('Auth');
       }
-    };
+      return;
+    }
 
-    loadUserData();
-  }, [rootNavigation]);
+    // Set form values from Redux state when userData changes
+    setDisplayName(userData.displayName || '');
+    setPhotoUrl(userData.photoUrl || '');
+
+    // Determine useInitialOnly based on fetched displayName
+    if (
+      userData.displayName &&
+      userData.displayName.length === 2 &&
+      userData.displayName.endsWith('.')
+    ) {
+      setUseInitialOnly(true);
+    }
+
+    setRecoveryDate(userData.recoveryDate || '');
+    setShowRecoveryDate(userData.privacySettings?.showRecoveryDate || false);
+    setAllowDirectMessages(
+      userData.privacySettings?.allowDirectMessages !== false,
+    );
+    setMeetingNotifications(userData.notificationSettings?.meetings !== false);
+    setAnnouncementNotifications(
+      userData.notificationSettings?.announcements !== false,
+    );
+    setCelebrationNotifications(
+      userData.notificationSettings?.celebrations !== false,
+    );
+  }, [userData, rootNavigation]);
+
+  // Show errors from Redux
+  useEffect(() => {
+    if (authError && authStatus === 'failed') {
+      Alert.alert('Error', authError);
+      // Consider dispatching an action to clear the error after showing it
+      // dispatch(clearError());
+    }
+  }, [authError, authStatus]);
+
+  // Handle image picker and upload
+  const handleChoosePhoto = async () => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 500,
+        maxHeight: 500,
+        includeBase64: false,
+      });
+
+      if (result.didCancel || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const selectedImage = result.assets[0];
+
+      if (!selectedImage.uri) {
+        throw new Error('No image URI found');
+      }
+
+      await uploadPhoto(selectedImage.uri);
+    } catch (error) {
+      console.error('Error selecting image:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
+  };
+
+  // Upload photo to Firebase Storage and update Redux store
+  const uploadPhoto = async (uri: string) => {
+    try {
+      setUploadingPhoto(true);
+      const currentUser = auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      const storageRef = storage().ref(
+        `users/${currentUser.uid}/images/profileImage`,
+      );
+
+      await storageRef.putFile(uri);
+      const downloadUrl = await storageRef.getDownloadURL();
+
+      // Dispatch action to update user photo in Redux and Firestore
+      await dispatch(updateUserPhoto(downloadUrl)).unwrap();
+
+      // Local state update for UI responsiveness (already updated via useEffect)
+      // setPhotoUrl(downloadUrl);
+
+      Alert.alert('Success', 'Profile photo updated successfully');
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   // Handle date selection
   const handleDateSelect = (date: Date | undefined) => {
@@ -125,7 +194,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
   // Format date for display
   const formatDateForDisplay = (dateString: string): string => {
     if (!dateString) return 'Not set';
-
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString('en-US', {
@@ -141,185 +209,122 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
   // Calculate sobriety time
   const calculateSobrietyTime = (dateString: string): string => {
     if (!dateString) return '';
-
     try {
-      const recoveryDate = new Date(dateString);
+      const recoveryDateObj = new Date(dateString);
       const today = new Date();
-
-      const diffTime = Math.abs(today.getTime() - recoveryDate.getTime());
+      const diffTime = Math.abs(today.getTime() - recoveryDateObj.getTime());
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
       const years = Math.floor(diffDays / 365);
       const months = Math.floor((diffDays % 365) / 30);
       const days = diffDays % 30;
-
       let sobrietyText = '';
-
-      if (years > 0) {
+      if (years > 0)
         sobrietyText += `${years} ${years === 1 ? 'year' : 'years'}`;
-      }
-
-      if (months > 0) {
+      if (months > 0)
         sobrietyText += sobrietyText
           ? `, ${months} ${months === 1 ? 'month' : 'months'}`
           : `${months} ${months === 1 ? 'month' : 'months'}`;
-      }
-
-      if (days > 0 || (!years && !months)) {
+      if (days > 0 || (!years && !months))
         sobrietyText += sobrietyText
           ? `, ${days} ${days === 1 ? 'day' : 'days'}`
           : `${days} ${days === 1 ? 'day' : 'days'}`;
-      }
-
       return sobrietyText;
     } catch (error) {
       return '';
     }
   };
 
-  // Save profile name
+  // Save profile name via Redux
   const saveDisplayName = async () => {
     if (!displayName.trim()) {
       Alert.alert('Error', 'Display name cannot be empty');
       return;
     }
-
-    setSaving(true);
     try {
-      const currentUser = auth().currentUser;
-
-      if (!currentUser) {
-        throw new Error('No authenticated user');
-      }
-
-      // Format name based on preference
-      const formattedName = useInitialOnly
-        ? `${displayName.trim().charAt(0)}.`
-        : displayName.trim();
-
-      // Update Firebase Auth profile
-      await currentUser.updateProfile({
-        displayName: formattedName,
-      });
-
-      // Update Firestore user document
-      await UserModel.update(currentUser.uid, {
-        displayName: formattedName,
-      });
-
-      // Update local state
-      setUser({...user, displayName: formattedName});
-      setDisplayName(formattedName);
-
+      await dispatch(
+        updateUserDisplayName({
+          displayName: displayName.trim(),
+          useInitialOnly: useInitialOnly,
+        }),
+      ).unwrap();
       setEditingName(false);
       Alert.alert('Success', 'Display name updated successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating display name:', error);
-      Alert.alert('Error', 'Failed to update display name. Please try again.');
-    } finally {
-      setSaving(false);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to update display name. Please try again.',
+      );
     }
   };
 
-  // Save recovery date
+  // Save recovery date via Redux
   const saveRecoveryDate = async () => {
-    setSaving(true);
     try {
-      const currentUser = auth().currentUser;
-
-      if (!currentUser) {
-        throw new Error('No authenticated user');
-      }
-
-      // Update Firestore user document
-      await UserModel.update(currentUser.uid, {
-        recoveryDate: recoveryDate,
-      });
-
-      // Update local state
-      setUser({...user, recoveryDate: recoveryDate});
-
+      await dispatch(updateUserRecoveryDate(recoveryDate)).unwrap();
       setEditingRecoveryDate(false);
       Alert.alert('Success', 'Recovery date updated successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating recovery date:', error);
-      Alert.alert('Error', 'Failed to update recovery date. Please try again.');
-    } finally {
-      setSaving(false);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to update recovery date. Please try again.',
+      );
     }
   };
 
-  // Save privacy settings
+  // Save privacy settings via Redux
   const savePrivacySettings = async () => {
-    setSaving(true);
     try {
-      const currentUser = auth().currentUser;
-
-      if (!currentUser) {
-        throw new Error('No authenticated user');
-      }
-
-      const privacySettings = {
-        showRecoveryDate,
-        allowDirectMessages,
-      };
-
-      // Update privacy settings
-      await UserModel.updatePrivacySettings(currentUser.uid, privacySettings);
-
-      // Update local state
-      setUser({...user, privacySettings});
-
+      await dispatch(
+        updateUserPrivacySettings({
+          showRecoveryDate,
+          allowDirectMessages,
+        }),
+      ).unwrap();
       Alert.alert('Success', 'Privacy settings updated successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating privacy settings:', error);
       Alert.alert(
         'Error',
-        'Failed to update privacy settings. Please try again.',
+        error.message || 'Failed to update privacy settings. Please try again.',
       );
-    } finally {
-      setSaving(false);
     }
   };
 
-  // Save notification settings
+  // Save notification settings via Redux
   const saveNotificationSettings = async () => {
-    setSaving(true);
     try {
-      const currentUser = auth().currentUser;
+      const currentSettings = userData?.notificationSettings || {};
+      const hasChanges =
+        meetingNotifications !== currentSettings.meetings ||
+        announcementNotifications !== currentSettings.announcements ||
+        celebrationNotifications !== currentSettings.celebrations;
 
-      if (!currentUser) {
-        throw new Error('No authenticated user');
+      if (hasChanges) {
+        await dispatch(
+          updateUserNotificationSettings({
+            meetings: meetingNotifications,
+            announcements: announcementNotifications,
+            celebrations: celebrationNotifications,
+          }),
+        ).unwrap();
+        Alert.alert('Success', 'Notification settings updated successfully');
+      } else {
+        Alert.alert('Info', 'No changes were made to notification settings.');
       }
-
-      const notificationSettings = {
-        meetings: meetingNotifications,
-        announcements: announcementNotifications,
-        celebrations: celebrationNotifications,
-      };
-
-      // Update notification settings
-      await UserModel.updateNotificationSettings(
-        currentUser.uid,
-        notificationSettings,
-      );
-
-      // Update local state
-      setUser({...user, notificationSettings});
-
-      Alert.alert('Success', 'Notification settings updated successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating notification settings:', error);
       Alert.alert(
         'Error',
-        'Failed to update notification settings. Please try again.',
+        error.message ||
+          'Failed to update notification settings. Please try again.',
       );
-    } finally {
-      setSaving(false);
     }
   };
 
-  if (loading) {
+  // Display loading indicator if loading or userData is not yet available
+  if (loading || !userData) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
@@ -344,6 +349,35 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
             <View style={styles.placeholderView} />
           </View>
 
+          {/* Profile Photo Section */}
+          <View style={styles.photoSection}>
+            <View style={styles.photoContainer}>
+              {/* Display photo from local state (updated from Redux) */}
+              {photoUrl ? (
+                <Image source={{uri: photoUrl}} style={styles.profilePhoto} />
+              ) : (
+                <View style={styles.profileInitials}>
+                  <Text style={styles.initialsText}>
+                    {/* Display initial from Redux data */}
+                    {userData?.displayName?.charAt(0).toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.changePhotoButton}
+                onPress={handleChoosePhoto}
+                disabled={uploadingPhoto || loading}>
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.changePhotoText}>
+                    {photoUrl ? 'Change Photo' : 'Add Photo'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Profile Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Personal Information</Text>
@@ -364,17 +398,16 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
               {editingName ? (
                 <View>
                   <Input
-                    value={displayName}
+                    value={displayName} // Use local state for input
                     onChangeText={setDisplayName}
                     placeholder="Your name or nickname"
                   />
-
                   <View style={styles.switchContainer}>
                     <Text style={styles.switchLabel}>
                       Use first initial only
                     </Text>
                     <Switch
-                      value={useInitialOnly}
+                      value={useInitialOnly} // Use local state
                       onValueChange={setUseInitialOnly}
                       trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
                       thumbColor={useInitialOnly ? '#2196F3' : '#FFFFFF'}
@@ -384,19 +417,19 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
                     If enabled, only your first initial will be shown to other
                     users (e.g., "J.")
                   </Text>
-
                   <Button
                     title="Save Name"
                     onPress={saveDisplayName}
-                    loading={saving}
-                    disabled={saving || !displayName.trim()}
+                    loading={loading} // Use Redux loading status
+                    disabled={loading || !displayName.trim()}
                     size="small"
                     style={styles.saveButton}
                   />
                 </View>
               ) : (
                 <Text style={styles.fieldValue}>
-                  {user?.displayName || 'Not set'}
+                  {/* Display name from Redux store */}
+                  {userData?.displayName || 'Not set'}
                 </Text>
               )}
             </View>
@@ -420,7 +453,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
                     style={styles.datePickerButton}
                     onPress={() => setShowDatePicker(true)}>
                     <Text style={styles.datePickerButtonText}>
-                      {recoveryDate
+                      {recoveryDate // Use local state for display during edit
                         ? formatDateForDisplay(recoveryDate)
                         : 'Select your recovery date'}
                     </Text>
@@ -429,23 +462,21 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
                     This is used for calculating sobriety time and for optional
                     celebrations.
                   </Text>
-
                   <View style={styles.buttonRow}>
                     {recoveryDate && (
                       <Button
                         title="Clear Date"
                         variant="outline"
-                        onPress={() => setRecoveryDate('')}
+                        onPress={() => setRecoveryDate('')} // Clear local state
                         size="small"
                         style={styles.clearButton}
                       />
                     )}
-
                     <Button
                       title="Save Date"
                       onPress={saveRecoveryDate}
-                      loading={saving}
-                      disabled={saving}
+                      loading={loading} // Use Redux loading status
+                      disabled={loading}
                       size="small"
                       style={styles.saveButton}
                     />
@@ -454,14 +485,14 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
               ) : (
                 <View>
                   <Text style={styles.fieldValue}>
-                    {recoveryDate
-                      ? formatDateForDisplay(recoveryDate)
+                    {/* Display recovery date from Redux store */}
+                    {userData?.recoveryDate
+                      ? formatDateForDisplay(userData.recoveryDate)
                       : 'Not set'}
                   </Text>
-
-                  {recoveryDate && (
+                  {userData?.recoveryDate && (
                     <Text style={styles.sobrietyText}>
-                      {calculateSobrietyTime(recoveryDate)} of sobriety
+                      {calculateSobrietyTime(userData.recoveryDate)} of sobriety
                     </Text>
                   )}
                 </View>
@@ -472,13 +503,12 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
           {/* Privacy Settings */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Privacy Settings</Text>
-
             <View style={styles.switchContainer}>
               <Text style={styles.switchLabel}>
                 Share recovery date with groups
               </Text>
               <Switch
-                value={showRecoveryDate}
+                value={showRecoveryDate} // Use local state for switch
                 onValueChange={setShowRecoveryDate}
                 trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
                 thumbColor={showRecoveryDate ? '#2196F3' : '#FFFFFF'}
@@ -488,11 +518,10 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
               Allow your recovery date to be visible to members of your home
               groups.
             </Text>
-
             <View style={styles.switchContainer}>
               <Text style={styles.switchLabel}>Allow direct messages</Text>
               <Switch
-                value={allowDirectMessages}
+                value={allowDirectMessages} // Use local state for switch
                 onValueChange={setAllowDirectMessages}
                 trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
                 thumbColor={allowDirectMessages ? '#2196F3' : '#FFFFFF'}
@@ -501,12 +530,11 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
             <Text style={styles.helperText}>
               Allow other members to send you private messages.
             </Text>
-
             <Button
               title="Save Privacy Settings"
               onPress={savePrivacySettings}
-              loading={saving}
-              disabled={saving}
+              loading={loading} // Use Redux loading status
+              disabled={loading}
               style={styles.sectionButton}
             />
           </View>
@@ -514,11 +542,10 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
           {/* Notification Settings */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Notification Settings</Text>
-
             <View style={styles.switchContainer}>
               <Text style={styles.switchLabel}>Meeting Reminders</Text>
               <Switch
-                value={meetingNotifications}
+                value={meetingNotifications} // Use local state for switch
                 onValueChange={setMeetingNotifications}
                 trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
                 thumbColor={meetingNotifications ? '#2196F3' : '#FFFFFF'}
@@ -527,11 +554,10 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
             <Text style={styles.helperText}>
               Receive notifications before your scheduled meetings.
             </Text>
-
             <View style={styles.switchContainer}>
               <Text style={styles.switchLabel}>Group Announcements</Text>
               <Switch
-                value={announcementNotifications}
+                value={announcementNotifications} // Use local state for switch
                 onValueChange={setAnnouncementNotifications}
                 trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
                 thumbColor={announcementNotifications ? '#2196F3' : '#FFFFFF'}
@@ -540,11 +566,10 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
             <Text style={styles.helperText}>
               Receive notifications for announcements from your groups.
             </Text>
-
             <View style={styles.switchContainer}>
               <Text style={styles.switchLabel}>Celebrations</Text>
               <Switch
-                value={celebrationNotifications}
+                value={celebrationNotifications} // Use local state for switch
                 onValueChange={setCelebrationNotifications}
                 trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
                 thumbColor={celebrationNotifications ? '#2196F3' : '#FFFFFF'}
@@ -553,34 +578,19 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
             <Text style={styles.helperText}>
               Receive notifications for sobriety milestones and celebrations.
             </Text>
-
             <Button
               title="Save Notification Settings"
               onPress={saveNotificationSettings}
-              loading={saving}
-              disabled={saving}
+              loading={loading} // Use Redux loading status
+              disabled={loading}
               style={styles.sectionButton}
             />
           </View>
 
+          {/* Account Security, Data & Privacy, Policy Sections remain the same */}
           {/* Account Security */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Account Security</Text>
-
-            {/* <TouchableOpacity
-              style={styles.securityOption}
-              onPress={() => navigation.navigate('ForgotPassword')}>
-              <Text style={styles.securityOptionText}>Change Password</Text>
-              <Text style={styles.securityOptionArrow}>→</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.securityOption}
-              onPress={() => navigation.navigate('EmailVerification')}>
-              <Text style={styles.securityOptionText}>Verify Email</Text>
-              <Text style={styles.securityOptionArrow}>→</Text>
-            </TouchableOpacity> */}
-
             <TouchableOpacity
               style={styles.securityOption}
               onPress={() => {
@@ -599,7 +609,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
           {/* Data & Privacy */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Data & Privacy</Text>
-
             <TouchableOpacity
               style={styles.securityOption}
               onPress={() => {
@@ -607,10 +616,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
                   'View Data',
                   'Would you like to download all your personal data?',
                   [
-                    {
-                      text: 'Cancel',
-                      style: 'cancel',
-                    },
+                    {text: 'Cancel', style: 'cancel'},
                     {
                       text: 'Download',
                       onPress: () => {
@@ -626,7 +632,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
               <Text style={styles.securityOptionText}>Download My Data</Text>
               <Text style={styles.securityOptionArrow}>→</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={styles.securityOption}
               onPress={() => {
@@ -634,15 +639,11 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
                   'Delete Account',
                   'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.',
                   [
-                    {
-                      text: 'Cancel',
-                      style: 'cancel',
-                    },
+                    {text: 'Cancel', style: 'cancel'},
                     {
                       text: 'Delete Account',
                       style: 'destructive',
                       onPress: () => {
-                        // Implement account deletion here
                         Alert.alert(
                           'Account Deletion Requested',
                           'Your account will be scheduled for deletion. You will receive a confirmation email with further instructions.',
@@ -672,7 +673,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
               <Text style={styles.securityOptionText}>Privacy Policy</Text>
               <Text style={styles.securityOptionArrow}>→</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={styles.securityOption}
               onPress={() => {
@@ -698,7 +698,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
         onClose={() => setShowDatePicker(false)}
         onSelect={handleDateSelect}
         initialDate={recoveryDate ? new Date(recoveryDate) : new Date()}
-        maxDate={new Date()} // Can't select future dates
+        maxDate={new Date()}
       />
     </SafeAreaView>
   );
@@ -750,6 +750,50 @@ const styles = StyleSheet.create({
   },
   placeholderView: {
     width: 40,
+  },
+  photoSection: {
+    backgroundColor: '#FFFFFF',
+    marginTop: 16,
+    padding: 20,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#EEEEEE',
+  },
+  photoContainer: {
+    alignItems: 'center',
+  },
+  profilePhoto: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 12,
+  },
+  profileInitials: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  initialsText: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  changePhotoButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  changePhotoText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   section: {
     backgroundColor: '#FFFFFF',

@@ -16,25 +16,24 @@ import {
   Linking,
   PermissionsAndroid,
 } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
-import functions from '@react-native-firebase/functions';
-import auth from '@react-native-firebase/auth';
 import Geolocation from '@react-native-community/geolocation';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import Slider from '@react-native-community/slider';
-import * as hashUtils from '../../utils/hashUtils';
-import {GroupModel} from '../../models/GroupModel';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  setUserLocation,
+  fetchMeetings,
+  filterMeetings,
+  toggleFavoriteMeeting,
+  selectFilteredMeetings,
+  selectMeetingsStatus,
+  selectMeetingsError,
+  selectUserLocation,
+} from '../../store/slices/meetingsSlice';
 
 // Types for meetings data
-import {
-  Meeting,
-  MeetingType,
-  Location,
-  MeetingSearchInput,
-  MeetingFilters,
-  DaysAndTimes,
-} from '../../types';
+import {Meeting, MeetingType, Location, DaysAndTimes} from '../../types';
 
 // Filter options type
 interface FilterOptions {
@@ -47,15 +46,21 @@ interface FilterOptions {
 
 const MeetingsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [filteredMeetings, setFilteredMeetings] = useState<Meeting[]>([]);
+  const dispatch = useAppDispatch();
+
+  // Get meetings from Redux
+  const filteredMeetings = useAppSelector(selectFilteredMeetings);
+  const status = useAppSelector(selectMeetingsStatus);
+  const error = useAppSelector(selectMeetingsError);
+  const userLocation = useAppSelector(selectUserLocation);
+
+  const isLoading = status === 'loading';
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [meetingDetailsVisible, setMeetingDetailsVisible] = useState(false);
-  const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
 
   // Filter state
@@ -95,7 +100,6 @@ const MeetingsScreen: React.FC = () => {
       const granted = await requestLocationPermission();
       if (!granted) {
         setLocationError('Location permission denied');
-        setLoading(false);
         return;
       }
     }
@@ -106,21 +110,32 @@ const MeetingsScreen: React.FC = () => {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
-        setUserLocation(location);
-        // Once we have location, fetch meetings
-        loadMeetings(location);
+        // Dispatch location to Redux
+        dispatch(setUserLocation(location));
+
+        // Instead of relying on the setUserLocation to trigger the fetch,
+        // we'll do it explicitly with filters
+        const filters = {
+          day: filterOptions.day || undefined,
+          type: filterOptions.meetingType || undefined,
+        };
+        dispatch(fetchMeetings({location, filters}));
       },
       error => {
         console.error('Error getting location:', error);
         setLocationError(
           'Unable to get your location. Please check app permissions.',
         );
-        // Still attempt to load meetings with a default location
-        loadMeetings(undefined);
+        // Try to fetch meetings without location but with current filters
+        const filters = {
+          day: filterOptions.day || undefined,
+          type: filterOptions.meetingType || undefined,
+        };
+        dispatch(fetchMeetings({filters}));
       },
       {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
     );
-  }, []);
+  }, [dispatch, filterOptions]);
 
   // For Android, request location permission
   const requestLocationPermission = async () => {
@@ -144,164 +159,72 @@ const MeetingsScreen: React.FC = () => {
     }
   };
 
+  // Initialize - get location on component mount
   useEffect(() => {
-    // Get user location when component mounts
     getUserLocation();
   }, [getUserLocation]);
 
-  // Reload meetings when filter options change
+  // Apply filters when they change
   useEffect(() => {
+    applyFilters();
+  }, [filterOptions, searchQuery]);
+
+  // Show error alert if there's an error from Redux
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Error', error);
+    }
+  }, [error]);
+
+  // Apply filters to meetings
+  const applyFilters = () => {
+    // Update the filtered results in state
+    dispatch(
+      filterMeetings({
+        searchQuery,
+        showOnline: filterOptions.showOnline,
+        showInPerson: filterOptions.showInPerson,
+        meetingType: filterOptions.meetingType,
+        day: filterOptions.day,
+      }),
+    );
+
+    // Also fetch new meetings with the updated filters if we have location
     if (userLocation) {
-      searchMeetings();
-    }
-  }, [filterOptions, userLocation]);
-
-  // Load meetings from the backend
-  const loadMeetings = async (location: Location | undefined) => {
-    setLoading(true);
-    try {
-      // Build meeting search input
-      const searchInput: MeetingSearchInput = {
-        filters: buildMeetingFilters(location),
-      };
-
-      // Call the cloud function
-      const meetingsResult = await functions().httpsCallable('findMeetings')(
-        searchInput,
+      dispatch(
+        fetchMeetings({
+          location: userLocation,
+          filters: {
+            day: filterOptions.day || undefined,
+            type: filterOptions.meetingType || undefined,
+          },
+        }),
       );
-
-      if (meetingsResult.data && Array.isArray(meetingsResult.data)) {
-        const meetings = meetingsResult.data.map(meeting => ({
-          ...meeting,
-          id: hashUtils.generateMeetingHash(meeting),
-        }));
-        setMeetings(meetings);
-        // Initial filtering
-        applyFiltersAndSearch(meetings, searchQuery);
-      } else {
-        console.error('Invalid response format from findMeetings function');
-        setMeetings([]);
-        setFilteredMeetings([]);
-      }
-    } catch (error) {
-      console.error('Error loading meetings:', error);
-      Alert.alert('Error', 'Failed to load meetings. Please try again later.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  // Build meeting filters from current filter options
-  const buildMeetingFilters = (
-    location?: Location,
-  ): MeetingFilters | undefined => {
-    const filters: MeetingFilters = {};
-
-    if (filterOptions.day) {
-      filters.day = filterOptions.day;
-    }
-
-    if (filterOptions.meetingType) {
-      filters.type = filterOptions.meetingType;
-    }
-
-    // Add location and radius to filters
-    if (location) {
-      filters.location = location;
-      filters.radius = filterOptions.radius;
-    }
-
-    if (Object.keys(filters).length === 0) {
-      return undefined;
-    }
-
-    return filters;
-  };
-
-  // Search meetings based on current filters
-  const searchMeetings = async () => {
-    setLoading(true);
-    try {
-      if (!userLocation) {
-        Alert.alert(
-          'Location Required',
-          'Please enable location services to search for meetings',
-        );
-        return;
-      }
-
-      // Build meeting search input
-      const searchInput: MeetingSearchInput = {
-        location: userLocation,
-        filters: buildMeetingFilters(userLocation),
-        criteria: searchQuery ? {name: searchQuery} : undefined,
-      };
-
-      // Call the cloud function
-      const meetingsResult = await functions().httpsCallable('findMeetings')(
-        searchInput,
-      );
-
-      if (meetingsResult.data && Array.isArray(meetingsResult.data)) {
-        setMeetings(meetingsResult.data);
-        // Apply any additional client-side filtering if needed
-        applyFiltersAndSearch(meetingsResult.data, searchQuery);
-      } else {
-        console.error('Invalid response format from findMeetings function');
-        setMeetings([]);
-        setFilteredMeetings([]);
-      }
-    } catch (error) {
-      console.error('Error searching meetings:', error);
-      Alert.alert(
-        'Error',
-        'Failed to search meetings. Please try again later.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Handle refresh
   const onRefresh = async () => {
     setRefreshing(true);
-    await getUserLocation();
-  };
 
-  // Apply additional client-side filtering if needed
-  const applyFiltersAndSearch = (meetingsList: Meeting[], query: string) => {
-    let filtered = [...meetingsList];
+    // Pass current filter options when refreshing
+    const filters = {
+      day: filterOptions.day || undefined,
+      type: filterOptions.meetingType || undefined,
+    };
 
-    // Apply additional client-side filtering for online/in-person if needed
-    if (!filterOptions.showOnline) {
-      filtered = filtered.filter(meeting => !meeting.online);
+    if (userLocation) {
+      dispatch(fetchMeetings({location: userLocation, filters}));
+    } else {
+      await getUserLocation();
     }
 
-    if (!filterOptions.showInPerson) {
-      filtered = filtered.filter(meeting => !meeting.online);
-    }
-
-    // Additional local text search if needed
-    if (query.trim()) {
-      const queryLower = query.trim().toLowerCase();
-      filtered = filtered.filter(
-        meeting =>
-          meeting.name.toLowerCase().includes(queryLower) ||
-          (meeting.location &&
-            meeting.location.toLowerCase().includes(queryLower)) ||
-          (meeting.address &&
-            meeting.address.toLowerCase().includes(queryLower)) ||
-          (meeting.city && meeting.city.toLowerCase().includes(queryLower)),
-      );
-    }
-
-    setFilteredMeetings(filtered);
+    setRefreshing(false);
   };
 
   // Handle search input changes
   const handleSearchChange = (text: string) => {
     setSearchQuery(text);
-    applyFiltersAndSearch(meetings, text);
   };
 
   // Reset all filters to default values
@@ -313,6 +236,7 @@ const MeetingsScreen: React.FC = () => {
       day: null,
       radius: 10,
     });
+    setSearchQuery('');
   };
 
   // Show meeting details
@@ -322,41 +246,8 @@ const MeetingsScreen: React.FC = () => {
   };
 
   // Toggle favorite status
-  const toggleFavorite = async (meetingId: string) => {
-    try {
-      const currentUser = auth().currentUser;
-      if (!currentUser) return;
-
-      const userRef = firestore().collection('users').doc(currentUser.uid);
-      const userDoc = await userRef.get();
-      const userData = userDoc.data();
-
-      if (!userData) return;
-
-      const favoriteMeetings = userData.favoriteMeetings || [];
-      const isFavorite = favoriteMeetings.includes(meetingId);
-
-      if (isFavorite) {
-        await userRef.update({
-          favoriteMeetings: firestore.FieldValue.arrayRemove(meetingId),
-        });
-      } else {
-        await userRef.update({
-          favoriteMeetings: firestore.FieldValue.arrayUnion(meetingId),
-        });
-      }
-
-      // Update local state
-      setMeetings(prevMeetings =>
-        prevMeetings.map(meeting =>
-          meeting.id === meetingId
-            ? {...meeting, isFavorite: !isFavorite}
-            : meeting,
-        ),
-      );
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-    }
+  const handleToggleFavorite = (meetingId: string) => {
+    dispatch(toggleFavoriteMeeting(meetingId));
   };
 
   // Format day and time for display
@@ -421,7 +312,7 @@ const MeetingsScreen: React.FC = () => {
         </View>
         <TouchableOpacity
           style={styles.favoriteButton}
-          onPress={() => item.id && toggleFavorite(item.id)}>
+          onPress={() => item.id && handleToggleFavorite(item.id)}>
           <Text style={styles.favoriteIcon}>{item.isFavorite ? '★' : '☆'}</Text>
         </TouchableOpacity>
       </View>
@@ -817,11 +708,7 @@ const MeetingsScreen: React.FC = () => {
                 ]}
                 onPress={() => {
                   if (selectedMeeting.id) {
-                    toggleFavorite(selectedMeeting.id);
-                    setSelectedMeeting({
-                      ...selectedMeeting,
-                      isFavorite: !selectedMeeting.isFavorite,
-                    });
+                    handleToggleFavorite(selectedMeeting.id);
                   }
                 }}>
                 <Text style={styles.detailsActionButtonText}>
@@ -897,7 +784,7 @@ const MeetingsScreen: React.FC = () => {
         </View>
       )}
 
-      {loading ? (
+      {isLoading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color="#2196F3" />
         </View>

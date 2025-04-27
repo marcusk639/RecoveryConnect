@@ -18,7 +18,6 @@ import {RouteProp, useNavigation, useRoute} from '@react-navigation/native';
 import {MainStackParamList, Meeting, MeetingType, HomeGroup} from '../../types';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
-import {GroupModel} from '../../models/GroupModel';
 import DayPicker from '../../components/groups/DayPicker';
 import TimePicker from '../../components/groups/TimePicker';
 import MeetingTypeSelector from '../../components/groups/MeetingTypeSelector';
@@ -26,8 +25,13 @@ import LocationPicker from '../../components/groups/LocationPicker';
 import DatePicker from '../../components/common/DatePicker';
 import {generateMeetingHash} from '../../utils/hashUtils';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import {GroupStackParamList} from '../../types/navigation';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  createGroup,
+  selectGroupsStatus,
+  selectGroupsError,
+} from '../../store/slices/groupsSlice';
 
 // Interface for meeting form data
 type MeetingFormData = Meeting;
@@ -37,10 +41,15 @@ const CreateGroupScreen: React.FC = () => {
     useNavigation<StackNavigationProp<GroupStackParamList, 'CreateGroup'>>();
   const route = useRoute<RouteProp<GroupStackParamList, 'CreateGroup'>>();
   const initialMeeting = route.params?.meeting;
+  const dispatch = useAppDispatch();
+
+  // Redux state
+  const status = useAppSelector(selectGroupsStatus);
+  const error = useAppSelector(selectGroupsError);
+  const isLoading = status === 'loading';
 
   // Step management
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [loading, setLoading] = useState<boolean>(false);
 
   // Group details form state
   const [groupName, setGroupName] = useState<string>(
@@ -91,6 +100,13 @@ const CreateGroupScreen: React.FC = () => {
     address: '',
     link: '',
   });
+
+  // Show Redux errors
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Error', error);
+    }
+  }, [error]);
 
   // Validate step 1 (basic info)
   const validateStep1 = (): boolean => {
@@ -182,7 +198,7 @@ const CreateGroupScreen: React.FC = () => {
     } else if (currentStep === 2 && validateStep2()) {
       setCurrentStep(3);
     } else if (currentStep === 3 && validateStep3()) {
-      createGroup();
+      handleCreateGroup();
     }
   };
 
@@ -278,73 +294,43 @@ const CreateGroupScreen: React.FC = () => {
     setMeetings(updatedMeetings);
   };
 
-  // Create the group in Firestore
-  const createGroup = async (): Promise<void> => {
-    try {
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        throw new Error('No authenticated user');
-      }
-
-      // Prepare group data
-      const groupData: Partial<HomeGroup> = {
-        name: groupName,
-        description: groupDescription,
-        type: meetings[0].type,
-        meetings: meetings.map(meeting => ({
-          id: meeting.id,
-          name: meeting.name,
-          type: meeting.type,
-          day: meeting.day,
-          time: meeting.time,
-          location: meeting.location,
-          address: meeting.address,
-          city: meeting.city,
-          state: meeting.state,
-          zip: meeting.zip,
-          types: [meeting.type],
-          online: meeting.online,
-          link: meeting.link,
-          verified: true,
-          addedBy: currentUser.uid,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-        location: meetings[0].location,
-        address: meetings[0].address,
-        city: meetings[0].city,
-        state: meetings[0].state,
-        zip: meetings[0].zip,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        memberCount: 1,
-        admins: [currentUser.uid],
-      };
-
-      // Create the group
-      const group = await GroupModel.create(groupData);
-
-      // Update all meetings with the new group ID
-      const batch = firestore().batch();
-      for (const meeting of meetings) {
-        const meetingRef = firestore().collection('meetings').doc(meeting.id);
-        batch.set(meetingRef, {
-          groupId: group.id,
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-          ...meeting,
-        });
-      }
-
-      await batch.commit();
-
-      navigation.navigate('GroupOverview', {
-        groupId: group.id!,
-        groupName: group.name,
-      });
-    } catch (error) {
-      console.error('Error creating group:', error);
-      Alert.alert('Error', 'Failed to create group. Please try again.');
+  // Create the group using Redux
+  const handleCreateGroup = (): void => {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to create a group');
+      return;
     }
+
+    // Prepare group data
+    const groupData: Partial<HomeGroup> = {
+      name: groupName,
+      description: groupDescription,
+      type: meetings[0].type,
+      location: meetings[0].location,
+      address: meetings[0].address,
+      city: meetings[0].city,
+      state: meetings[0].state,
+      zip: meetings[0].zip,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      memberCount: 1,
+      admins: [currentUser.uid],
+    };
+
+    // Dispatch the action to create the group
+    dispatch(
+      createGroup({
+        groupData,
+        meetings,
+        onSuccess: group => {
+          navigation.navigate('GroupOverview', {
+            groupId: group.id!,
+            groupName: group.name,
+          });
+        },
+      }),
+    );
   };
 
   // Component to render progress indicator
@@ -720,20 +706,20 @@ const CreateGroupScreen: React.FC = () => {
               title="Back"
               onPress={prevStep}
               variant="secondary"
-              disabled={loading}
+              disabled={isLoading}
             />
           )}
           <Button
             style={{height: 50, width: '48%'}}
             title={currentStep === 3 ? 'Create Group' : 'Next'}
             onPress={nextStep}
-            disabled={loading}
+            disabled={isLoading}
             size="medium"
             fullWidth={false}
           />
         </View>
 
-        {loading && (
+        {isLoading && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#2196F3" />
           </View>

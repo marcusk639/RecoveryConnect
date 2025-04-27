@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -14,21 +14,20 @@ import {
 } from 'react-native';
 import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 import {GroupStackParamList} from '../../types/navigation';
-
-// Types for announcements data
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  isPinned: boolean;
-  createdAt: Date;
-  createdBy: string;
-  authorName: string;
-}
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  fetchAnnouncementsForGroup,
+  createAnnouncement,
+  selectAnnouncementsByGroupId,
+  selectAnnouncementsStatus,
+  selectAnnouncementsError,
+} from '../../store/slices/announcementsSlice';
+import {Announcement} from '../../types';
+import {selectGroupById} from '../../store/slices/groupsSlice';
 
 type GroupAnnouncementsScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -42,11 +41,21 @@ const GroupAnnouncementsScreen: React.FC = () => {
   const navigation = useNavigation<GroupAnnouncementsScreenNavigationProp>();
   const {groupId, groupName} = route.params;
 
-  const [loading, setLoading] = useState(true);
+  const dispatch = useAppDispatch();
+
+  // Get data from Redux store
+  const announcements = useAppSelector(state =>
+    selectAnnouncementsByGroupId(state, groupId),
+  );
+  const status = useAppSelector(selectAnnouncementsStatus);
+  const error = useAppSelector(selectAnnouncementsError);
+
+  const loading = status === 'loading';
   const [refreshing, setRefreshing] = useState(false);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+
+  const group = useAppSelector(state => selectGroupById(state, groupId));
 
   // New announcement form
   const [title, setTitle] = useState('');
@@ -61,72 +70,35 @@ const GroupAnnouncementsScreen: React.FC = () => {
 
   const checkAdminStatus = async () => {
     try {
-      // In a real app, this would check if the current user is an admin
-      // For now, we'll just simulate
-      setIsAdmin(true);
+      // Get the current user
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        return;
+      }
+
+      // Check if user is in admins array of the group
+
+      const isUserAdmin = group?.admins?.includes(currentUser.uid) || false;
+      setIsAdmin(isUserAdmin);
     } catch (error) {
       console.error('Error checking admin status:', error);
     }
   };
 
-  const loadAnnouncements = async () => {
-    try {
-      setLoading(true);
-
-      // In a real app, fetch from Firestore
-      // For now, use mock data
-      const mockAnnouncements: Announcement[] = [
-        {
-          id: '1',
-          title: 'Group Inventory',
-          content:
-            'We will be conducting our annual group inventory after the meeting on May 15th. All members are encouraged to attend and participate.',
-          isPinned: true,
-          createdAt: new Date('2024-04-30'),
-          createdBy: 'user1',
-          authorName: 'J.',
-        },
-        {
-          id: '2',
-          title: 'Literature Order',
-          content:
-            'We will be placing a bulk literature order next week. Please let M. know if you need any specific books or pamphlets.',
-          isPinned: false,
-          createdAt: new Date('2024-04-25'),
-          createdBy: 'user2',
-          authorName: 'M.',
-        },
-        {
-          id: '3',
-          title: 'New Meeting Format',
-          content:
-            'Starting next month, we will be incorporating a 10-minute meditation at the beginning of our meetings. This change comes after a discussion at our last business meeting. Please give it a try and share your feedback.',
-          isPinned: false,
-          createdAt: new Date('2024-04-20'),
-          createdBy: 'user3',
-          authorName: 'S.',
-        },
-      ];
-
-      // Sort: pinned first, then by date (newest first)
-      const sorted = mockAnnouncements.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return b.createdAt.getTime() - a.createdAt.getTime();
+  const loadAnnouncements = useCallback(() => {
+    setRefreshing(true);
+    dispatch(fetchAnnouncementsForGroup(groupId))
+      .unwrap()
+      .catch(error => {
+        Alert.alert(
+          'Error',
+          'Failed to load announcements. Please try again later.',
+        );
+      })
+      .finally(() => {
+        setRefreshing(false);
       });
-
-      setAnnouncements(sorted);
-    } catch (error) {
-      console.error('Error loading announcements:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load announcements. Please try again later.',
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  }, [dispatch, groupId]);
 
   const handleCreate = async () => {
     if (!title.trim() || !content.trim()) {
@@ -137,34 +109,18 @@ const GroupAnnouncementsScreen: React.FC = () => {
     try {
       setSubmitting(true);
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Dispatch the create action to Redux store
+      await dispatch(
+        createAnnouncement({
+          groupId,
+          title: title.trim(),
+          content: content.trim(),
+          isPinned,
+        }),
+      ).unwrap();
 
-      const currentUser = auth().currentUser;
-      const userName = currentUser?.displayName || 'Anonymous';
-
-      const newAnnouncement: Announcement = {
-        id: Date.now().toString(),
-        title,
-        content,
-        isPinned,
-        createdAt: new Date(),
-        createdBy: currentUser?.uid || 'unknown',
-        authorName: userName,
-      };
-
-      // Add to list and sort
-      const updatedAnnouncements = [newAnnouncement, ...announcements];
-      const sorted = updatedAnnouncements.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return b.createdAt.getTime() - a.createdAt.getTime();
-      });
-
-      setAnnouncements(sorted);
       setModalVisible(false);
       resetForm();
-
       Alert.alert('Success', 'Announcement created successfully.');
     } catch (error) {
       console.error('Error creating announcement:', error);
@@ -185,8 +141,6 @@ const GroupAnnouncementsScreen: React.FC = () => {
       groupId,
       announcementId: announcement.id,
     });
-    // In a real app, you would pass the announcement ID and fetch the details there
-    // For now, we'll just simulate it
   };
 
   const formatDate = (date: Date): string => {
@@ -307,7 +261,7 @@ const GroupAnnouncementsScreen: React.FC = () => {
         )}
       </View>
 
-      {loading ? (
+      {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2196F3" />
         </View>

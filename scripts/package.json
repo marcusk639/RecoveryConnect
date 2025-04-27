@@ -1,0 +1,18 @@
+{
+  "name": "recovery-connect-scripts",
+  "version": "1.0.0",
+  "description": "Utility scripts for RecoveryConnect",
+  "main": "migrateMembers.js",
+  "scripts": {
+    "migrate": "node migrateMembers.js --migrate",
+    "migrate-dry-run": "node migrateMembers.js --migrate --dry-run",
+    "cleanup": "node migrateMembers.js --cleanup"
+  },
+  "dependencies": {
+    "commander": "^11.1.0",
+    "firebase-admin": "^11.11.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -14,45 +14,32 @@ import {StackNavigationProp} from '@react-navigation/stack';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 
-// Import types
+// Import types and Redux
 import {GroupStackParamList} from '../../types/navigation';
+import {HomeGroup, Meeting, GroupMember} from '../../types';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  fetchGroupById,
+  selectGroupById,
+  selectGroupsStatus,
+  leaveGroup,
+} from '../../store/slices/groupsSlice';
+import {
+  fetchAnnouncementsForGroup,
+  selectAnnouncementsByGroupId,
+} from '../../store/slices/announcementsSlice';
+import {
+  fetchGroupMembers,
+  selectMembersByGroupId,
+} from '../../store/slices/membersSlice';
+import {GroupModel} from '../../models/GroupModel';
 
-// Types for home screen data
-interface Announcement {
-  id: string;
-  title: string;
-  message: string;
-  createdAt: Date;
-  createdBy: string;
-}
-
-interface Meeting {
-  id: string;
-  name: string;
-  dayOfWeek: string;
-  time: string;
-  location: string;
-  format: string;
-}
-
+// Types for celebrations data
 interface Celebration {
-  id: string;
+  memberId: string;
   memberName: string;
+  date: Date;
   years: number;
-  celebrationDate: Date;
-}
-
-interface HomeGroup {
-  id: string;
-  name: string;
-  description: string;
-  meetingDay: string;
-  meetingTime: string;
-  location: string;
-  type: string;
-  memberCount: number;
-  foundedDate: string;
-  isAdmin: boolean;
 }
 
 type GroupOverviewScreenRouteProp = RouteProp<
@@ -67,100 +54,57 @@ const GroupOverviewScreen: React.FC = () => {
   const navigation = useNavigation<GroupOverviewScreenNavigationProp>();
   const {groupId, groupName} = route.params;
 
-  const [loading, setLoading] = useState(true);
+  const dispatch = useAppDispatch();
+
+  // Get data from Redux store
+  const group = useAppSelector(state => selectGroupById(state, groupId));
+  const groupsStatus = useAppSelector(selectGroupsStatus);
+  const announcements = useAppSelector(state =>
+    selectAnnouncementsByGroupId(state, groupId),
+  );
+  const members = useAppSelector(state =>
+    selectMembersByGroupId(state, groupId),
+  );
+
+  // Local state for data not in Redux yet
   const [refreshing, setRefreshing] = useState(false);
   const [leaveGroupLoading, setLeaveGroupLoading] = useState(false);
-
-  // Data states
-  const [group, setGroup] = useState<HomeGroup | null>(null);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [upcomingMeetings, setUpcomingMeetings] = useState<Meeting[]>([]);
   const [celebrations, setCelebrations] = useState<Celebration[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadGroupData();
   }, [groupId]);
 
-  const loadGroupData = async () => {
+  const loadGroupData = useCallback(async () => {
     setLoading(true);
+    setRefreshing(true);
+
     try {
-      // In a real app, these would be fetched from Firestore
-      // For now, we'll use mock data
+      // Dispatch actions to load data from Redux
+      await Promise.all([
+        dispatch(fetchGroupById(groupId)).unwrap(),
+        dispatch(fetchAnnouncementsForGroup(groupId)).unwrap(),
+        dispatch(fetchGroupMembers(groupId)).unwrap(),
+      ]);
 
-      // Mock group data
-      const mockGroup: HomeGroup = {
-        id: groupId,
-        name: groupName,
-        description:
-          'A welcoming group focused on practical application of the principles. Meeting since 2010.',
-        meetingDay: 'Tuesday',
-        meetingTime: '7:00 PM',
-        location: 'Community Center, Room 101, 123 Main St.',
-        type: 'Open Discussion',
-        memberCount: 35,
-        foundedDate: '2010-05-15',
-        isAdmin: true, // Current user is an admin
-      };
-      setGroup(mockGroup);
+      // Load upcoming meetings for this group
+      const meetingsSnapshot = await firestore()
+        .collection('meetings')
+        .where('groupId', '==', groupId)
+        .get();
 
-      // Mock announcements
-      const mockAnnouncements: Announcement[] = [
-        {
-          id: '1',
-          title: 'Group Inventory',
-          message:
-            'We will be conducting our annual group inventory after the meeting on May 15th. All members are encouraged to attend and participate.',
-          createdAt: new Date('2024-04-30'),
-          createdBy: 'J',
-        },
-        {
-          id: '2',
-          title: 'Literature Order',
-          message:
-            'We will be placing a bulk literature order next week. Please let M. know if you need any specific books or pamphlets.',
-          createdAt: new Date('2024-04-25'),
-          createdBy: 'M',
-        },
-      ];
-      setAnnouncements(mockAnnouncements);
+      const meetings = meetingsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Meeting[];
 
-      // Mock upcoming meetings
-      const mockMeetings: Meeting[] = [
-        {
-          id: '1',
-          name: 'Regular Meeting',
-          dayOfWeek: 'Tuesday',
-          time: '7:00 PM',
-          location: 'Community Center, Room 101',
-          format: 'Open Discussion',
-        },
-        {
-          id: '2',
-          name: 'Business Meeting',
-          dayOfWeek: 'Last Tuesday',
-          time: '8:30 PM',
-          location: 'Community Center, Room 101',
-          format: 'Group Conscience',
-        },
-      ];
-      setUpcomingMeetings(mockMeetings);
+      setUpcomingMeetings(meetings);
 
-      // Mock celebrations
-      const mockCelebrations: Celebration[] = [
-        {
-          id: '1',
-          memberName: 'T',
-          years: 1,
-          celebrationDate: new Date('2024-05-15'),
-        },
-        {
-          id: '2',
-          memberName: 'S',
-          years: 5,
-          celebrationDate: new Date('2024-05-22'),
-        },
-      ];
-      setCelebrations(mockCelebrations);
+      // Load celebrations/milestones (not in Redux yet)
+      const milestones = await GroupModel.getGroupMilestones(groupId, 30);
+      setCelebrations(milestones);
     } catch (error) {
       console.error('Error loading group data:', error);
       Alert.alert(
@@ -171,7 +115,7 @@ const GroupOverviewScreen: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [groupId, dispatch]);
 
   const formatDate = (date: Date): string => {
     return date.toLocaleDateString('en-US', {
@@ -229,9 +173,8 @@ const GroupOverviewScreen: React.FC = () => {
           try {
             setLeaveGroupLoading(true);
 
-            // In a real app, this would call Firestore to remove the user from the group
-            // For now, we'll just simulate a network delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Use Redux to leave the group
+            await dispatch(leaveGroup(groupId)).unwrap();
 
             // Navigate back to the groups list
             navigation.goBack();
@@ -250,10 +193,20 @@ const GroupOverviewScreen: React.FC = () => {
     ]);
   };
 
-  if (loading) {
+  // Show loading indicator while initial data is loading
+  if (loading && !group) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
+      </View>
+    );
+  }
+
+  // Check if group is loaded
+  if (!group) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Group not found</Text>
       </View>
     );
   }
@@ -270,21 +223,46 @@ const GroupOverviewScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Group Information</Text>
         </View>
 
-        {group && (
-          <View style={styles.groupInfoContainer}>
-            <Text style={styles.meetingTimeText}>
-              {group.meetingDay}s at {group.meetingTime}
-            </Text>
-            <Text style={styles.locationText}>{group.location}</Text>
-            <Text style={styles.meetingTypeText}>{group.type} Meeting</Text>
-            <Text style={styles.memberCountText}>
-              {group.memberCount} Members • Founded{' '}
-              {formatDate(new Date(group.foundedDate))}
-            </Text>
-            <Text style={styles.groupDescriptionText}>{group.description}</Text>
-          </View>
-        )}
+        <View style={styles.groupInfoContainer}>
+          <Text style={styles.meetingTimeText}>
+            {group.type || 'Various'} Group
+          </Text>
+          <Text style={styles.locationText}>
+            {group.location || 'Location TBD'}
+          </Text>
+          <Text style={styles.meetingTypeText}>
+            {group.type || 'Various'} Meeting
+          </Text>
+          <Text style={styles.memberCountText}>
+            {group.memberCount} Members • Founded{' '}
+            {group.foundedDate
+              ? formatDate(new Date(group.foundedDate))
+              : 'Recently'}
+          </Text>
+          <Text style={styles.groupDescriptionText}>{group.description}</Text>
+        </View>
       </View>
+
+      {/* Members section */}
+      <TouchableOpacity
+        style={styles.section}
+        onPress={() =>
+          navigation.navigate('GroupMembers', {
+            groupId: groupId,
+            groupName: group.name,
+          })
+        }>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Members</Text>
+          <Text style={styles.sectionCount}>{group.memberCount || 0}</Text>
+        </View>
+        <Text style={styles.sectionDescription}>
+          View and manage group members
+        </Text>
+        <View style={styles.arrow}>
+          <Text style={styles.arrowText}>→</Text>
+        </View>
+      </TouchableOpacity>
 
       {/* Navigation Tiles */}
       <View style={styles.navTilesContainer}>
@@ -336,7 +314,7 @@ const GroupOverviewScreen: React.FC = () => {
       </View>
 
       {/* Admin Actions */}
-      {group?.isAdmin && (
+      {group.admins && group.admins.includes(auth().currentUser?.uid || '') && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Admin Actions</Text>
@@ -376,13 +354,15 @@ const GroupOverviewScreen: React.FC = () => {
           upcomingMeetings.map(meeting => (
             <View key={meeting.id} style={styles.meetingItem}>
               <View style={styles.meetingTimeContainer}>
-                <Text style={styles.meetingDay}>{meeting.dayOfWeek}</Text>
-                <Text style={styles.meetingTime}>{meeting.time}</Text>
+                <Text style={styles.meetingDay}>{meeting.day || 'TBD'}</Text>
+                <Text style={styles.meetingTime}>{meeting.time || 'TBD'}</Text>
               </View>
               <View style={styles.meetingContent}>
                 <Text style={styles.meetingName}>{meeting.name}</Text>
                 <Text style={styles.meetingLocation}>{meeting.location}</Text>
-                <Text style={styles.meetingFormat}>{meeting.format}</Text>
+                <Text style={styles.meetingFormat}>
+                  {meeting.format || meeting.type}
+                </Text>
               </View>
             </View>
           ))
@@ -401,15 +381,15 @@ const GroupOverviewScreen: React.FC = () => {
         </View>
 
         {announcements.length > 0 ? (
-          announcements.map(announcement => (
+          announcements.slice(0, 2).map(announcement => (
             <View key={announcement.id} style={styles.announcementItem}>
               <Text style={styles.announcementTitle}>{announcement.title}</Text>
               <Text style={styles.announcementMessage} numberOfLines={2}>
-                {announcement.message}
+                {announcement.content}
               </Text>
               <View style={styles.announcementFooter}>
                 <Text style={styles.announcementMeta}>
-                  Posted by {announcement.createdBy} on{' '}
+                  Posted by {announcement.authorName} on{' '}
                   {formatDate(announcement.createdAt)}
                 </Text>
               </View>
@@ -427,8 +407,8 @@ const GroupOverviewScreen: React.FC = () => {
         </View>
 
         {celebrations.length > 0 ? (
-          celebrations.map(celebration => (
-            <View key={celebration.id} style={styles.celebrationItem}>
+          celebrations.map((celebration, index) => (
+            <View key={index} style={styles.celebrationItem}>
               <View style={styles.celebrationIcon}>
                 <Text style={styles.celebrationIconText}>🎉</Text>
               </View>
@@ -438,7 +418,7 @@ const GroupOverviewScreen: React.FC = () => {
                   {celebration.years === 1 ? 'Year' : 'Years'}
                 </Text>
                 <Text style={styles.celebrationDate}>
-                  {formatDate(celebration.celebrationDate)}
+                  {formatDate(celebration.date)}
                 </Text>
               </View>
             </View>
@@ -704,6 +684,25 @@ const styles = StyleSheet.create({
     color: '#F44336',
     fontWeight: '600',
     fontSize: 16,
+  },
+  sectionCount: {
+    fontSize: 14,
+    color: '#9E9E9E',
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#757575',
+  },
+  arrow: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arrowText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2196F3',
   },
 });
 

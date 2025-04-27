@@ -10,12 +10,23 @@ import {
   Alert,
   Modal,
   TextInput,
+  Image,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import {MainStackParamList} from '../../types';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  selectUser,
+  selectUserData,
+  selectAuthStatus,
+  selectAuthError,
+  signOut,
+  fetchUserData,
+} from '../../store/slices/authSlice';
+import {UserModel} from '../../models/UserModel';
 
 type ProfileStackParamList = {
   ProfileMain: undefined;
@@ -42,6 +53,14 @@ interface UserProfile {
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
+  const dispatch = useAppDispatch();
+
+  // Get user data from Redux
+  const user = useAppSelector(selectUser);
+  const userData = useAppSelector(selectUserData);
+  const authStatus = useAppSelector(selectAuthStatus);
+  const authError = useAppSelector(selectAuthError);
+
   const [userProfile, setUserProfile] = useState<UserProfile>({
     displayName: '',
     email: '',
@@ -61,52 +80,44 @@ const ProfileScreen: React.FC = () => {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newRecoveryDate, setNewRecoveryDate] = useState('');
 
+  // Load user data from Redux or fetch if needed
   useEffect(() => {
-    // Load user profile
-    loadUserProfile();
-  }, []);
-
-  const loadUserProfile = async () => {
-    try {
-      // In a real app, this would pull from Firebase Auth and Firestore
-      // For MVP, we'll use mock data
-      const currentUser = auth().currentUser;
-
-      if (currentUser) {
-        // Mock user profile data
-        const mockProfile: UserProfile = {
-          displayName: currentUser.displayName || 'Anonymous',
-          email: currentUser.email || '',
-          recoveryDate: '2024-01-15', // Mock recovery date
-          notifications: {
-            meetings: true,
-            announcements: true,
-            celebrations: true,
-          },
-          privacySettings: {
-            showRecoveryDate: false,
-            allowDirectMessages: true,
-          },
-        };
-
-        setUserProfile(mockProfile);
-        setNewDisplayName(mockProfile.displayName);
-        setNewRecoveryDate(mockProfile.recoveryDate || '');
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      Alert.alert('Error', 'Failed to load profile. Please try again later.');
+    if (user && (!userData || authStatus === 'idle')) {
+      dispatch(fetchUserData(user.uid));
     }
-  };
+
+    if (userData) {
+      // Map Redux userData to local state
+      setUserProfile({
+        displayName: userData.displayName || '',
+        email: userData.email || '',
+        recoveryDate: userData.recoveryDate,
+        notifications: {
+          meetings: userData.notificationSettings?.meetings ?? true,
+          announcements: userData.notificationSettings?.announcements ?? true,
+          celebrations: userData.notificationSettings?.celebrations ?? true,
+        },
+        privacySettings: {
+          showRecoveryDate: userData.privacySettings?.showRecoveryDate ?? false,
+          allowDirectMessages:
+            userData.privacySettings?.allowDirectMessages ?? true,
+        },
+      });
+
+      setNewDisplayName(userData.displayName || '');
+      setNewRecoveryDate(userData.recoveryDate || '');
+    }
+  }, [user, userData, authStatus]);
+
+  // Show errors
+  useEffect(() => {
+    if (authError) {
+      Alert.alert('Error', authError);
+    }
+  }, [authError]);
 
   const handleSignOut = async () => {
-    try {
-      await auth().signOut();
-      // Navigation will be handled by the auth state listener in App.tsx
-    } catch (error) {
-      console.error('Error signing out:', error);
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
-    }
+    dispatch(signOut());
   };
 
   const confirmSignOut = () => {
@@ -130,18 +141,22 @@ const ProfileScreen: React.FC = () => {
     }
 
     try {
-      // In a real app, this would update Firebase Auth and Firestore
+      // Update using UserModel
       const currentUser = auth().currentUser;
-
       if (currentUser) {
         await currentUser.updateProfile({
           displayName: newDisplayName,
         });
 
-        setUserProfile({
-          ...userProfile,
-          displayName: newDisplayName,
-        });
+        if (userData) {
+          await UserModel.update(currentUser.uid, {
+            ...userData,
+            displayName: newDisplayName,
+          });
+
+          // Refresh user data in Redux
+          dispatch(fetchUserData(currentUser.uid));
+        }
 
         setEditNameVisible(false);
         Alert.alert('Success', 'Display name updated successfully');
@@ -363,11 +378,18 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>
-                {userProfile.displayName
-                  ? userProfile.displayName.charAt(0).toUpperCase()
-                  : 'A'}
-              </Text>
+              {userData?.photoUrl ? (
+                <Image
+                  source={{uri: userData.photoUrl}}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {userProfile.displayName
+                    ? userProfile.displayName.charAt(0).toUpperCase()
+                    : 'A'}
+                </Text>
+              )}
             </View>
 
             <View style={styles.profileInfo}>
@@ -386,6 +408,12 @@ const ProfileScreen: React.FC = () => {
           </View>
 
           <View style={styles.profileActions}>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => navigation.navigate('ProfileManagement')}>
+              <Text style={styles.editButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setEditNameVisible(true)}>
@@ -613,6 +641,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   avatarText: {
     fontSize: 32,

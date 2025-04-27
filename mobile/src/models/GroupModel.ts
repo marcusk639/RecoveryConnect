@@ -6,8 +6,9 @@ import {
 } from '../types/schema';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
-import {generateMeetingHash} from '../utils/hashUtils';
+import {calculateDistance} from '../utils/locationUtils';
 import {Transaction} from '../types/domain';
+import {MemberModel} from './MemberModel';
 
 /**
  * Group model for managing group data
@@ -76,6 +77,18 @@ export class GroupModel {
       firestoreData.treasury = group.treasury;
     }
 
+    // Location information
+    if (group.location !== undefined) firestoreData.location = group.location;
+    if (group.address !== undefined) firestoreData.address = group.address;
+    if (group.city !== undefined) firestoreData.city = group.city;
+    if (group.state !== undefined) firestoreData.state = group.state;
+    if (group.zip !== undefined) firestoreData.zip = group.zip;
+    if (group.lat !== undefined) firestoreData.lat = group.lat;
+    if (group.lng !== undefined) firestoreData.lng = group.lng;
+    if (group.placeName !== undefined)
+      firestoreData.placeName = group.placeName;
+    if (group.type !== undefined) firestoreData.type = group.type;
+
     return firestoreData;
   }
 
@@ -95,6 +108,62 @@ export class GroupModel {
     } catch (error) {
       console.error('Error getting group by ID:', error);
       return null;
+    }
+  }
+
+  /**
+   * Get all groups
+   */
+  static async getAllGroups(): Promise<HomeGroup[]> {
+    try {
+      const groupsSnapshot = await firestore().collection('groups').get();
+
+      const groups = groupsSnapshot.docs.map(doc => {
+        const data = doc.data() as GroupDocument;
+        // Ensure required fields have defaults
+        return {
+          id: doc.id,
+          type: data.type || 'AA', // Default type
+          name: data.name,
+          description: data.description,
+          location: data.location || '',
+          address: data.address,
+          city: data.city,
+          state: data.state,
+          zip: data.zip,
+          lat: data.lat,
+          lng: data.lng,
+          // Provide default empty array for treasurers if undefined
+          treasurers: data.treasurers || [],
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          foundedDate: data.foundedDate?.toDate().toISOString(),
+          memberCount: data.memberCount || 0,
+          admins: data.admins || [],
+          // Provide default treasury structure if undefined
+          treasury: data.treasury || {
+            balance: 0,
+            prudentReserve: 0,
+            monthlyIncome: 0,
+            monthlyExpenses: 0,
+            transactions: [],
+            summary: {
+              balance: 0,
+              prudentReserve: 0,
+              monthlyIncome: 0,
+              monthlyExpenses: 0,
+              lastUpdated: new Date(),
+            },
+          },
+          placeName: data.placeName,
+          meetings: [], // Initialize with empty array
+        } as HomeGroup; // Assert type after providing defaults
+      });
+
+      return groups;
+    } catch (error) {
+      console.error('Error getting all groups:', error);
+      throw error; // Rethrow or return empty array based on desired error handling
     }
   }
 
@@ -142,32 +211,51 @@ export class GroupModel {
       delete newGroup.id; // Remove ID as Firestore will generate one
       delete newGroup.meetings; // Remove meetings as they're stored separately
 
+      // Ensure lat, lng, and geohash are set if we have location data
+      // First, try to use provided lat/lng
+      let hasLocationData = false;
+      if (groupData.lat && groupData.lng) {
+        // If lat and lng are provided directly, use them
+        newGroup.lat = groupData.lat;
+        newGroup.lng = groupData.lng;
+        hasLocationData = true;
+      } else if (groupData.address) {
+        // If no lat/lng but we have an address, we should geocode it
+        // For now, log a warning - in a real implementation, you would
+        // call a geocoding service here to get lat/lng from the address
+        console.warn('Group created with address but no lat/lng coordinates');
+      } else {
+        console.warn('Group created without location data');
+      }
+
       const docRef = await firestore()
         .collection('groups')
         .add(GroupModel.toFirestore(newGroup));
 
-      // Add current user as a member
-      await firestore()
-        .collection('groups')
-        .doc(docRef.id)
-        .collection('members')
-        .doc(currentUser.uid)
-        .set({
-          id: currentUser.uid,
-          displayName: currentUser.displayName || 'Anonymous',
-          joinedAt: firestore.FieldValue.serverTimestamp(),
-          isAdmin: true,
-          showSobrietyDate: false,
-        });
-
-      // Add group ID to user's homeGroups
-      await firestore()
+      // Get user data
+      const userDoc = await firestore()
         .collection('users')
         .doc(currentUser.uid)
-        .update({
-          homeGroups: firestore.FieldValue.arrayUnion(docRef.id),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
+        .get();
+      const userData = userDoc.data();
+
+      // Add current user as a member using the MemberModel
+      await MemberModel.addMember(docRef.id, currentUser.uid, userData, true);
+
+      // If we have location data, call the Cloud Function to set the geohash
+      if (hasLocationData) {
+        try {
+          const functions = firestore().app.functions('us-central1');
+          const ensureGeolocation = functions.httpsCallable(
+            'ensureGroupGeolocation',
+          );
+          await ensureGeolocation({groupId: docRef.id});
+          console.log('Successfully set geohash for group');
+        } catch (error) {
+          console.error('Failed to set geohash for group:', error);
+          // Don't throw here, as the group was still created successfully
+        }
+      }
 
       const createdGroup = await docRef.get();
       return {
@@ -222,24 +310,8 @@ export class GroupModel {
    */
   static async getMembers(groupId: string): Promise<GroupMember[]> {
     try {
-      const membersSnapshot = await firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('members')
-        .get();
-
-      return membersSnapshot.docs.map(doc => {
-        const data = doc.data() as GroupMemberDocument;
-        return {
-          id: doc.id,
-          name: data.displayName,
-          sobrietyDate: data.sobrietyDate
-            ? data.sobrietyDate.toDate().toISOString()
-            : undefined,
-          position: data.position,
-          isAdmin: data.isAdmin,
-        };
-      });
+      // Use MemberModel to get group members from top-level collection
+      return MemberModel.getGroupMembers(groupId);
     } catch (error) {
       console.error('Error getting group members:', error);
       throw error;
@@ -263,38 +335,8 @@ export class GroupModel {
 
       const userData = userDoc.data();
 
-      // Add user to group's members collection
-      await firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('members')
-        .doc(userId)
-        .set({
-          id: userId,
-          displayName: userData?.displayName || 'Anonymous',
-          joinedAt: firestore.FieldValue.serverTimestamp(),
-          sobrietyDate: userData?.recoveryDate,
-          isAdmin: isAdmin,
-          showSobrietyDate: false,
-        });
-
-      // Increment member count
-      await firestore()
-        .collection('groups')
-        .doc(groupId)
-        .update({
-          memberCount: firestore.FieldValue.increment(1),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
-
-      // Add group to user's homeGroups
-      await firestore()
-        .collection('users')
-        .doc(userId)
-        .update({
-          homeGroups: firestore.FieldValue.arrayUnion(groupId),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
+      // Use MemberModel to add member to top-level collection
+      await MemberModel.addMember(groupId, userId, userData, isAdmin);
     } catch (error) {
       console.error('Error adding group member:', error);
       throw error;
@@ -306,118 +348,21 @@ export class GroupModel {
    */
   static async removeMember(groupId: string, userId: string): Promise<void> {
     try {
-      // Check if member exists
-      const memberDoc = await firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('members')
-        .doc(userId)
-        .get();
-
-      if (!memberDoc.exists) {
-        throw new Error('Member not found in this group');
-      }
-
-      const memberData = memberDoc.data() as GroupMemberDocument;
-      if (memberData.isAdmin) {
-        const groupDoc = await firestore()
-          .collection('groups')
-          .doc(groupId)
-          .get();
-        const groupData = groupDoc.data() as GroupDocument;
-
-        if (groupData.admins.length === 1 && groupData.admins[0] === userId) {
-          throw new Error('Cannot remove the last admin from a group');
-        }
-
-        // Remove user from admins array
-        await firestore()
-          .collection('groups')
-          .doc(groupId)
-          .update({
-            admins: firestore.FieldValue.arrayRemove(userId),
-            updatedAt: firestore.FieldValue.serverTimestamp(),
-          });
-      }
-
-      // Remove member from group's members collection
-      await firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('members')
-        .doc(userId)
-        .delete();
-
-      // Decrement member count
-      await firestore()
-        .collection('groups')
-        .doc(groupId)
-        .update({
-          memberCount: firestore.FieldValue.increment(-1),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
-
-      // Remove group from user's homeGroups
-      await firestore()
-        .collection('users')
-        .doc(userId)
-        .update({
-          homeGroups: firestore.FieldValue.arrayRemove(groupId),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
+      // Use MemberModel to remove member from top-level collection
+      await MemberModel.removeMember(groupId, userId);
     } catch (error) {
       console.error('Error removing group member:', error);
       throw error;
     }
   }
 
-  // Add these methods to the GroupModel class in src/models/GroupModel.ts
-
   /**
    * Make a user an admin of a group
    */
   static async makeAdmin(groupId: string, userId: string): Promise<void> {
     try {
-      const groupRef = firestore().collection('groups').doc(groupId);
-      const memberRef = firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('members')
-        .doc(userId);
-
-      // Check if group and member exist
-      const [groupDoc, memberDoc] = await Promise.all([
-        groupRef.get(),
-        memberRef.get(),
-      ]);
-
-      if (!groupDoc.exists) {
-        throw new Error('Group not found');
-      }
-
-      if (!memberDoc.exists) {
-        throw new Error('Member not found in this group');
-      }
-
-      // Get current admins array
-      const groupData = groupDoc.data();
-      const currentAdmins = groupData?.admins || [];
-
-      // Check if user is already an admin
-      if (currentAdmins.includes(userId)) {
-        return; // Already an admin, nothing to do
-      }
-
-      // Add user to admins array
-      await groupRef.update({
-        admins: firestore.FieldValue.arrayUnion(userId),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      });
-
-      // Update member document
-      await memberRef.update({
-        isAdmin: true,
-      });
+      // Use MemberModel to make user an admin
+      await MemberModel.makeAdmin(groupId, userId);
     } catch (error) {
       console.error('Error making user admin:', error);
       throw error;
@@ -429,51 +374,8 @@ export class GroupModel {
    */
   static async removeAdmin(groupId: string, userId: string): Promise<void> {
     try {
-      const groupRef = firestore().collection('groups').doc(groupId);
-      const memberRef = firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('members')
-        .doc(userId);
-
-      // Check if group and member exist
-      const [groupDoc, memberDoc] = await Promise.all([
-        groupRef.get(),
-        memberRef.get(),
-      ]);
-
-      if (!groupDoc.exists) {
-        throw new Error('Group not found');
-      }
-
-      if (!memberDoc.exists) {
-        throw new Error('Member not found in this group');
-      }
-
-      // Get current admins array
-      const groupData = groupDoc.data();
-      const currentAdmins = groupData?.admins || [];
-
-      // Check if user is an admin
-      if (!currentAdmins.includes(userId)) {
-        return; // Not an admin, nothing to do
-      }
-
-      // Check if user is the last admin
-      if (currentAdmins.length === 1 && currentAdmins[0] === userId) {
-        throw new Error('Cannot remove the last admin from a group');
-      }
-
-      // Remove user from admins array
-      await groupRef.update({
-        admins: firestore.FieldValue.arrayRemove(userId),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      });
-
-      // Update member document
-      await memberRef.update({
-        isAdmin: false,
-      });
+      // Use MemberModel to remove user as admin
+      await MemberModel.removeAdmin(groupId, userId);
     } catch (error) {
       console.error('Error removing user as admin:', error);
       throw error;
@@ -600,23 +502,8 @@ export class GroupModel {
     position: string,
   ): Promise<void> {
     try {
-      const memberRef = firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('members')
-        .doc(userId);
-
-      // Check if member exists
-      const memberDoc = await memberRef.get();
-
-      if (!memberDoc.exists) {
-        throw new Error('Member not found in this group');
-      }
-
-      // Update member position
-      await memberRef.update({
-        position: position,
-      });
+      // Use MemberModel to update member position
+      await MemberModel.updateMemberPosition(groupId, userId, position);
     } catch (error) {
       console.error('Error updating member position:', error);
       throw error;
@@ -631,14 +518,8 @@ export class GroupModel {
     userId: string,
   ): Promise<boolean> {
     try {
-      const memberRef = firestore()
-        .collection('groups')
-        .doc(groupId)
-        .collection('members')
-        .doc(userId);
-
-      const memberDoc = await memberRef.get();
-      return memberDoc.exists;
+      // Use MemberModel to check if user is a member
+      return MemberModel.isGroupMember(groupId, userId);
     } catch (error) {
       console.error('Error checking if user is a member:', error);
       return false;
@@ -902,10 +783,11 @@ export class GroupModel {
         admins: [currentUser.uid],
       };
 
+      // Create group - this will also handle setting the geohash if lat/lng are provided
       const group = await GroupModel.create(groupData);
 
       // Update the meeting with the new group ID
-      await firestore().collection('meetings').doc(meeting.id).set({
+      await firestore().collection('meetings').doc(meeting.id).update({
         groupId: group.id,
         updatedAt: firestore.FieldValue.serverTimestamp(),
       });
@@ -951,6 +833,57 @@ export class GroupModel {
       await this.updateMeetingGroupId(meeting.id!, groupId);
     } catch (error) {
       console.error('Error adding meeting to group:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search groups by location using a Cloud Function (assumed)
+   * @param latitude User's latitude
+   * @param longitude User's longitude
+   * @param radius Radius in miles
+   * @returns Promise<HomeGroup[]>
+   */
+  static async searchGroupsByLocation(
+    latitude: number,
+    longitude: number,
+    radius: number,
+  ): Promise<HomeGroup[]> {
+    try {
+      // TODO: Replace with actual Cloud Function call
+      console.warn(
+        'searchGroupsByLocation: Cloud Function call not implemented yet. Returning empty array.',
+      );
+      // Example of how you might call a Cloud Function:
+      // const functions = firebase.app().functions('your-region'); // Get functions instance
+      // const searchFunction = functions.httpsCallable('searchGroupsByLocation');
+      // const result = await searchFunction({ latitude, longitude, radius });
+      // return result.data as HomeGroup[]; // Assuming the function returns data in this format
+
+      // --- TEMPORARY FALLBACK (REMOVE LATER) ---
+      // Fetch all and filter client-side (inefficient, for testing only)
+      const allGroups = await this.getAllGroups();
+      const filtered = allGroups.filter(group => {
+        if (group.lat && group.lng) {
+          const distance = calculateDistance(
+            latitude,
+            longitude,
+            group.lat,
+            group.lng,
+          );
+          return distance <= radius;
+        }
+        return false;
+      });
+      console.log(
+        `Temporary client-side filter found ${filtered.length} groups within ${radius} miles.`,
+      );
+      return filtered;
+      // --- END TEMPORARY FALLBACK ---
+
+      // return []; // Return empty when Cloud Function is ready
+    } catch (error) {
+      console.error('Error searching groups by location:', error);
       throw error;
     }
   }

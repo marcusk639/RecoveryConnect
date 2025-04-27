@@ -9,7 +9,6 @@ import {MainTabParamList} from '../types/navigation';
 // Import screens and navigators
 import GroupStackNavigator from './GroupStackNavigator';
 import MeetingsScreen from '../screens/meetings/MeetingScreen';
-import TreasuryScreen from '../screens/treasury/TreasuryScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import GroupSearchScreen from '../screens/homegroup/GroupSearchScreen';
 
