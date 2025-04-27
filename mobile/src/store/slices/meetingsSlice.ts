@@ -50,6 +50,34 @@ export const setUserLocation = createAsyncThunk(
   },
 );
 
+export const fetchGroupMeetings = createAsyncThunk(
+  'meetings/fetchGroupMeetings',
+  async (groupId: string, {rejectWithValue}) => {
+    try {
+      const firestore = require('@react-native-firebase/firestore').default;
+
+      // Fetch meetings for the specified group
+      const meetingsSnapshot = await firestore()
+        .collection('meetings')
+        .where('groupId', '==', groupId)
+        .get();
+
+      const meetings = meetingsSnapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Meeting[];
+
+      return {
+        meetings,
+        groupId,
+      };
+    } catch (error: any) {
+      console.error('Error fetching group meetings:', error);
+      return rejectWithValue(error.message || 'Failed to fetch group meetings');
+    }
+  },
+);
+
 export const fetchMeetings = createAsyncThunk(
   'meetings/fetchMeetings',
   async (
@@ -240,6 +268,28 @@ const meetingsSlice = createSlice({
         state.error = (action.payload as string) || 'Failed to fetch meetings';
       })
 
+      // Handle fetchGroupMeetings
+      .addCase(fetchGroupMeetings.pending, state => {
+        state.status = 'loading';
+      })
+      .addCase(fetchGroupMeetings.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+
+        // Add group meetings to items dictionary
+        action.payload.meetings.forEach((meeting: Meeting) => {
+          if (meeting.id) {
+            state.items[meeting.id] = meeting;
+          }
+        });
+
+        state.error = null;
+      })
+      .addCase(fetchGroupMeetings.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error =
+          (action.payload as string) || 'Failed to fetch group meetings';
+      })
+
       // Toggle favorite
       .addCase(toggleFavoriteMeeting.fulfilled, (state, action) => {
         const {meetingId, isFavorite} = action.payload;
@@ -277,6 +327,11 @@ export const selectFavoriteMeetings = (state: RootState) =>
 
 export const selectMeetingById = (state: RootState, id: string) =>
   state.meetings.items[id];
+
+export const selectGroupMeetings = (state: RootState, groupId: string) =>
+  Object.values(state.meetings.items).filter(
+    meeting => meeting.groupId === groupId,
+  );
 
 export const selectMeetingsStatus = (state: RootState) => state.meetings.status;
 

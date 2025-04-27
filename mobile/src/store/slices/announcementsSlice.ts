@@ -121,10 +121,7 @@ export const createAnnouncement = createAsyncThunk(
         authorName: currentUser.displayName || 'Anonymous',
       };
 
-      const announcement = await AnnouncementModel.create(
-        groupId,
-        announcementData,
-      );
+      const announcement = await AnnouncementModel.create(announcementData);
       return announcement;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to create announcement');
@@ -163,13 +160,9 @@ export const updateAnnouncement = createAsyncThunk(
       if (content !== undefined) updateData.content = content;
       if (isPinned !== undefined) updateData.isPinned = isPinned;
 
-      const updatedAnnouncement = await AnnouncementModel.update(
-        currentAnnouncement.groupId,
-        announcementId,
-        updateData,
-      );
+      await AnnouncementModel.update(currentAnnouncement.groupId, updateData);
 
-      return updatedAnnouncement;
+      return currentAnnouncement;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to update announcement');
     }
@@ -188,7 +181,7 @@ export const deleteAnnouncement = createAsyncThunk(
         return rejectWithValue('Announcement not found');
       }
 
-      await AnnouncementModel.delete(announcement.groupId, announcementId);
+      await AnnouncementModel.delete(announcementId);
 
       return {
         id: announcementId,

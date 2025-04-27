@@ -17,10 +17,18 @@ export interface GroupMember {
   joinedAt: Date;
 }
 
+export interface GroupMilestone {
+  memberId: string;
+  memberName: string;
+  date: Date;
+  years: number;
+}
+
 // State interface
 interface MembersState {
   items: Record<string, GroupMember>;
   groupMembers: Record<string, string[]>;
+  milestones: Record<string, GroupMilestone[]>; // By groupId
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   lastFetched: Record<string, number>; // By groupId
@@ -30,6 +38,7 @@ interface MembersState {
 const initialState: MembersState = {
   items: {},
   groupMembers: {},
+  milestones: {},
   status: 'idle',
   error: null,
   lastFetched: {},
@@ -81,6 +90,27 @@ export const fetchGroupMembers = createAsyncThunk(
       // Check if data for this group is stale
       return isDataStale(state.members.lastFetched[groupId]);
     },
+  },
+);
+
+// Fetch group milestones (sobriety celebrations)
+export const fetchGroupMilestones = createAsyncThunk(
+  'members/fetchMilestones',
+  async (
+    {groupId, daysAhead = 30}: {groupId: string; daysAhead?: number},
+    {rejectWithValue},
+  ) => {
+    try {
+      const milestones = await GroupModel.getGroupMilestones(
+        groupId,
+        daysAhead,
+      );
+      return {groupId, milestones};
+    } catch (error: any) {
+      return rejectWithValue(
+        error.message || 'Failed to fetch group milestones',
+      );
+    }
   },
 );
 
@@ -245,6 +275,22 @@ const membersSlice = createSlice({
           (action.payload as string) || 'Failed to fetch group members';
       })
 
+      // Fetch group milestones
+      .addCase(fetchGroupMilestones.pending, state => {
+        state.status = 'loading';
+      })
+      .addCase(fetchGroupMilestones.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const {groupId, milestones} = action.payload;
+        state.milestones[groupId] = milestones;
+        state.error = null;
+      })
+      .addCase(fetchGroupMilestones.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error =
+          (action.payload as string) || 'Failed to fetch group milestones';
+      })
+
       // Add member to group
       .addCase(addMemberToGroup.pending, state => {
         state.status = 'loading';
@@ -346,6 +392,9 @@ export const selectGroupAdmins = (state: RootState, groupId: string) => {
     .map(id => state.members.items[id])
     .filter(member => member && member.isAdmin);
 };
+
+export const selectGroupMilestones = (state: RootState, groupId: string) =>
+  state.members.milestones[groupId] || [];
 
 export const selectMembersStatus = (state: RootState) => state.members.status;
 

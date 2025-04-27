@@ -120,6 +120,7 @@ export interface AnnouncementDocument {
   createdBy: string; // User ID
   authorName: string; // Display name for efficiency
   expiresAt?: Timestamp;
+  groupId: string; // Group ID that this announcement belongs to
 }
 
 /**
@@ -328,11 +329,11 @@ export const COLLECTION_PATHS = {
   USERS: 'users',
   GROUPS: 'groups',
   MEMBERS: 'members', // New top-level members collection
-  GROUP_MEMBERS: (groupId: string) => `groups/${groupId}/members`, // Legacy path, will be migrated
-  ANNOUNCEMENTS: (groupId: string) => `groups/${groupId}/announcements`,
+  GROUP_MEMBERS: 'members', // Legacy path, will be migrated
+  ANNOUNCEMENTS: 'announcements', // Updated to top-level collection
   EVENTS: (groupId: string) => `groups/${groupId}/events`,
-  TRANSACTIONS: (groupId: string) => `groups/${groupId}/transactions`,
-  TREASURY_OVERVIEW: (groupId: string) => `groups/${groupId}/treasury`,
+  TRANSACTIONS: `transactions`,
+  TREASURY_OVERVIEW: `treasury_overviews`,
   MEETINGS: 'meetings',
   NOTIFICATIONS: 'notifications',
   BUSINESS_MEETINGS: 'business_meetings',

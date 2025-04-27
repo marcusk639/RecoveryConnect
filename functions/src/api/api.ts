@@ -1,6 +1,6 @@
-import {MeetingLocation} from "../src/entities/MeetingLocation";
+import { MeetingLocation } from "../entities/MeetingLocation";
 import Axios from "axios";
-import {GeocodeResponse, Location} from "../src/entities/GeocodeResponse";
+import { GeocodeResponse, Location } from "../entities/GeocodeResponse";
 
 /**
  * NEW MEETING GUIDE API: https://api.meetingguide.org/app/v2/request?latitude=30.267153&longitude=-97.743057
@@ -22,9 +22,9 @@ const PARTIAL_GEOCODE = (query: string) =>
 const AA_API = (lat: number, lng: number) =>
   `https://api.meetingguide.org/app/v2/request?latitude=${lat}&longitude=${lng}`;
 // import DEPRECATED_AA_LOCATIONS from '../DEPRECATED_AA_LOCATIONS.json';
-import {AAMeetingResponse} from "../src/entities/AAMeetingResponse";
-import {getNaMeetings} from "./firestore";
-import {Meeting} from "../src/entities/Meeting";
+import { AAMeetingResponse } from "../entities/AAMeetingResponse";
+import { getNaMeetings } from "./firestore";
+import { Meeting } from "../entities/Meeting";
 // stripe emergency backup code
 // ifto-swwb-ttpi-fjcn-yvxv
 // 'https://maps.googleapis.com/maps/api/geocode/json?address=Holy Cross Church,105 Montrose Avenue,Lafayette, LA 70503-3819,Directions: Behind Asbury Methodist Church on Johnston Street&key=AIzaSyBQ85gSGYC2W2f8OSBIbcDaOG8BkLDwamw'
@@ -40,8 +40,8 @@ export const getAAMeetings = async (lat: number, lng: number) => {
 };
 
 export const reverseGeocode = async (
-    lat: number,
-    lng: number
+  lat: number,
+  lng: number
 ): Promise<GeocodeResponse> => {
   const location = await Axios.get<GeocodeResponse>(REVERSE_GEOCODE(lat, lng));
   return location.data;
@@ -49,7 +49,7 @@ export const reverseGeocode = async (
 
 export const geocode = async (street: string, city: string, state: string) => {
   const location = await Axios.get<GeocodeResponse>(
-      GEOCODE(street, city, state)
+    GEOCODE(street, city, state)
   );
   return location.data;
 };
@@ -64,9 +64,9 @@ export const partialGeocode = async (query: string) => {
  * @param address
  */
 export const getNAMeetings = async (
-    location: Location,
-    distance: number,
-    day?: string
+  location: Location,
+  distance: number,
+  day?: string
 ): Promise<Meeting[]> => {
   return getNaMeetings(location.lat, location.lng, distance, day);
 };
@@ -83,8 +83,8 @@ export const getTimezone = async (lat: number, lng: number, _time?: number) => {
 };
 
 export const getCelebrateRecoveryMeetings = async (
-    lat: number,
-    lng: number
+  lat: number,
+  lng: number
 ) => {
   // sourced from https://locator.crgroups.info/
   const url = `https://locator.crgroups.info/index.php?option=com_storelocator&view=map&format=raw&searchall=0&Itemid=110&lat=${lat}&lng=${lng}&radius=25&catid=2&tagid=-1&featstate=0&name_search=`;

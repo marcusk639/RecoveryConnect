@@ -11,12 +11,11 @@ import {
 } from 'react-native';
 import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 
 // Import types and Redux
 import {GroupStackParamList} from '../../types/navigation';
-import {HomeGroup, Meeting, GroupMember} from '../../types';
+import {HomeGroup, Meeting} from '../../types';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
   fetchGroupById,
@@ -31,16 +30,15 @@ import {
 import {
   fetchGroupMembers,
   selectMembersByGroupId,
+  fetchGroupMilestones,
+  selectGroupMilestones,
+  GroupMilestone,
 } from '../../store/slices/membersSlice';
-import {GroupModel} from '../../models/GroupModel';
-
-// Types for celebrations data
-interface Celebration {
-  memberId: string;
-  memberName: string;
-  date: Date;
-  years: number;
-}
+import {
+  fetchGroupMeetings,
+  selectGroupMeetings,
+  selectMeetingsStatus,
+} from '../../store/slices/meetingsSlice';
 
 type GroupOverviewScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -65,12 +63,17 @@ const GroupOverviewScreen: React.FC = () => {
   const members = useAppSelector(state =>
     selectMembersByGroupId(state, groupId),
   );
+  const upcomingMeetings = useAppSelector(state =>
+    selectGroupMeetings(state, groupId),
+  );
+  const meetingsStatus = useAppSelector(selectMeetingsStatus);
+  const celebrations = useAppSelector(state =>
+    selectGroupMilestones(state, groupId),
+  );
 
-  // Local state for data not in Redux yet
+  // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [leaveGroupLoading, setLeaveGroupLoading] = useState(false);
-  const [upcomingMeetings, setUpcomingMeetings] = useState<Meeting[]>([]);
-  const [celebrations, setCelebrations] = useState<Celebration[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -87,24 +90,9 @@ const GroupOverviewScreen: React.FC = () => {
         dispatch(fetchGroupById(groupId)).unwrap(),
         dispatch(fetchAnnouncementsForGroup(groupId)).unwrap(),
         dispatch(fetchGroupMembers(groupId)).unwrap(),
+        dispatch(fetchGroupMeetings(groupId)).unwrap(),
+        dispatch(fetchGroupMilestones({groupId})).unwrap(),
       ]);
-
-      // Load upcoming meetings for this group
-      const meetingsSnapshot = await firestore()
-        .collection('meetings')
-        .where('groupId', '==', groupId)
-        .get();
-
-      const meetings = meetingsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Meeting[];
-
-      setUpcomingMeetings(meetings);
-
-      // Load celebrations/milestones (not in Redux yet)
-      const milestones = await GroupModel.getGroupMilestones(groupId, 30);
-      setCelebrations(milestones);
     } catch (error) {
       console.error('Error loading group data:', error);
       Alert.alert(

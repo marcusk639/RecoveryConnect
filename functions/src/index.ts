@@ -8,6 +8,8 @@ import {
 import { Meeting, MeetingSearchCriteria } from "./entities/Meeting";
 import * as admin from "firebase-admin";
 import * as geofire from "geofire-common";
+// Import the v1 namespace specifically
+import * as functionsV1 from "firebase-functions/v1";
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
@@ -266,3 +268,170 @@ export const ensureGroupGeolocation = functions.https.onCall(
     }
   }
 );
+
+/**
+ * Cloud Function: Fetches AA meetings from the Meeting Guide API when a new group is created
+ * and creates corresponding meeting documents in Firestore
+ */
+export const fetchMeetingsForNewGroup = functionsV1.firestore
+  .document("groups/{groupId}")
+  .onCreate(async (snapshot, context) => {
+    try {
+      const groupId = context.params.groupId;
+      const groupData = snapshot.data();
+
+      functions.logger.info(
+        `New group created: ${groupId}. Fetching nearby meetings...`
+      );
+
+      // Check if group has location data
+      if (!groupData.lat || !groupData.lng) {
+        functions.logger.warn(
+          `Group ${groupId} does not have location data, skipping meeting fetch.`
+        );
+        return null;
+      }
+
+      // Import the API module
+      const { getAAMeetings } = require("./api/api");
+
+      // Fetch meetings from Meeting Guide API
+      const latitude = Number(groupData.lat);
+      const longitude = Number(groupData.lng);
+      const meetingsResponse = await getAAMeetings(latitude, longitude);
+
+      functions.logger.info(
+        `Fetched ${
+          meetingsResponse.meetings?.length || 0
+        } meetings from Meeting Guide API`
+      );
+
+      // Filter meetings that are likely associated with this group
+      // This requires some heuristics - for now, we'll use proximity and name similarity
+      const relevantMeetings = findRelevantMeetings(
+        meetingsResponse.meetings || [],
+        groupData
+      );
+
+      functions.logger.info(
+        `Found ${relevantMeetings.length} meetings relevant to group ${groupId}`
+      );
+
+      // Create meeting documents in Firestore
+      const batch = admin.firestore().batch();
+      let meetingsCreated = 0;
+
+      for (const meeting of relevantMeetings) {
+        const meetingDocRef = admin.firestore().collection("meetings").doc();
+
+        // Create meeting document with a reference to the group
+        batch.set(meetingDocRef, {
+          ...formatMeetingForFirestore(meeting),
+          groupId: groupId,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        meetingsCreated++;
+      }
+
+      // Commit the batch if meetings were found
+      if (meetingsCreated > 0) {
+        await batch.commit();
+        functions.logger.info(
+          `Created ${meetingsCreated} meeting documents for group ${groupId}`
+        );
+
+        // Update the group with the meeting count
+        await admin.firestore().collection("groups").doc(groupId).update({
+          meetingCount: meetingsCreated,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      return { success: true, meetingsCreated };
+    } catch (error) {
+      functions.logger.error("Error in fetchMeetingsForNewGroup:", error);
+      return null;
+    }
+  });
+
+/**
+ * Helper function to format a meeting from the Meeting Guide API into a Firestore document
+ */
+function formatMeetingForFirestore(meeting: any) {
+  // Extract the relevant fields from the Meeting Guide API response
+  // and format them for storage in Firestore
+  return {
+    name: meeting.name || "Unnamed Meeting",
+    day: meeting.day || "",
+    time: meeting.time || "",
+    location: meeting.location_name || "",
+    address: meeting.address || "",
+    city: meeting.city || "",
+    state: meeting.state || "",
+    postal_code: meeting.postal_code || "",
+    country: meeting.country || "USA",
+    lat: parseFloat(meeting.latitude) || null,
+    lng: parseFloat(meeting.longitude) || null,
+    type: "AA", // Since these are from the AA API
+    format: meeting.types || "",
+    notes: meeting.location_notes || "",
+    online: !!meeting.conference_url, // If there's a URL, it's likely online
+    url: meeting.conference_url || null,
+    externalId: meeting.id?.toString() || null,
+    source: "meeting_guide_api",
+  };
+}
+
+function hasNameOverlap(meeting: any, groupName: string) {
+  const groupNameWords = groupName.toLowerCase().split(/\s+/);
+
+  if (groupNameWords.length > 0) {
+    const meetingNameWords = (meeting.name || "").toLowerCase().split(/\s+/);
+    const hasNameOverlap = groupNameWords.some(
+      (word) => word.length > 3 && meetingNameWords.includes(word)
+    );
+
+    // If names are too different, exclude the meeting
+    return hasNameOverlap;
+  }
+
+  return false;
+}
+
+/**
+ * Helper function to find meetings that are likely associated with a group
+ */
+function findRelevantMeetings(meetings: any[], groupData: any) {
+  // This function needs heuristics to determine which meetings are associated with a group
+  // For example, we could use:
+  // 1. Proximity (meetings very close to the group location)
+  // 2. Name similarity (meetings with similar names to the group)
+  // 3. Address matching (meetings at the same address)
+
+  // For this implementation, let's use proximity and optional name matching
+  const MAX_DISTANCE_METERS = 500; // 500 meters max distance
+  const groupLocation: [number, number] = [
+    Number(groupData.lat),
+    Number(groupData.lng),
+  ];
+  return meetings.filter((meeting) => {
+    // Check if meeting has location data
+    if (meeting.latitude && meeting.longitude) {
+      // Check distance
+      const meetingLocation: [number, number] = [
+        parseFloat(meeting.latitude),
+        parseFloat(meeting.longitude),
+      ];
+
+      const distance = geofire.distanceBetween(groupLocation, meetingLocation);
+
+      if (distance <= MAX_DISTANCE_METERS) {
+        return hasNameOverlap(meeting, groupData.name);
+      }
+    }
+
+    return hasNameOverlap(meeting, groupData.name);
+  });
+}
