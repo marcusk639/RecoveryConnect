@@ -16,10 +16,19 @@ const ProfileNavigator = () => {
       screenOptions={{
         headerShown: false,
       }}>
-      <Stack.Screen name="ProfileMain" component={ProfileScreen} />
+      <Stack.Screen
+        name="ProfileMain"
+        component={ProfileScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
       <Stack.Screen
         name="ProfileManagement"
         component={ProfileManagementScreen}
+        options={{
+          headerShown: false,
+        }}
       />
       {/* <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen

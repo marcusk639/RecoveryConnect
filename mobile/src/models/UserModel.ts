@@ -39,23 +39,69 @@ export class UserModel {
   /**
    * Convert a User object to a Firestore document
    */
-  static toFirestore(user: User): Partial<UserDocument> {
-    return {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName,
-      recoveryDate: user.recoveryDate
-        ? Firestore.Timestamp.fromDate(new Date(user.recoveryDate))
-        : undefined,
-      createdAt: Firestore.Timestamp.fromDate(user.createdAt),
-      updatedAt: Firestore.Timestamp.fromDate(user.updatedAt),
-      lastLogin: Firestore.Timestamp.fromDate(user.lastLogin),
-      notificationSettings: user.notificationSettings,
-      privacySettings: user.privacySettings,
-      homeGroups: user.homeGroups,
-      role: user.role,
-      favoriteMeetings: user.favoriteMeetings,
-    };
+  static toFirestore(user: Partial<User>): Partial<UserDocument> {
+    const firestoreData: Partial<UserDocument> = {};
+
+    // Only include properties that are defined
+    if (user.uid !== undefined) firestoreData.uid = user.uid;
+    if (user.email !== undefined) firestoreData.email = user.email;
+    if (user.displayName !== undefined)
+      firestoreData.displayName = user.displayName;
+    if (user.photoUrl !== undefined) firestoreData.photoUrl = user.photoUrl;
+
+    // Handle dates safely - check if they exist and are valid
+    if (user.recoveryDate) {
+      try {
+        firestoreData.recoveryDate = Firestore.Timestamp.fromDate(
+          new Date(user.recoveryDate),
+        );
+      } catch (error) {
+        console.warn('Invalid recovery date format:', user.recoveryDate);
+      }
+    }
+
+    if (user.createdAt) {
+      try {
+        firestoreData.createdAt = Firestore.Timestamp.fromDate(
+          new Date(user.createdAt),
+        );
+      } catch (error) {
+        console.warn('Invalid createdAt date format:', user.createdAt);
+      }
+    }
+
+    if (user.updatedAt) {
+      try {
+        firestoreData.updatedAt = Firestore.Timestamp.fromDate(
+          new Date(user.updatedAt),
+        );
+      } catch (error) {
+        console.warn('Invalid updatedAt date format:', user.updatedAt);
+      }
+    }
+
+    if (user.lastLogin) {
+      try {
+        firestoreData.lastLogin = Firestore.Timestamp.fromDate(
+          new Date(user.lastLogin),
+        );
+      } catch (error) {
+        console.warn('Invalid lastLogin date format:', user.lastLogin);
+      }
+    }
+
+    // Handle other properties
+    if (user.notificationSettings !== undefined)
+      firestoreData.notificationSettings = user.notificationSettings;
+    if (user.privacySettings !== undefined)
+      firestoreData.privacySettings = user.privacySettings;
+    if (user.homeGroups !== undefined)
+      firestoreData.homeGroups = user.homeGroups;
+    if (user.role !== undefined) firestoreData.role = user.role;
+    if (user.favoriteMeetings !== undefined)
+      firestoreData.favoriteMeetings = user.favoriteMeetings;
+
+    return firestoreData;
   }
 
   /**

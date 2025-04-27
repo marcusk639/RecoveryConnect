@@ -28,12 +28,16 @@ import {
 } from '../../store/slices/authSlice';
 import {UserModel} from '../../models/UserModel';
 
+// Define the navigation param list for the Profile stack
 type ProfileStackParamList = {
   ProfileMain: undefined;
   ProfileManagement: undefined;
 };
 
-type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList>;
+type ProfileScreenNavigationProp = StackNavigationProp<
+  ProfileStackParamList,
+  'ProfileMain'
+>;
 
 // Types for user profile
 interface UserProfile {
@@ -410,7 +414,10 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.profileActions}>
             <TouchableOpacity
               style={styles.editButton}
-              onPress={() => navigation.navigate('ProfileManagement')}>
+              onPress={() => {
+                // Navigate to the ProfileManagementScreen which is in the same folder
+                navigation.navigate('ProfileManagement');
+              }}>
               <Text style={styles.editButtonText}>Edit Profile</Text>
             </TouchableOpacity>
 
@@ -562,7 +569,10 @@ const ProfileScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.accountAction}
-            onPress={() => navigation.navigate('ProfileManagement')}>
+            onPress={() => {
+              // Navigate to the ProfileManagementScreen which is in the same folder
+              navigation.navigate('ProfileManagement');
+            }}>
             <Text style={styles.accountActionText}>Edit Profile</Text>
           </TouchableOpacity>
 

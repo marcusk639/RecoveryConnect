@@ -153,7 +153,19 @@ const CreateGroupScreen: React.FC = () => {
   const validateStep2 = (): boolean => {
     let isValid = true;
     const newErrors = {...errors};
+
+    // Check if we have any meetings
+    if (meetings.length === 0) {
+      Alert.alert('Error', 'Please add at least one meeting.');
+      return false;
+    }
+
     const currentMeeting = meetings[currentMeetingIndex];
+
+    if (!currentMeeting) {
+      Alert.alert('Error', 'Invalid meeting selection.');
+      return false;
+    }
 
     if (!currentMeeting.day) {
       newErrors.meetingDay = 'Meeting day is required';
@@ -209,6 +221,39 @@ const CreateGroupScreen: React.FC = () => {
   // Handle navigation between steps
   const nextStep = (): void => {
     if (currentStep === 1 && validateStep1()) {
+      // If we're moving to step 2 and don't have any meetings yet,
+      // create a default meeting
+      if (meetings.length === 0) {
+        const defaultMeeting: MeetingFormData = {
+          id: generateMeetingHash({
+            name: groupName,
+            type: groupType,
+            day: '',
+            time: '',
+            location: '',
+            types: [groupType],
+            online: false,
+            verified: true,
+            addedBy: auth().currentUser?.uid || '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+          name: groupName,
+          day: '',
+          time: '',
+          format: 'Open Discussion',
+          online: false,
+          location: '',
+          address: '',
+          city: '',
+          state: '',
+          zip: '',
+          link: '',
+          type: groupType,
+          types: [groupType],
+        };
+        setMeetings([defaultMeeting]);
+      }
       setCurrentStep(2);
     } else if (currentStep === 2 && validateStep2()) {
       setCurrentStep(3);
@@ -588,7 +633,30 @@ const CreateGroupScreen: React.FC = () => {
 
   // Render step 2 (meeting schedule)
   const renderStep2 = () => {
+    // Make sure we have a valid meeting index
+    if (meetings.length === 0) {
+      return (
+        <View style={styles.stepContainer}>
+          <Text style={styles.stepTitle}>Meeting Schedule</Text>
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateText}>No meetings added yet.</Text>
+            <Button
+              title="Add First Meeting"
+              onPress={addMeeting}
+              style={styles.emptyStateButton}
+            />
+          </View>
+        </View>
+      );
+    }
+
     const currentMeeting = meetings[currentMeetingIndex];
+
+    // Safety check - shouldn't happen with the above code, but just to be sure
+    if (!currentMeeting) {
+      setCurrentMeetingIndex(0);
+      return null;
+    }
 
     return (
       <View style={styles.stepContainer}>
@@ -1133,6 +1201,23 @@ const styles = StyleSheet.create({
     color: '#F44336',
     fontSize: 12,
     marginBottom: 8,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#757575',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  emptyStateButton: {
+    minWidth: 200,
   },
 });
 
