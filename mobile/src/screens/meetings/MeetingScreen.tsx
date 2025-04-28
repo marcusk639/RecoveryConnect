@@ -751,7 +751,9 @@ const MeetingsScreen: React.FC = () => {
         <FlatList
           data={meetings}
           renderItem={renderMeetingItem}
-          keyExtractor={item => item.id || Math.random().toString()}
+          keyExtractor={(item, index) =>
+            item.id ? `${item.id}-${index}` : `no-id-${index}`
+          }
           contentContainerStyle={styles.meetingsList}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
