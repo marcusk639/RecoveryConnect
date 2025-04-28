@@ -28,6 +28,7 @@ import {
 } from '../../store/slices/announcementsSlice';
 import {Announcement} from '../../types';
 import {selectGroupById} from '../../store/slices/groupsSlice';
+import Button from '../../components/common/Button';
 
 type GroupAnnouncementsScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -252,50 +253,41 @@ const GroupAnnouncementsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Announcements</Text>
-        {isAdmin && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setModalVisible(true)}>
-            <Text style={styles.addButtonText}>+</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2196F3" />
         </View>
       ) : (
-        <FlatList
-          data={announcements}
-          renderItem={renderAnnouncementItem}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.announcementsList}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={loadAnnouncements}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No announcements yet</Text>
-              {isAdmin && (
-                <TouchableOpacity
-                  style={styles.createButton}
-                  onPress={() => setModalVisible(true)}>
-                  <Text style={styles.createButtonText}>
-                    Create Announcement
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          }
-        />
-      )}
+        <View style={styles.announcementsContainer}>
+          <FlatList
+            data={announcements}
+            renderItem={renderAnnouncementItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.announcementsList}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={loadAnnouncements}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No announcements yet</Text>
+              </View>
+            }
+          />
 
+          {isAdmin && (
+            <View style={styles.createButtonContainer}>
+              <TouchableOpacity
+                style={styles.createButtonCentered}
+                onPress={() => setModalVisible(true)}>
+                <Text style={styles.createButtonText}>Create Announcement</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
       {renderModal()}
     </SafeAreaView>
   );
@@ -305,6 +297,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  announcementsContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -397,14 +392,29 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     marginBottom: 16,
   },
-  createButton: {
+  createButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 16,
+  },
+  createButtonCentered: {
     backgroundColor: '#2196F3',
     borderRadius: 8,
-    paddingVertical: 8,
+    paddingVertical: 14,
     paddingHorizontal: 16,
+    width: '75%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
   },
   createButtonText: {
     color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '600',
   },
   modalOverlay: {

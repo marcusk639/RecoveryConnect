@@ -151,6 +151,13 @@ const GroupOverviewScreen: React.FC = () => {
     });
   };
 
+  const navigateToGroupChat = () => {
+    navigation.navigate('GroupChat', {
+      groupId,
+      groupName,
+    });
+  };
+
   const handleLeaveGroup = () => {
     Alert.alert('Leave Group', 'Are you sure you want to leave this group?', [
       {
@@ -294,8 +301,15 @@ const GroupOverviewScreen: React.FC = () => {
           <Text style={styles.navTileText}>Meetings</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.navTile} onPress={navigateToGroupChat}>
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>💬</Text>
+          </View>
+          <Text style={styles.navTileText}>Chat</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
-          style={{...styles.navTile, opacity: 0.5}}
+          style={[styles.navTile, {opacity: 0.5}]}
           disabled={true}
           onPress={navigateToGroupLiterature}>
           <View style={styles.navTileIcon}>

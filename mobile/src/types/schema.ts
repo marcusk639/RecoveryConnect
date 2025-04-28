@@ -308,7 +308,7 @@ export interface DirectMessageThreadDocument {
   lastMessage: {
     text: string;
     senderId: string;
-    timestamp: Timestamp;
+    sentAt: Timestamp;
     read: {[userId: string]: boolean};
   };
   createdAt: Timestamp;
@@ -321,8 +321,54 @@ export interface DirectMessageDocument {
   id: string;
   senderId: string;
   text: string;
-  timestamp: Timestamp;
+  sentAt: Timestamp;
   read: {[userId: string]: boolean};
+}
+
+/**
+ * Group Chat Document
+ */
+export interface GroupChatDocument {
+  groupId: string;
+  lastMessage: {
+    text: string;
+    senderId: string;
+    senderName: string;
+    sentAt: Timestamp;
+  };
+  participantCount: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/**
+ * Chat Message Document
+ */
+export interface ChatMessageDocument {
+  id: string;
+  groupId: string;
+  senderId: string;
+  senderName: string;
+  senderPhotoURL?: string;
+  text: string;
+  sentAt: Timestamp;
+  readBy: {[userId: string]: boolean};
+  attachments?: {
+    type: 'image' | 'file' | 'voice';
+    url: string;
+    name?: string;
+    size?: number;
+    duration?: number; // for voice messages
+  }[];
+  reactions?: {
+    [reactionType: string]: string[]; // userId[]
+  };
+  replyTo?: {
+    messageId: string;
+    text: string;
+    senderId: string;
+    senderName: string;
+  };
 }
 
 /**
@@ -348,4 +394,6 @@ export const COLLECTION_PATHS = {
   DIRECT_MESSAGE_THREADS: 'direct_message_threads',
   DIRECT_MESSAGES: (threadId: string) =>
     `direct_message_threads/${threadId}/messages`,
+  GROUP_CHATS: 'group_chats',
+  CHAT_MESSAGES: (groupId: string) => `group_chats/${groupId}/messages`,
 };
