@@ -7,6 +7,7 @@ import treasuryReducer from './slices/treasurySlice';
 import meetingsReducer from './slices/meetingsSlice';
 import announcementsReducer from './slices/announcementsSlice';
 import membersReducer from './slices/membersSlice';
+import chatReducer from './slices/chatSlice';
 
 const store = configureStore({
   reducer: {
@@ -17,6 +18,7 @@ const store = configureStore({
     meetings: meetingsReducer,
     announcements: announcementsReducer,
     members: membersReducer,
+    chat: chatReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
