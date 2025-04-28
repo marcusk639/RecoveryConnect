@@ -11,6 +11,7 @@ import {Transaction} from '../types/domain';
 import {MemberModel} from './MemberModel';
 import {MeetingModel} from './MeetingModel';
 import {cloneDeep, zip} from 'lodash';
+import {mapAsync} from '../utils/async';
 
 /**
  * Group model for managing group data
@@ -21,11 +22,12 @@ export class GroupModel {
    */
   static fromFirestore(doc: FirestoreDocument<GroupDocument>): HomeGroup {
     const data = doc.data();
+    const now = new Date(); // Default date if timestamps are missing
     return {
       id: doc.id,
-      type: data.type,
-      name: data.name,
-      description: data.description,
+      type: data.type || 'AA', // Default to AA if missing
+      name: data.name || 'Unnamed Group',
+      description: data.description || '',
       location: data.location || '',
       address: data.address,
       city: data.city,
@@ -33,15 +35,28 @@ export class GroupModel {
       zip: data.zip,
       lat: data.lat,
       lng: data.lng,
-      treasurers: data.treasurers,
-      createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate(),
+      treasurers: data.treasurers || [],
+      createdAt: data.createdAt ? data.createdAt.toDate() : now,
+      updatedAt: data.updatedAt ? data.updatedAt.toDate() : now,
       foundedDate: data.foundedDate
         ? data.foundedDate.toDate().toISOString()
         : undefined,
-      memberCount: data.memberCount,
-      admins: data.admins,
-      treasury: data.treasury,
+      memberCount: data.memberCount || 0,
+      admins: data.admins || [],
+      treasury: data.treasury || {
+        balance: 0,
+        prudentReserve: 0,
+        monthlyIncome: 0,
+        monthlyExpenses: 0,
+        transactions: [],
+        summary: {
+          balance: 0,
+          prudentReserve: 0,
+          monthlyIncome: 0,
+          monthlyExpenses: 0,
+          lastUpdated: now,
+        },
+      },
       placeName: data.placeName,
       meetings: [], // Initialize with empty array, will be populated when needed
     };
@@ -590,45 +605,42 @@ export class GroupModel {
    */
   static async getUserGroups(userId: string): Promise<HomeGroup[]> {
     try {
-      const userDoc = await firestore().collection('users').doc(userId).get();
+      // Step 1: Get the user's memberships to find which groups they belong to
+      const membersSnapshot = await firestore()
+        .collection('members')
+        .where('userId', '==', userId)
+        .get();
 
-      if (!userDoc.exists) {
-        throw new Error('User not found');
+      if (membersSnapshot.empty) {
+        return []; // User isn't a member of any groups
       }
 
-      const userData = userDoc.data();
-      const homeGroupIds = userData?.homeGroups || [];
+      // Step 2: Extract the group IDs from the memberships
+      const groupIds = membersSnapshot.docs.map(doc => doc.data().groupId);
 
-      if (homeGroupIds.length === 0) {
+      if (groupIds.length === 0) {
         return [];
       }
 
-      // Get all groups in a batch
-      const groups: HomeGroup[] = [];
+      // Step 3: Fetch the actual group documents using these IDs
+      const groupPromises = groupIds.map(groupId =>
+        firestore().collection('groups').doc(groupId).get(),
+      );
 
-      // Firestore has a limit of 10 items in a where-in query
-      // So we need to batch our requests
-      const batchSize = 10;
-      for (let i = 0; i < homeGroupIds.length; i += batchSize) {
-        const batch = homeGroupIds.slice(i, i + batchSize);
+      const groupDocs = await Promise.all(groupPromises);
 
-        const groupsSnapshot = await firestore()
-          .collection('groups')
-          .where(firestore.FieldPath.documentId(), 'in', batch)
-          .get();
-
-        const batchGroups = groupsSnapshot.docs.map(doc =>
+      // Step 4: Convert to HomeGroup objects, filtering out any that don't exist
+      const groups = groupDocs
+        .filter(doc => doc.exists)
+        .map(doc =>
           this.fromFirestore({
             id: doc.id,
             data: () => doc.data() as GroupDocument,
           }),
         );
 
-        groups.push(...batchGroups);
-      }
-
       // Fetch meetings for all groups
-      const meetingsPromises = groups.map(async group => {
+      const groupsWithMeetings = await mapAsync(groups, async group => {
         const meetingsSnapshot = await firestore()
           .collection('meetings')
           .where('groupId', '==', group.id)
@@ -644,8 +656,6 @@ export class GroupModel {
           meetings,
         };
       });
-
-      const groupsWithMeetings = await Promise.all(meetingsPromises);
 
       // Sort groups by name
       return groupsWithMeetings.sort((a, b) => a.name.localeCompare(b.name));

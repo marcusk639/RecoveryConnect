@@ -3,6 +3,7 @@ import {RootState} from '../index';
 import auth from '@react-native-firebase/auth';
 import {GroupModel} from '../../models/GroupModel';
 import {UserModel} from '../../models/UserModel';
+import {MemberModel} from '../../models/MemberModel';
 
 // Define types
 export interface GroupMember {
@@ -11,10 +12,13 @@ export interface GroupMember {
   name: string;
   email?: string;
   photoURL?: string;
-  isAdmin: boolean;
+  isAdmin?: boolean;
   position?: string;
   sobrietyDate?: string;
   joinedAt: Date;
+  phoneNumber?: string;
+  showPhoneNumber?: boolean;
+  showSobrietyDate?: boolean;
 }
 
 export interface GroupMilestone {
@@ -231,6 +235,33 @@ export const removeMemberFromGroup = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(
         error.message || 'Failed to remove member from group',
+      );
+    }
+  },
+);
+
+// Add new thunk to update phone number visibility
+export const updatePhoneNumberVisibility = createAsyncThunk(
+  'members/updatePhoneNumberVisibility',
+  async (
+    {showPhoneNumber}: {showPhoneNumber: boolean},
+    {getState, rejectWithValue},
+  ) => {
+    try {
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        return rejectWithValue('User not authenticated');
+      }
+
+      // Update phone number visibility in all memberships
+      await MemberModel.updateUserAcrossMemberships(currentUser.uid, {
+        showPhoneNumber,
+      });
+
+      return {showPhoneNumber};
+    } catch (error: any) {
+      return rejectWithValue(
+        error.message || 'Failed to update phone number visibility',
       );
     }
   },

@@ -8,6 +8,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import {RouteProp} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
@@ -17,6 +19,7 @@ import auth from '@react-native-firebase/auth';
 import {GroupModel} from '../../models/GroupModel';
 import {GroupMember} from '../../types';
 import Button from '../../components/common/Button';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
   selectMemberById,
@@ -129,6 +132,67 @@ const MemberDetailScreen: React.FC<Props> = ({route, navigation}) => {
     } catch (e) {
       return '';
     }
+  };
+
+  const formatPhoneNumber = (phone?: string): string => {
+    // Basic US phone number formatting: (555) 555-5555
+    if (!phone) return 'Not available';
+
+    // Strip all non-digits
+    const cleaned = phone.replace(/\D/g, '');
+
+    // Check for US format (10 digits)
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(
+        6,
+      )}`;
+    }
+
+    // International number or other format
+    return phone;
+  };
+
+  const handleCallMember = (phoneNumber?: string) => {
+    if (!phoneNumber) return;
+
+    // Use the tel: protocol to initiate a call
+    const telUrl = `tel:${phoneNumber.replace(/\D/g, '')}`;
+
+    Linking.canOpenURL(telUrl)
+      .then(supported => {
+        if (supported) {
+          return Linking.openURL(telUrl);
+        } else {
+          Alert.alert('Error', 'Phone calls are not supported on this device');
+        }
+      })
+      .catch(err => {
+        console.error('Error initiating phone call:', err);
+        Alert.alert('Error', 'Could not initiate phone call');
+      });
+  };
+
+  const handleSendSMS = (phoneNumber?: string) => {
+    if (!phoneNumber) return;
+
+    // Use the sms: protocol to start a text message
+    const smsUrl =
+      Platform.OS === 'ios'
+        ? `sms:${phoneNumber.replace(/\D/g, '')}`
+        : `sms:${phoneNumber.replace(/\D/g, '')}?body=`;
+
+    Linking.canOpenURL(smsUrl)
+      .then(supported => {
+        if (supported) {
+          return Linking.openURL(smsUrl);
+        } else {
+          Alert.alert('Error', 'SMS is not supported on this device');
+        }
+      })
+      .catch(err => {
+        console.error('Error opening SMS app:', err);
+        Alert.alert('Error', 'Could not open messaging app');
+      });
   };
 
   const handleMakeAdmin = async () => {
@@ -247,7 +311,7 @@ const MemberDetailScreen: React.FC<Props> = ({route, navigation}) => {
           </View>
 
           {/* Sobriety Information */}
-          {member.sobrietyDate && (
+          {member.sobrietyDate && member.showSobrietyDate && (
             <View style={styles.infoSection}>
               <Text style={styles.infoLabel}>Sobriety Date</Text>
               <Text style={styles.infoValue}>
@@ -256,6 +320,36 @@ const MemberDetailScreen: React.FC<Props> = ({route, navigation}) => {
               <Text style={styles.sobrietyTime}>
                 {calculateSobrietyTime(member.sobrietyDate)} of sobriety
               </Text>
+            </View>
+          )}
+
+          {/* Phone Number Section - Only show if available and user has allowed sharing */}
+          {member.phoneNumber && member.showPhoneNumber && (
+            <View style={styles.infoSection}>
+              <Text style={styles.infoLabel}>Phone Number</Text>
+              <Text style={styles.infoValue}>
+                {formatPhoneNumber(member.phoneNumber)}
+              </Text>
+
+              <View style={styles.phoneActionsContainer}>
+                <TouchableOpacity
+                  style={styles.phoneActionButton}
+                  onPress={() => handleCallMember(member.phoneNumber)}>
+                  <Icon name="phone" size={20} color="#4CAF50" />
+                  <Text style={[styles.phoneActionText, {color: '#4CAF50'}]}>
+                    Call
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.phoneActionButton}
+                  onPress={() => handleSendSMS(member.phoneNumber)}>
+                  <Icon name="message-text" size={20} color="#2196F3" />
+                  <Text style={[styles.phoneActionText, {color: '#2196F3'}]}>
+                    Text
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -458,6 +552,24 @@ const styles = StyleSheet.create({
   actionButton: {
     color: '#D32F2F',
     marginBottom: 12,
+  },
+  phoneActionsContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  phoneActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  phoneActionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 4,
   },
 });
 

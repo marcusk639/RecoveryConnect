@@ -29,6 +29,20 @@ import FastImage from 'react-native-fast-image';
 import {ChatModel, ChatMessage} from '../../models/ChatModel';
 import {GroupModel} from '../../models/GroupModel';
 import {showMessage} from 'react-native-flash-message';
+import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  initializeGroupChat,
+  fetchRecentMessages,
+  fetchEarlierMessages,
+  sendMessage,
+  markMessageAsRead,
+  addReaction,
+  deleteMessage,
+  setMessages,
+  selectMessagesByGroup,
+  selectChatStatus,
+  selectChatError,
+} from '../../store/slices/chatSlice';
 
 type GroupChatScreenRouteProp = RouteProp<GroupStackParamList, 'GroupChat'>;
 type GroupChatScreenNavigationProp = StackNavigationProp<GroupStackParamList>;
@@ -50,18 +64,23 @@ const GroupChatScreen: React.FC = () => {
   const flatListRef = useRef<FlatList>(null);
   const messageInputRef = useRef<TextInput>(null);
 
-  // States
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Redux
+  const dispatch = useAppDispatch();
+  const messages = useAppSelector(state =>
+    selectMessagesByGroup(state, groupId),
+  );
+  const status = useAppSelector(selectChatStatus);
+  const error = useAppSelector(selectChatError);
+
+  // Local states
   const [messageText, setMessageText] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // Animation values
   const inputHeight = useRef(new Animated.Value(50)).current;
@@ -71,10 +90,8 @@ const GroupChatScreen: React.FC = () => {
   useEffect(() => {
     const initChat = async () => {
       try {
-        setIsLoading(true);
-        await ChatModel.initializeGroupChat(groupId);
-        const initialMessages = await ChatModel.getRecentMessages(groupId);
-        setMessages(initialMessages);
+        await dispatch(initializeGroupChat(groupId)).unwrap();
+        await dispatch(fetchRecentMessages(groupId)).unwrap();
 
         // Check if current user is admin
         const currentUser = auth().currentUser;
@@ -85,24 +102,24 @@ const GroupChatScreen: React.FC = () => {
           );
           setIsAdmin(isAdminUser);
         }
-      } catch (error) {
-        console.error('Error initializing chat:', error);
+      } catch (err) {
+        console.error('Error initializing chat:', err);
         Alert.alert('Error', 'Failed to load chat. Please try again.');
-      } finally {
-        setIsLoading(false);
       }
     };
 
     initChat();
-  }, [groupId]);
+  }, [groupId, dispatch]);
 
   // Set up real-time listener for new messages
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
 
-    if (!isLoading) {
+    if (status !== 'loading') {
       unsubscribe = ChatModel.listenForMessages(groupId, updatedMessages => {
-        setMessages(updatedMessages);
+        // Update the Redux store with the latest messages
+        dispatch(setMessages({groupId, messages: updatedMessages}));
+
         // Mark new messages as read
         markNewMessagesAsRead(updatedMessages);
       });
@@ -113,7 +130,7 @@ const GroupChatScreen: React.FC = () => {
         unsubscribe();
       }
     };
-  }, [groupId, isLoading]);
+  }, [groupId, status, dispatch]);
 
   // Handle navigation options
   useEffect(() => {
@@ -143,13 +160,13 @@ const GroupChatScreen: React.FC = () => {
 
       for (const msg of unreadMessages) {
         try {
-          await ChatModel.markMessageAsRead(groupId, msg.id);
+          dispatch(markMessageAsRead({groupId, messageId: msg.id}));
         } catch (error) {
           console.error('Error marking message as read:', error);
         }
       }
     },
-    [groupId],
+    [groupId, dispatch],
   );
 
   // Handle sending a message
@@ -164,9 +181,17 @@ const GroupChatScreen: React.FC = () => {
 
     try {
       const replyToId = replyingTo ? replyingTo.id : null;
-      await ChatModel.sendMessage(groupId, messageText.trim(), replyToId);
+      await dispatch(
+        sendMessage({
+          groupId,
+          text: messageText.trim(),
+          replyToMessageId: replyToId,
+        }),
+      ).unwrap();
+
       setMessageText('');
       setReplyingTo(null);
+
       // Scroll to bottom after sending
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({animated: true});
@@ -184,14 +209,13 @@ const GroupChatScreen: React.FC = () => {
     try {
       setLoadingEarlier(true);
       const oldestMessage = messages[0];
-      const earlierMessages = await ChatModel.getMessagesBefore(
-        groupId,
-        oldestMessage.id,
-      );
 
-      if (earlierMessages.length > 0) {
-        setMessages(prevMessages => [...earlierMessages, ...prevMessages]);
-      }
+      await dispatch(
+        fetchEarlierMessages({
+          groupId,
+          beforeMessageId: oldestMessage.id,
+        }),
+      ).unwrap();
     } catch (error) {
       console.error('Error loading earlier messages:', error);
     } finally {
@@ -212,7 +236,14 @@ const GroupChatScreen: React.FC = () => {
   // Handle adding a reaction to a message
   const handleAddReaction = async (messageId: string, reaction: string) => {
     try {
-      await ChatModel.addReaction(groupId, messageId, reaction);
+      await dispatch(
+        addReaction({
+          groupId,
+          messageId,
+          reactionType: reaction,
+        }),
+      ).unwrap();
+
       setSelectedMessage(null);
       fadeAnim.setValue(0);
     } catch (error) {
@@ -240,7 +271,13 @@ const GroupChatScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await ChatModel.deleteMessage(groupId, messageId);
+              await dispatch(
+                deleteMessage({
+                  groupId,
+                  messageId,
+                }),
+              ).unwrap();
+
               setSelectedMessage(null);
               fadeAnim.setValue(0);
               showMessage({
@@ -282,6 +319,16 @@ const GroupChatScreen: React.FC = () => {
     });
   };
 
+  // Handle image press to view in full screen
+  const handleImagePress = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+  };
+
+  // Close full screen image viewer
+  const closeImageViewer = () => {
+    setSelectedImage(null);
+  };
+
   // Handle message input focus
   const handleInputFocus = () => {
     Animated.timing(inputHeight, {
@@ -302,16 +349,6 @@ const GroupChatScreen: React.FC = () => {
       }).start();
     }
     setIsTyping(false);
-  };
-
-  // Handle image press to view in full screen
-  const handleImagePress = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
-  };
-
-  // Close full screen image viewer
-  const closeImageViewer = () => {
-    setSelectedImage(null);
   };
 
   // Render message bubble
@@ -658,7 +695,7 @@ const GroupChatScreen: React.FC = () => {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
-        {isLoading ? (
+        {status === 'loading' && messages.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#2196F3" />
             <Text style={styles.loadingText}>Loading messages...</Text>
@@ -766,6 +803,13 @@ const GroupChatScreen: React.FC = () => {
 
       {/* Image Viewer */}
       {renderImageViewer()}
+
+      {/* Error Display */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -1219,6 +1263,22 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  // Error display
+  errorContainer: {
+    position: 'absolute',
+    top: 80,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(244, 67, 54, 0.9)',
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

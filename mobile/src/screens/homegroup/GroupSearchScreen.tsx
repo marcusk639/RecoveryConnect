@@ -11,6 +11,8 @@ import {
   SafeAreaView,
   PermissionsAndroid,
   Platform,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
@@ -28,6 +30,8 @@ import {
   selectGroupsError,
 } from '../../store/slices/groupsSlice';
 import {GroupModel} from '../../models/GroupModel';
+import LocationPicker from '../../components/groups/LocationPicker';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Define a more specific type for the Home tab navigation
 type HomeTabParams = {
@@ -71,6 +75,19 @@ const GroupSearchScreen: React.FC = () => {
     MeetingType | 'All'
   >('All');
 
+  // New state for location search
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [customLocation, setCustomLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    address: string;
+  } | null>(null);
+  const [searchRadius, setSearchRadius] = useState<number>(25);
+  const [usingCustomLocation, setUsingCustomLocation] = useState(false);
+
+  // New state for type filter modal
+  const [showTypeFilterModal, setShowTypeFilterModal] = useState(false);
+
   // Get user data from Redux
   const userData = useAppSelector(selectUserData);
   const userJoinedGroups = userData?.homeGroups || [];
@@ -85,33 +102,49 @@ const GroupSearchScreen: React.FC = () => {
     'All',
     'AA',
     'NA',
-    'IOP',
-    'Religious',
     'Celebrate Recovery',
     'Custom',
   ];
 
   // Fetch Location on Mount
   useEffect(() => {
-    requestLocationPermission();
-  }, []);
+    if (!usingCustomLocation) {
+      requestLocationPermission();
+    }
+  }, [usingCustomLocation]);
 
   // Load groups once location is available
   useEffect(() => {
-    if (userLocation) {
-      loadNearbyGroups();
+    if (userLocation && !usingCustomLocation) {
+      loadNearbyGroups(
+        userLocation.latitude,
+        userLocation.longitude,
+        searchRadius,
+      );
+    } else if (customLocation && usingCustomLocation) {
+      loadNearbyGroups(
+        customLocation.latitude,
+        customLocation.longitude,
+        searchRadius,
+      );
     }
-    // If location fails, don't load groups initially, show message in empty state
-    else if (locationError) {
+    // Only show error if we're not using custom location and there's an error
+    else if (locationError && !usingCustomLocation) {
       setLoading(false);
       setAllGroups([]);
       setFilteredGroups([]);
       Alert.alert(
         'Location Error',
-        'Could not get your location. Please enable location services to find nearby groups.',
+        'Could not get your location. Please use the location search to find groups.',
       );
     }
-  }, [userLocation, locationError]);
+  }, [
+    userLocation,
+    customLocation,
+    locationError,
+    usingCustomLocation,
+    searchRadius,
+  ]);
 
   // Update loading state from Redux
   useEffect(() => {
@@ -186,18 +219,40 @@ const GroupSearchScreen: React.FC = () => {
     );
   };
 
-  const loadNearbyGroups = () => {
-    if (!userLocation) return;
-
-    // Dispatch the searchGroupsByLocation action instead of directly calling GroupModel
+  const loadNearbyGroups = (
+    latitude: number,
+    longitude: number,
+    radius: number = 25,
+  ) => {
+    // Dispatch the searchGroupsByLocation action
     dispatch(
       searchGroupsByLocation({
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        radius: 25,
+        latitude,
+        longitude,
+        radius,
       }),
     );
   };
+
+  useEffect(() => {
+    if (
+      customLocation?.address ||
+      customLocation?.latitude ||
+      customLocation?.longitude
+    ) {
+      dispatch(
+        searchGroupsByLocation({
+          latitude: customLocation?.latitude,
+          longitude: customLocation?.longitude,
+          radius: searchRadius,
+        }),
+      );
+    }
+  }, [
+    customLocation?.address,
+    customLocation?.latitude,
+    customLocation?.longitude,
+  ]);
 
   const filterGroups = () => {
     let tempFiltered = [...allGroups];
@@ -279,6 +334,20 @@ const GroupSearchScreen: React.FC = () => {
     return userJoinedGroups.includes(groupId);
   };
 
+  const handleLocationSelect = (location: {
+    address: string;
+    latitude: number;
+    longitude: number;
+    placeName?: string;
+  }) => {
+    setCustomLocation({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      address: location.address,
+    });
+    setUsingCustomLocation(true);
+  };
+
   const renderGroupItem = ({item}: {item: HomeGroup}) => (
     <View style={styles.groupCard}>
       <View style={styles.groupHeader}>
@@ -319,6 +388,12 @@ const GroupSearchScreen: React.FC = () => {
           <Text style={styles.groupDetailLabel}>Members: </Text>
           {item.memberCount}
         </Text>
+        {item.distanceInKm !== undefined && (
+          <Text style={styles.groupDetailText}>
+            <Text style={styles.groupDetailLabel}>Distance: </Text>
+            {item.distanceInKm.toFixed(1)} miles
+          </Text>
+        )}
       </View>
 
       <TouchableOpacity
@@ -342,33 +417,97 @@ const GroupSearchScreen: React.FC = () => {
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Find Groups</Text>
         <Text style={styles.headerSubtitle}>
-          {userLocation
-            ? 'Showing groups within 25 miles'
-            : 'Enable location to find nearby groups'}
+          {customLocation && usingCustomLocation
+            ? `Showing groups near ${customLocation.address.split(',')[0]}`
+            : userLocation
+            ? `Showing groups within ${searchRadius} miles of your location`
+            : 'Search for recovery groups'}
         </Text>
       </View>
 
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search name, description, location..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {/* <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={selectedTypeFilter}
-            onValueChange={(itemValue: MeetingType | 'All') =>
-              setSelectedTypeFilter(itemValue)
-            }
-            style={styles.picker}
-            itemStyle={styles.pickerItem}
-            dropdownIconColor="#2196F3">
-            {meetingTypes.map(type => (
-              <Picker.Item key={type} label={type} value={type} />
-            ))}
-          </Picker>
-        </View> */}
+        {/* Search by name/description */}
+        <View style={styles.searchInputContainer}>
+          <Icon
+            name="magnify"
+            size={20}
+            color="#757575"
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name or description"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        {/* Filter and Location Search Buttons */}
+        <View style={styles.filterButtonsRow}>
+          {/* Filter by Type */}
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setShowTypeFilterModal(true)}>
+            <Icon name="filter-variant" size={18} color="#2196F3" />
+            <Text style={styles.filterButtonText}>
+              {selectedTypeFilter === 'All' ? 'All Types' : selectedTypeFilter}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Location Search */}
+          <TouchableOpacity
+            style={styles.locationButton}
+            onPress={() => setShowLocationPicker(true)}>
+            <Icon name="map-marker" size={18} color="#2196F3" />
+            <Text style={styles.locationButtonText}>
+              {customLocation ? 'Change Location' : 'Search Location'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Search radius selector */}
+        {(userLocation || (customLocation && usingCustomLocation)) && (
+          <View style={styles.radiusContainer}>
+            <Text style={styles.radiusLabel}>
+              Search radius: {searchRadius} miles
+            </Text>
+            <View style={styles.radiusButtonsRow}>
+              {[5, 10, 25, 50, 100].map(radius => (
+                <TouchableOpacity
+                  key={radius}
+                  style={[
+                    styles.radiusButton,
+                    searchRadius === radius && styles.radiusButtonActive,
+                  ]}
+                  onPress={() => {
+                    setSearchRadius(radius);
+                    // Reload groups with new radius
+                    if (usingCustomLocation && customLocation) {
+                      loadNearbyGroups(
+                        customLocation.latitude,
+                        customLocation.longitude,
+                        radius,
+                      );
+                    } else if (userLocation) {
+                      loadNearbyGroups(
+                        userLocation.latitude,
+                        userLocation.longitude,
+                        radius,
+                      );
+                    }
+                  }}>
+                  <Text
+                    style={[
+                      styles.radiusButtonText,
+                      searchRadius === radius && styles.radiusButtonTextActive,
+                    ]}>
+                    {radius}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
 
       {loading ? (
@@ -384,18 +523,32 @@ const GroupSearchScreen: React.FC = () => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
-                {!userLocation && !locationError
-                  ? 'Enable location services to find nearby groups'
+                {!userLocation && !customLocation
+                  ? 'Search for a location to find groups'
                   : groupsError
                   ? 'Error loading groups. Please try again later.'
-                  : allGroups.length === 0 && userLocation
-                  ? 'No groups found within 25 miles'
+                  : allGroups.length === 0
+                  ? `No groups found within ${searchRadius} miles`
                   : 'No groups match your current filters'}
               </Text>
               {groupsError && (
                 <TouchableOpacity
                   style={styles.retryButton}
-                  onPress={loadNearbyGroups}>
+                  onPress={() => {
+                    if (usingCustomLocation && customLocation) {
+                      loadNearbyGroups(
+                        customLocation.latitude,
+                        customLocation.longitude,
+                        searchRadius,
+                      );
+                    } else if (userLocation) {
+                      loadNearbyGroups(
+                        userLocation.latitude,
+                        userLocation.longitude,
+                        searchRadius,
+                      );
+                    }
+                  }}>
                   <Text style={styles.retryButtonText}>Retry</Text>
                 </TouchableOpacity>
               )}
@@ -403,6 +556,169 @@ const GroupSearchScreen: React.FC = () => {
           }
         />
       )}
+
+      {/* Location Picker Modal */}
+      <Modal
+        visible={showLocationPicker}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowLocationPicker(false)}>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Search Location</Text>
+            <TouchableOpacity
+              onPress={() => setShowLocationPicker(false)}
+              style={styles.closeButton}>
+              <Icon name="close" size={24} color="#2196F3" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <LocationPicker
+              onLocationSelect={handleLocationSelect}
+              label="Search for groups near..."
+              initialAddress={customLocation?.address}
+            />
+
+            <TouchableOpacity
+              style={styles.useMyLocationButton}
+              onPress={() => {
+                setUsingCustomLocation(true);
+                setShowLocationPicker(false);
+                requestLocationPermission();
+              }}>
+              <Text style={styles.useMyLocationText}>Done</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Type Filter Modal */}
+      <Modal
+        visible={showTypeFilterModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowTypeFilterModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowTypeFilterModal(false)}>
+          <View style={styles.filterModalContainer}>
+            <View style={styles.pullIndicator} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Group Type</Text>
+              <TouchableOpacity
+                onPress={() => setShowTypeFilterModal(false)}
+                style={styles.closeButton}>
+                <Icon name="close" size={24} color="#2196F3" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={meetingTypes}
+              keyExtractor={item => item}
+              renderItem={({item: type}) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.typeFilterButton,
+                    selectedTypeFilter === type &&
+                      styles.typeFilterButtonActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedTypeFilter(type);
+                    setShowTypeFilterModal(false);
+                  }}>
+                  <View style={styles.typeFilterButtonContent}>
+                    {/* Icons for different meeting types */}
+                    <View style={styles.typeIconContainer}>
+                      {type === 'AA' && (
+                        <Icon
+                          name="alpha-a"
+                          size={24}
+                          color={
+                            selectedTypeFilter === type ? '#FFFFFF' : '#2196F3'
+                          }
+                        />
+                      )}
+                      {type === 'NA' && (
+                        <Icon
+                          name="alpha-n"
+                          size={24}
+                          color={
+                            selectedTypeFilter === type ? '#FFFFFF' : '#2196F3'
+                          }
+                        />
+                      )}
+                      {type === 'IOP' && (
+                        <Icon
+                          name="hospital-building"
+                          size={24}
+                          color={
+                            selectedTypeFilter === type ? '#FFFFFF' : '#2196F3'
+                          }
+                        />
+                      )}
+                      {type === 'Religious' && (
+                        <Icon
+                          name="church"
+                          size={24}
+                          color={
+                            selectedTypeFilter === type ? '#FFFFFF' : '#2196F3'
+                          }
+                        />
+                      )}
+                      {type === 'Celebrate Recovery' && (
+                        <Icon
+                          name="party-popper"
+                          size={24}
+                          color={
+                            selectedTypeFilter === type ? '#FFFFFF' : '#2196F3'
+                          }
+                        />
+                      )}
+                      {type === 'Custom' && (
+                        <Icon
+                          name="cog"
+                          size={24}
+                          color={
+                            selectedTypeFilter === type ? '#FFFFFF' : '#2196F3'
+                          }
+                        />
+                      )}
+                      {type === 'All' && (
+                        <Icon
+                          name="filter-variant-remove"
+                          size={24}
+                          color={
+                            selectedTypeFilter === type ? '#FFFFFF' : '#2196F3'
+                          }
+                        />
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.typeFilterButtonText,
+                        selectedTypeFilter === type &&
+                          styles.typeFilterButtonTextActive,
+                      ]}>
+                      {type}
+                    </Text>
+                  </View>
+                  {selectedTypeFilter === type && (
+                    <Icon
+                      name="check"
+                      size={24}
+                      color="#FFFFFF"
+                      style={styles.typeFilterCheckIcon}
+                    />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -433,13 +749,88 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
   },
-  searchInput: {
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F5F5F5',
     borderRadius: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
     paddingVertical: 12,
     fontSize: 16,
+    color: '#212121',
+  },
+  filterButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  filterButtonText: {
+    color: '#2196F3',
+    fontWeight: '600',
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 16,
+  },
+  locationButtonText: {
+    color: '#2196F3',
+    fontWeight: '600',
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  radiusContainer: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  radiusLabel: {
+    fontSize: 14,
+    color: '#757575',
+    marginBottom: 8,
+  },
+  radiusButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  radiusButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
+    backgroundColor: '#FFFFFF',
+  },
+  radiusButtonActive: {
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
+  },
+  radiusButtonText: {
+    color: '#2196F3',
+    fontSize: 14,
+  },
+  radiusButtonTextActive: {
+    color: '#FFFFFF',
   },
   pickerContainer: {
     backgroundColor: '#F5F5F5',
@@ -560,6 +951,102 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#212121',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  useMyLocationButton: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  useMyLocationText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  typeFilterButton: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  typeFilterButtonActive: {
+    backgroundColor: '#2196F3',
+  },
+  typeFilterButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  typeIconContainer: {
+    marginRight: 12,
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeFilterButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#212121',
+    textAlign: 'center',
+  },
+  typeFilterButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  typeFilterCheckIcon: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  filterModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    paddingBottom: 34, // Extra padding for bottom to account for home indicator on iPhone
+    maxHeight: '70%', // Reduced height to ensure it fits on screen
+  },
+  pullIndicator: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2.5,
+    marginBottom: 16,
+    alignSelf: 'center',
   },
 });
 

@@ -9,6 +9,8 @@ import {
   SafeAreaView,
   Alert,
   FlatList,
+  ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -30,6 +32,8 @@ import {GroupDocument, UserDocument} from '../../types/schema';
 import {GroupModel} from '../../models/GroupModel';
 import {HomeGroup} from '../../types';
 import {UserModel} from '../../models/UserModel';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+
 type GroupsListScreenNavigationProp = CompositeNavigationProp<
   StackNavigationProp<GroupStackParamList, 'GroupsList'>,
   BottomTabNavigationProp<MainTabParamList>
@@ -44,8 +48,13 @@ const GroupsListScreen: React.FC = () => {
   const status = useAppSelector(selectGroupsStatus);
   const error = useAppSelector(selectGroupsError);
   const isLoading = status === 'loading';
+  const isInitialLoad = status === 'idle';
 
   const [userName, setUserName] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Track whether this is the first time loading
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   useEffect(() => {
     // Get current user's display name
@@ -60,6 +69,13 @@ const GroupsListScreen: React.FC = () => {
     }
   }, []);
 
+  // Set initialLoadComplete when data is first loaded
+  useEffect(() => {
+    if (status === 'succeeded' && !initialLoadComplete) {
+      setInitialLoadComplete(true);
+    }
+  }, [status, initialLoadComplete]);
+
   useEffect(() => {
     // Show error if there's one
     if (error) {
@@ -72,7 +88,8 @@ const GroupsListScreen: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    loadData();
+    setRefreshing(true);
+    loadData().finally(() => setRefreshing(false));
   };
 
   const navigateToGroupDetails = (group: HomeGroup) => {
@@ -84,6 +101,10 @@ const GroupsListScreen: React.FC = () => {
 
   const navigateToCreateGroup = () => {
     navigation.navigate('CreateGroup', {});
+  };
+
+  const navigateToGroupSearch = () => {
+    navigation.navigate('GroupSearch');
   };
 
   const renderHomeGroupItem = ({item}: {item: HomeGroup}) => (
@@ -98,7 +119,9 @@ const GroupsListScreen: React.FC = () => {
           </View>
         )}
       </View>
-      <Text style={styles.homeGroupDescription}>{item.description}</Text>
+      <Text style={styles.homeGroupDescription} numberOfLines={2}>
+        {item.description}
+      </Text>
       <View style={styles.homeGroupFooter}>
         <Text style={styles.homeGroupMemberCount}>
           {item.memberCount} members
@@ -107,25 +130,84 @@ const GroupsListScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const renderEmptyComponent = () => (
-    <View style={styles.emptyHomeGroups}>
-      <Text style={styles.emptyStateText}>
-        You haven't joined any home groups yet
-      </Text>
-      <TouchableOpacity
-        style={styles.joinGroupButton}
-        onPress={() => navigation.navigate('GroupSearch')}>
-        <Text style={styles.joinGroupButtonText}>Find a Group</Text>
-      </TouchableOpacity>
+  // Skeleton loading indicator for groups
+  const renderSkeletonItem = () => (
+    <View style={styles.skeletonCard}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonTitle} />
+        <View style={[styles.skeletonBadge, {width: 50}]} />
+      </View>
+      <View style={styles.skeletonLine} />
+      <View style={[styles.skeletonLine, {width: '70%'}]} />
+      <View style={styles.skeletonFooter}>
+        <View style={styles.skeletonMemberCount} />
+      </View>
     </View>
   );
+
+  const renderEmptyComponent = () => {
+    // Show skeleton loaders during initial load
+    if (isLoading && !initialLoadComplete) {
+      return (
+        <View>
+          {[...Array(3)].map((_, index) => (
+            <View key={`skeleton-${index}`}>{renderSkeletonItem()}</View>
+          ))}
+        </View>
+      );
+    }
+
+    // Show empty state when loaded but no groups found
+    return (
+      <View style={styles.emptyStateContainer}>
+        <Icon
+          name="account-group-outline"
+          size={64}
+          color="#BBDEFB"
+          style={styles.emptyStateIcon}
+        />
+        <Text style={styles.emptyStateHeading}>No Groups Yet</Text>
+        <Text style={styles.emptyStateText}>
+          You haven't joined any home groups yet. Join an existing group or
+          create your own.
+        </Text>
+        <View style={styles.emptyStateButtons}>
+          <TouchableOpacity
+            style={styles.emptyStateButtonPrimary}
+            onPress={navigateToGroupSearch}>
+            <Text style={styles.emptyStateButtonPrimaryText}>Find a Group</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.emptyStateButtonSecondary}
+            onPress={navigateToCreateGroup}>
+            <Text style={styles.emptyStateButtonSecondaryText}>
+              Create Group
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // Handle loading state with a clean message when not initial load
+  const renderLoadingOverlay = () => {
+    if (isLoading && initialLoadComplete && groups.length === 0) {
+      return (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#2196F3" />
+          <Text style={styles.loadingText}>Loading your groups...</Text>
+        </View>
+      );
+    }
+    return null;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }>
         {/* Welcome Section */}
         <View style={styles.welcomeSection}>
@@ -145,8 +227,7 @@ const GroupsListScreen: React.FC = () => {
                 onPress={navigateToCreateGroup}>
                 <Text style={styles.createGroupButtonText}>Create</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('GroupSearch')}>
+              <TouchableOpacity onPress={navigateToGroupSearch}>
                 <Text style={styles.seeAllText}>Join New</Text>
               </TouchableOpacity>
             </View>
@@ -161,22 +242,14 @@ const GroupsListScreen: React.FC = () => {
               showsHorizontalScrollIndicator={false}
               scrollEnabled={false}
               contentContainerStyle={styles.homeGroupsList}
-              ListEmptyComponent={renderEmptyComponent}
             />
           ) : (
-            <View style={styles.emptyHomeGroups}>
-              <Text style={styles.emptyStateText}>
-                You haven't joined any home groups yet
-              </Text>
-              <TouchableOpacity
-                style={styles.joinGroupButton}
-                onPress={() => navigation.navigate('GroupSearch')}>
-                <Text style={styles.joinGroupButtonText}>Find a Group</Text>
-              </TouchableOpacity>
-            </View>
+            renderEmptyComponent()
           )}
         </View>
       </ScrollView>
+
+      {renderLoadingOverlay()}
     </SafeAreaView>
   );
 };
@@ -293,27 +366,121 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9E9E9E',
   },
-  emptyHomeGroups: {
-    padding: 24,
-    alignItems: 'center',
+  // Skeleton loading styles
+  skeletonCard: {
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  joinGroupButton: {
-    marginTop: 12,
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  skeletonHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  skeletonTitle: {
+    width: '60%',
+    height: 16,
+    backgroundColor: '#E0E0E0',
     borderRadius: 4,
   },
-  joinGroupButtonText: {
-    color: '#FFFFFF',
+  skeletonBadge: {
+    width: 60,
+    height: 16,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 12,
+  },
+  skeletonLine: {
+    width: '100%',
+    height: 12,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  skeletonFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+  },
+  skeletonMemberCount: {
+    width: 80,
+    height: 12,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+  },
+  // Empty state styles
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginVertical: 8,
+  },
+  emptyStateIcon: {
+    marginBottom: 16,
+  },
+  emptyStateHeading: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#424242',
+    marginBottom: 8,
+    textAlign: 'center',
   },
   emptyStateText: {
     fontSize: 14,
-    color: '#9E9E9E',
-    fontStyle: 'italic',
+    color: '#757575',
     textAlign: 'center',
-    padding: 16,
+    marginBottom: 24,
+  },
+  emptyStateButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  emptyStateButtonPrimary: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  emptyStateButtonPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  emptyStateButtonSecondary: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  emptyStateButtonSecondaryText: {
+    color: '#2196F3',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#757575',
   },
 });
 

@@ -141,6 +141,7 @@ export class UserModel {
         uid: currentUser.uid,
         email: currentUser.email || '',
         displayName: currentUser.displayName || 'Anonymous',
+        photoUrl: currentUser.photoURL || '',
         createdAt: now,
         updatedAt: now,
         lastLogin: now,
@@ -313,6 +314,107 @@ export class UserModel {
       return userData.favoriteMeetings || [];
     } catch (error) {
       console.error('Error removing favorite meeting:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sync user profile from Firebase Auth to Firestore
+   * This ensures that any changes made directly to the auth profile
+   * (like photoURL) are reflected in our Firestore user document
+   */
+  static async syncUserProfileFromAuth(uid: string): Promise<User | null> {
+    try {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser || currentUser.uid !== uid) {
+        throw new Error('User not authenticated or ID mismatch');
+      }
+
+      const userRef = firestore.collection('users').doc(uid);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        console.warn(
+          'User document not found in Firestore when syncing from auth',
+        );
+        return null;
+      }
+
+      const updates: Partial<User> = {
+        updatedAt: new Date(),
+      };
+
+      // Only update fields that exist in auth and have values
+      if (currentUser.displayName) {
+        updates.displayName = currentUser.displayName;
+      }
+
+      if (currentUser.email) {
+        updates.email = currentUser.email;
+      }
+
+      if (currentUser.photoURL) {
+        updates.photoUrl = currentUser.photoURL;
+      }
+
+      // Update the document with auth profile data
+      await userRef.update(UserModel.toFirestore(updates));
+
+      // Get the updated document
+      const updatedDoc = await userRef.get();
+      return UserModel.fromFirestore({
+        id: updatedDoc.id,
+        data: () => updatedDoc.data() as UserDocument,
+      });
+    } catch (error) {
+      console.error('Error syncing user profile from auth:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update user's photo URL in both Firestore and Auth profile
+   */
+  static async updatePhotoURL(
+    uid: string,
+    photoUrl: string,
+  ): Promise<User | null> {
+    try {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser || currentUser.uid !== uid) {
+        throw new Error('User not authenticated or ID mismatch');
+      }
+
+      // Update auth profile first
+      await currentUser.updateProfile({
+        photoURL: photoUrl,
+      });
+
+      // Then update Firestore document
+      const userRef = firestore.collection('users').doc(uid);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        throw new Error('User document not found');
+      }
+
+      const updates: Partial<User> = {
+        photoUrl: photoUrl,
+        updatedAt: new Date(),
+      };
+
+      await userRef.update(UserModel.toFirestore(updates));
+
+      // Get the updated document
+      const updatedDoc = await userRef.get();
+      return UserModel.fromFirestore({
+        id: updatedDoc.id,
+        data: () => updatedDoc.data() as UserDocument,
+      });
+    } catch (error) {
+      console.error('Error updating user photo URL:', error);
       throw error;
     }
   }
