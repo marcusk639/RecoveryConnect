@@ -16,6 +16,9 @@ import {
   Pressable,
   SafeAreaView,
   StatusBar,
+  Linking,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
@@ -58,6 +61,7 @@ const GroupChatScreen: React.FC = () => {
   const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // Animation values
   const inputHeight = useRef(new Animated.Value(50)).current;
@@ -300,6 +304,16 @@ const GroupChatScreen: React.FC = () => {
     setIsTyping(false);
   };
 
+  // Handle image press to view in full screen
+  const handleImagePress = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+  };
+
+  // Close full screen image viewer
+  const closeImageViewer = () => {
+    setSelectedImage(null);
+  };
+
   // Render message bubble
   const renderMessageBubble = ({item}: {item: ChatMessage}) => {
     const isCurrentUser = item.senderId === auth().currentUser?.uid;
@@ -320,6 +334,126 @@ const GroupChatScreen: React.FC = () => {
           0,
         )
       : 0;
+
+    // Function to render attachments
+    const renderAttachments = () => {
+      if (!item.attachments || item.attachments.length === 0) return null;
+
+      return (
+        <View style={styles.attachmentsContainer}>
+          {item.attachments.map((attachment, index) => {
+            // Image attachments
+            if (attachment.type === 'image') {
+              return (
+                <TouchableOpacity
+                  key={`${item.id}-attachment-${index}`}
+                  onPress={() => handleImagePress(attachment.url)}
+                  style={styles.imageAttachmentContainer}>
+                  <FastImage
+                    source={{uri: attachment.url}}
+                    style={styles.imageAttachment}
+                    resizeMode={FastImage.resizeMode.contain}
+                  />
+                  <View style={styles.imageOverlay}>
+                    <Icon
+                      name="magnify-plus-outline"
+                      size={16}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            }
+
+            // File attachments
+            if (attachment.type === 'file') {
+              return (
+                <TouchableOpacity
+                  key={`${item.id}-attachment-${index}`}
+                  onPress={() => Linking.openURL(attachment.url)}
+                  style={styles.fileAttachmentContainer}>
+                  <Icon
+                    name="file-document-outline"
+                    size={24}
+                    color="#2196F3"
+                  />
+                  <View style={styles.fileAttachmentDetails}>
+                    <Text style={styles.fileAttachmentName} numberOfLines={1}>
+                      {attachment.name || 'Document'}
+                    </Text>
+                    {attachment.size && (
+                      <Text style={styles.fileAttachmentSize}>
+                        {formatFileSize(attachment.size)}
+                      </Text>
+                    )}
+                  </View>
+                  <Icon name="download" size={20} color="#757575" />
+                </TouchableOpacity>
+              );
+            }
+
+            // Voice attachments
+            if (attachment.type === 'voice') {
+              return (
+                <View
+                  key={`${item.id}-attachment-${index}`}
+                  style={styles.voiceAttachmentContainer}>
+                  <TouchableOpacity
+                    style={styles.voicePlayButton}
+                    onPress={() => Linking.openURL(attachment.url)}>
+                    <Icon name="play" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <View style={styles.voiceWaveform}>
+                    <View style={styles.voiceWaveformBar} />
+                    <View style={[styles.voiceWaveformBar, {height: 15}]} />
+                    <View style={[styles.voiceWaveformBar, {height: 18}]} />
+                    <View style={[styles.voiceWaveformBar, {height: 12}]} />
+                    <View style={[styles.voiceWaveformBar, {height: 16}]} />
+                    <View style={[styles.voiceWaveformBar, {height: 10}]} />
+                    <View style={[styles.voiceWaveformBar, {height: 14}]} />
+                  </View>
+                  {attachment.duration && (
+                    <Text style={styles.voiceDuration}>
+                      {formatDuration(attachment.duration)}
+                    </Text>
+                  )}
+                </View>
+              );
+            }
+
+            // Default fallback
+            return (
+              <TouchableOpacity
+                key={`${item.id}-attachment-${index}`}
+                onPress={() => Linking.openURL(attachment.url)}
+                style={styles.genericAttachmentContainer}>
+                <Text style={styles.genericAttachmentText}>
+                  View Attachment
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      );
+    };
+
+    // Helper function to format file size
+    const formatFileSize = (sizeInBytes: number) => {
+      if (sizeInBytes < 1024) {
+        return `${sizeInBytes} B`;
+      } else if (sizeInBytes < 1024 * 1024) {
+        return `${(sizeInBytes / 1024).toFixed(1)} KB`;
+      } else {
+        return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
+    };
+
+    // Helper function to format duration
+    const formatDuration = (durationInSeconds: number) => {
+      const minutes = Math.floor(durationInSeconds / 60);
+      const seconds = Math.floor(durationInSeconds % 60);
+      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    };
 
     return (
       <Pressable
@@ -371,10 +505,19 @@ const GroupChatScreen: React.FC = () => {
             </View>
           )}
 
-          <Text
-            style={[styles.messageText, isSystem && styles.systemMessageText]}>
-            {item.text}
-          </Text>
+          {/* Text message */}
+          {item.text && (
+            <Text
+              style={[
+                styles.messageText,
+                isSystem && styles.systemMessageText,
+              ]}>
+              {item.text}
+            </Text>
+          )}
+
+          {/* Attachments */}
+          {renderAttachments()}
 
           <Text
             style={[
@@ -467,6 +610,43 @@ const GroupChatScreen: React.FC = () => {
           }}
         />
       </Animated.View>
+    );
+  };
+
+  // Image Viewer Modal
+  const renderImageViewer = () => {
+    if (!selectedImage) return null;
+
+    return (
+      <Modal
+        transparent={true}
+        visible={!!selectedImage}
+        onRequestClose={closeImageViewer}>
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity
+            style={styles.imageViewerCloseButton}
+            onPress={closeImageViewer}>
+            <Icon name="close" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.imageViewerImageContainer}
+            onPress={closeImageViewer}>
+            <FastImage
+              source={{uri: selectedImage}}
+              style={styles.imageViewerImage}
+              resizeMode={FastImage.resizeMode.contain}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.imageViewerDownloadButton}
+            onPress={() => Linking.openURL(selectedImage)}>
+            <Icon name="download" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
     );
   };
 
@@ -583,6 +763,9 @@ const GroupChatScreen: React.FC = () => {
 
       {/* Reaction Picker */}
       {renderReactionPicker()}
+
+      {/* Image Viewer */}
+      {renderImageViewer()}
     </SafeAreaView>
   );
 };
@@ -900,6 +1083,142 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 8,
     marginRight: 8,
+  },
+  // Attachment styles
+  attachmentsContainer: {
+    marginTop: 8,
+    marginBottom: 4,
+    maxWidth: 280,
+    alignSelf: 'center',
+  },
+  imageAttachmentContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 4,
+    backgroundColor: '#f0f0f0',
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 1.5, // Default aspect ratio, will be adjusted by the image's natural ratio
+    maxHeight: 250,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageAttachment: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+    maxWidth: 280,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  fileAttachmentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 4,
+  },
+  fileAttachmentDetails: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+  fileAttachmentName: {
+    fontSize: 14,
+    color: '#212121',
+    fontWeight: '500',
+  },
+  fileAttachmentSize: {
+    fontSize: 12,
+    color: '#757575',
+    marginTop: 2,
+  },
+  voiceAttachmentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    borderRadius: 16,
+    padding: 8,
+    marginBottom: 4,
+  },
+  voicePlayButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voiceWaveform: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    height: 30,
+    marginHorizontal: 12,
+  },
+  voiceWaveformBar: {
+    width: 3,
+    height: 12,
+    backgroundColor: '#2196F3',
+    borderRadius: 1.5,
+  },
+  voiceDuration: {
+    fontSize: 12,
+    color: '#757575',
+    marginLeft: 4,
+  },
+  genericAttachmentContainer: {
+    padding: 10,
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    borderRadius: 8,
+    marginBottom: 4,
+    alignItems: 'center',
+  },
+  genericAttachmentText: {
+    color: '#2196F3',
+    fontWeight: '500',
+  },
+  // Image viewer styles
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerImageContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
+  },
+  imageViewerCloseButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  imageViewerDownloadButton: {
+    position: 'absolute',
+    bottom: 40,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
 });
 
