@@ -155,7 +155,7 @@ const MainTabNavigator: React.FC = () => {
         component={GroupSearchScreen}
         options={{
           tabBarLabel: 'Groups',
-          headerTitle: 'Find Groups',
+          headerShown: false,
           tabBarIcon: ({focused}) => <GroupSearchIcon focused={focused} />,
         }}
       />
@@ -166,6 +166,7 @@ const MainTabNavigator: React.FC = () => {
           tabBarLabel: 'Profile',
           tabBarIcon: ({focused}) => <ProfileIcon focused={focused} />,
           headerTitle: 'Profile',
+          headerShown: false,
         }}
       />
     </Tab.Navigator>

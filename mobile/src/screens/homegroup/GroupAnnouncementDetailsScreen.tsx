@@ -27,6 +27,7 @@ import {
   selectAnnouncementsError,
   Announcement,
 } from '../../store/slices/announcementsSlice';
+import Button from '../../components/common/Button';
 
 type GroupAnnouncementDetailsScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -509,6 +510,8 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: '#F44336',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editButtonText: {
     color: '#2196F3',
@@ -559,6 +562,8 @@ const styles = StyleSheet.create({
   },
   deleteConfirmButton: {
     backgroundColor: '#F44336',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelConfirmText: {
     color: '#757575',
@@ -567,6 +572,7 @@ const styles = StyleSheet.create({
   deleteConfirmText: {
     color: '#FFFFFF',
     fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

@@ -1,10 +1,14 @@
-
-
-import {BaseEntity} from "./BaseEntity";
-import OperatorSubscription from "./OperatorSubscription";
+import { BaseEntity } from "./BaseEntity";
 
 export const removeUserFromHouse = () => {
-  return {guestId: null, houseId: null, potentialGuest: false, potentialSuperAdmin: false, isGuest: false, isSuperAdmin: false};
+  return {
+    guestId: null,
+    houseId: null,
+    potentialGuest: false,
+    potentialSuperAdmin: false,
+    isGuest: false,
+    isSuperAdmin: false,
+  };
 };
 
 class User extends BaseEntity {
@@ -45,4 +49,4 @@ class User extends BaseEntity {
   subscriptionMetadata: OperatorSubscription = new OperatorSubscription();
 }
 
-export {User};
+export { User };

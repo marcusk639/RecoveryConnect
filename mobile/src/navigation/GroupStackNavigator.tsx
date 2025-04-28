@@ -17,6 +17,8 @@ import GroupEditDetailsScreen from '../screens/homegroup/GroupEditDetailsScreen'
 import CreateGroupScreen from '../screens/homegroup/CreateGroupScreen';
 import GroupScheduleScreen from '../screens/homegroup/GroupScheduleScreen';
 import AddTransactionScreen from '../screens/homegroup/AddTransactionScreen';
+import GroupChatScreen from '../screens/homegroup/GroupChatScreen';
+import GroupChatMediaPickerScreen from '../screens/homegroup/GroupChatMediaPickerScreen';
 // import GroupEventDetailsScreen from '../screens/groups/GroupEventDetailsScreen';
 // import GroupBusinessMeetingScreen from '../screens/groups/GroupBusinessMeetingScreen';
 
@@ -27,7 +29,7 @@ const GroupStackNavigator: React.FC = () => {
     <Stack.Navigator
       initialRouteName="GroupsList"
       screenOptions={{
-        headerBackTitle: undefined,
+        headerBackTitle: 'Back',
         headerTitleAlign: 'center',
       }}>
       <Stack.Screen
@@ -76,7 +78,7 @@ const GroupStackNavigator: React.FC = () => {
         name="GroupMemberDetails"
         component={GroupMemberDetailsScreen}
         options={{
-          title: 'Member Details',
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -118,7 +120,7 @@ const GroupStackNavigator: React.FC = () => {
         name="GroupSchedule"
         component={GroupScheduleScreen}
         options={({route}) => ({
-          title: `${route.params.groupName} - Schedule`,
+          title: `${route.params.groupName} - Meetings`,
         })}
       />
       <Stack.Screen
@@ -127,6 +129,21 @@ const GroupStackNavigator: React.FC = () => {
         options={{
           presentation: 'modal',
           title: 'Add Transaction',
+        }}
+      />
+      <Stack.Screen
+        name="GroupChat"
+        component={GroupChatScreen}
+        options={{
+          title: 'Group Chat',
+        }}
+      />
+      <Stack.Screen
+        name="GroupChatMediaPicker"
+        component={GroupChatMediaPickerScreen}
+        options={{
+          title: 'Choose Media',
+          presentation: 'modal',
         }}
       />
     </Stack.Navigator>

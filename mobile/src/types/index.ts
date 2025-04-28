@@ -161,7 +161,6 @@ const exampleMeeting: Meeting = {
   lat: 30.296411,
   city: 'Austin',
   lng: -97.7688783,
-  types: ['12 Steps & 12 Traditions', 'Closed', 'English'],
   online: false,
   name: 'Benevolent Manipulators - IN-PERSON',
 };
@@ -173,6 +172,7 @@ export interface Meeting {
   day: string;
   time: string;
   address?: string;
+  country?: string;
   city?: string;
   state?: string;
   street?: string;
@@ -180,7 +180,6 @@ export interface Meeting {
   lat?: number;
   lng?: number;
   location?: string;
-  types: string[];
   online?: boolean;
   link?: string;
   onlineNotes?: string;

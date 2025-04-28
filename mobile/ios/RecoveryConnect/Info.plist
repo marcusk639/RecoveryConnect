@@ -52,9 +52,9 @@
 	<string>We need to know your location to show you meetings near you</string>
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
 	<dict>
-    <key>Location</key>
-    <string>We need to know your location to show you meetings near you</string>
-  </dict>
+		<key>Location</key>
+		<string>We need to know your location to show you meetings near you</string>
+	</dict>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photo library to upload a profile photo</string>
 	<key>NSCameraUsageDescription</key>
@@ -70,6 +70,30 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>ATSApplicationFontsPath</key>
+	<string>Fonts</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>MaterialIcons.ttf</string>
+		<string>AntDesign.ttf</string>
+		<string>Entypo.ttf</string>
+		<string>EvilIcons.ttf</string>
+		<string>Feather.ttf</string>
+		<string>FontAwesome.ttf</string>
+		<string>FontAwesome5_Brands.ttf</string>
+		<string>FontAwesome5_Regular.ttf</string>
+		<string>FontAwesome5_Solid.ttf</string>
+		<string>FontAwesome6_Brands.ttf</string>
+		<string>FontAwesome6_Regular.ttf</string>
+		<string>FontAwesome6_Solid.ttf</string>
+		<string>Fontisto.ttf</string>
+		<string>Foundation.ttf</string>
+		<string>Ionicons.ttf</string>
+		<string>MaterialCommunityIcons.ttf</string>
+		<string>Octicons.ttf</string>
+		<string>SimpleLineIcons.ttf</string>
+		<string>Zocial.ttf</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>

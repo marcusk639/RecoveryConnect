@@ -74,3 +74,18 @@ Business Meeting Tools - More complex but high value for group operations
 External Integrations - Can be added progressively as the app matures
 
 Would you like me to start implementing any of these specific features? I can begin with designing and implementing the Group Activity Feed as it would provide immediate value to users.
+
+TODO:
+
+- secretary features (1)
+- chat (1)
+- show sponsors (1)
+- reports (treasury, GSR) (2)
+- show member positions (1)
+- events, birthdays (1)
+- voting for positions (2)
+- show when business meetings are scheduled (2)
+- available positions (1)
+- emergency function (3)
+- sobriety counter (3)
+- show chips (3)

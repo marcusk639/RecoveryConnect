@@ -91,7 +91,6 @@ const AnnouncementsScreen: React.FC = () => {
         isAdmin={isAdmin}
         onAnnouncementPress={handleAnnouncementPress}
       />
-
       {selectedAnnouncement && (
         <AnnouncementDetail
           announcement={selectedAnnouncement}

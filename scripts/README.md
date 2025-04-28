@@ -1,6 +1,62 @@
-# RecoveryConnect Migration Scripts
+# RecoveryConnect Utility Scripts
 
-This directory contains utility scripts for database migrations in the RecoveryConnect application.
+This directory contains utility scripts for database migrations and testing in the RecoveryConnect application.
+
+## Chat Functionality Test Script
+
+The `testChatFunctionality.ts` script tests the chat functionality using Firestore with the same collection structure as used in the app's ChatModel.
+
+### Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Make sure you have Firebase Admin SDK credentials:
+   - Save your Firebase service account key as `recovery-connect.json` in this directory
+   - You can download this from Firebase Console:
+     - Go to Project Settings > Service Accounts
+     - Click "Generate new private key"
+     - Save the JSON file as `recovery-connect.json` in this scripts directory
+
+### Usage
+
+Run the chat testing script:
+
+```bash
+npm run test-chat
+```
+
+Or directly with ts-node:
+
+```bash
+npx ts-node testChatFunctionality.ts
+```
+
+### What It Tests
+
+The script tests various chat functionality:
+
+1. Initializing a group chat
+2. Sending regular user messages
+3. Sending system messages
+4. Retrieving recent messages
+5. Adding reactions to messages
+6. Marking messages as read
+7. Real-time message reception using Firestore listeners
+
+### Collection Structure
+
+The script uses the same Firestore collection paths as the app's ChatModel:
+
+- `group_chats`: Collection of all group chats
+- `group_chats/{groupId}/messages`: Subcollection of messages for each group
+
+### Configuration
+
+The script is configured to use the group with ID `VkIApNXMxkTsx1nHELBH`. If you want to test with a different group, edit the `GROUP_ID` constant in the script.
 
 ## Member Migration Script
 

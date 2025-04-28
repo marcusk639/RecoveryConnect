@@ -39,6 +39,7 @@ import {
   selectGroupMeetings,
   selectMeetingsStatus,
 } from '../../store/slices/meetingsSlice';
+import {upperFirst} from 'lodash';
 
 type GroupOverviewScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -145,6 +146,13 @@ const GroupOverviewScreen: React.FC = () => {
 
   const navigateToGroupLiterature = () => {
     navigation.navigate('GroupLiterature', {
+      groupId,
+      groupName,
+    });
+  };
+
+  const navigateToGroupChat = () => {
+    navigation.navigate('GroupChat', {
       groupId,
       groupName,
     });
@@ -290,11 +298,18 @@ const GroupOverviewScreen: React.FC = () => {
           <View style={styles.navTileIcon}>
             <Text style={styles.navTileIconText}>📅</Text>
           </View>
-          <Text style={styles.navTileText}>Schedule</Text>
+          <Text style={styles.navTileText}>Meetings</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navTile} onPress={navigateToGroupChat}>
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>💬</Text>
+          </View>
+          <Text style={styles.navTileText}>Chat</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={{...styles.navTile, opacity: 0.5}}
+          style={[styles.navTile, {opacity: 0.5}]}
           disabled={true}
           onPress={navigateToGroupLiterature}>
           <View style={styles.navTileIcon}>
@@ -345,12 +360,16 @@ const GroupOverviewScreen: React.FC = () => {
           upcomingMeetings.map(meeting => (
             <View key={meeting.id} style={styles.meetingItem}>
               <View style={styles.meetingTimeContainer}>
-                <Text style={styles.meetingDay}>{meeting.day || 'TBD'}</Text>
-                <Text style={styles.meetingTime}>{meeting.time || 'TBD'}</Text>
+                <Text style={styles.meetingDay}>
+                  {meeting.day ? upperFirst(meeting.day) : 'Unknown day'}
+                </Text>
+                <Text style={styles.meetingTime}>
+                  {meeting.time ? meeting.time : 'Unknown time'}
+                </Text>
               </View>
               <View style={styles.meetingContent}>
                 <Text style={styles.meetingName}>{meeting.name}</Text>
-                <Text style={styles.meetingLocation}>{meeting.location}</Text>
+                <Text style={styles.meetingLocation}>{meeting.address}</Text>
                 <Text style={styles.meetingFormat}>
                   {meeting.format || meeting.type}
                 </Text>

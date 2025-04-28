@@ -16,12 +16,18 @@ import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {MainTabParamList} from '../../types/navigation';
 import auth from '@react-native-firebase/auth';
-import {GroupModel} from '../../models/GroupModel';
 import {HomeGroup, MeetingType} from '../../types';
 import Geolocation from '@react-native-community/geolocation';
 import {Picker} from '@react-native-picker/picker';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {selectUserData, fetchUserData} from '../../store/slices/authSlice';
+import {
+  searchGroupsByLocation,
+  selectNearbyGroups,
+  selectGroupsStatus,
+  selectGroupsError,
+} from '../../store/slices/groupsSlice';
+import {GroupModel} from '../../models/GroupModel';
 
 // Define a more specific type for the Home tab navigation
 type HomeTabParams = {
@@ -69,6 +75,11 @@ const GroupSearchScreen: React.FC = () => {
   const userData = useAppSelector(selectUserData);
   const userJoinedGroups = userData?.homeGroups || [];
 
+  // Get groups data from Redux
+  const nearbyGroups = useAppSelector(selectNearbyGroups);
+  const groupsStatus = useAppSelector(selectGroupsStatus);
+  const groupsError = useAppSelector(selectGroupsError);
+
   // Define Meeting Types for Picker
   const meetingTypes: (MeetingType | 'All')[] = [
     'All',
@@ -80,7 +91,7 @@ const GroupSearchScreen: React.FC = () => {
     'Custom',
   ];
 
-  // Fetch Location and Groups on Mount
+  // Fetch Location on Mount
   useEffect(() => {
     requestLocationPermission();
   }, []);
@@ -101,6 +112,28 @@ const GroupSearchScreen: React.FC = () => {
       );
     }
   }, [userLocation, locationError]);
+
+  // Update loading state from Redux
+  useEffect(() => {
+    setLoading(groupsStatus === 'loading');
+  }, [groupsStatus]);
+
+  // Update groups from Redux
+  useEffect(() => {
+    if (nearbyGroups) {
+      setAllGroups(nearbyGroups);
+    }
+  }, [nearbyGroups]);
+
+  // Handle Redux errors
+  useEffect(() => {
+    if (groupsError) {
+      Alert.alert(
+        'Error',
+        'Failed to load nearby groups. Please try again later.',
+      );
+    }
+  }, [groupsError]);
 
   // Filter groups whenever dependencies change
   useEffect(() => {
@@ -153,26 +186,17 @@ const GroupSearchScreen: React.FC = () => {
     );
   };
 
-  const loadNearbyGroups = async () => {
+  const loadNearbyGroups = () => {
     if (!userLocation) return;
-    try {
-      setLoading(true);
-      const nearbyGroups = await GroupModel.searchGroupsByLocation(
-        userLocation.latitude,
-        userLocation.longitude,
-        25,
-      );
-      setAllGroups(nearbyGroups);
-    } catch (error) {
-      console.error('Error loading nearby groups:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load nearby groups. Please try again later.',
-      );
-      setAllGroups([]);
-    } finally {
-      setLoading(false);
-    }
+
+    // Dispatch the searchGroupsByLocation action instead of directly calling GroupModel
+    dispatch(
+      searchGroupsByLocation({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        radius: 25,
+      }),
+    );
   };
 
   const filterGroups = () => {
@@ -362,10 +386,19 @@ const GroupSearchScreen: React.FC = () => {
               <Text style={styles.emptyText}>
                 {!userLocation && !locationError
                   ? 'Enable location services to find nearby groups'
+                  : groupsError
+                  ? 'Error loading groups. Please try again later.'
                   : allGroups.length === 0 && userLocation
                   ? 'No groups found within 25 miles'
                   : 'No groups match your current filters'}
               </Text>
+              {groupsError && (
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={loadNearbyGroups}>
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              )}
             </View>
           }
         />
@@ -515,6 +548,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9E9E9E',
     textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
 

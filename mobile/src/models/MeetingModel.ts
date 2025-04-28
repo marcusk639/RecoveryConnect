@@ -2,6 +2,7 @@ import {Meeting, Location, MeetingSearchInput} from '../types';
 import {FirestoreDocument, MeetingDocument} from '../types/schema';
 import {firestore, auth, functions} from '../services/firebase/config';
 import {generateMeetingHash} from '../utils/hashUtils';
+import Firestore from '@react-native-firebase/firestore';
 
 /**
  * Meeting model for managing meeting data
@@ -18,14 +19,16 @@ export class MeetingModel {
       type: data.type as any, // Cast to MeetingType
       day: data.day,
       time: data.time,
-      street: data.address || '',
+      street: data.street || '',
+      address: data.address || '',
+      groupId: data.groupId,
+      country: data.country,
       city: data.city,
       state: data.state,
       zip: data.zip,
       lat: data.lat,
       lng: data.lng,
       locationName: data.location,
-      types: data.types,
       online: data.isOnline,
       link: data.onlineLink,
       onlineNotes: data.onlineNotes,
@@ -44,7 +47,8 @@ export class MeetingModel {
     if (meeting.type !== undefined) firestoreData.type = meeting.type;
     if (meeting.day !== undefined) firestoreData.day = meeting.day;
     if (meeting.time !== undefined) firestoreData.time = meeting.time;
-    if (meeting.street !== undefined) firestoreData.address = meeting.street;
+    if (meeting.street !== undefined) firestoreData.street = meeting.street;
+    if (meeting.address !== undefined) firestoreData.address = meeting.address;
     if (meeting.city !== undefined) firestoreData.city = meeting.city;
     if (meeting.state !== undefined) firestoreData.state = meeting.state;
     if (meeting.zip !== undefined) firestoreData.zip = meeting.zip;
@@ -52,15 +56,33 @@ export class MeetingModel {
     if (meeting.lng !== undefined) firestoreData.lng = meeting.lng;
     if (meeting.locationName !== undefined)
       firestoreData.location = meeting.locationName;
-    if (meeting.types !== undefined) firestoreData.types = meeting.types;
     if (meeting.online !== undefined) firestoreData.isOnline = meeting.online;
     if (meeting.link !== undefined) firestoreData.onlineLink = meeting.link;
     if (meeting.onlineNotes !== undefined)
       firestoreData.onlineNotes = meeting.onlineNotes;
     if (meeting.verified !== undefined)
-      firestoreData.verified = meeting.verified;
-    if (meeting.addedBy !== undefined) firestoreData.addedBy = meeting.addedBy;
+      if (meeting.addedBy !== undefined)
+        firestoreData.addedBy = meeting.addedBy;
+    if (meeting.groupId !== undefined) firestoreData.groupId = meeting.groupId;
+    if (meeting.createdAt) {
+      try {
+        firestoreData.createdAt = Firestore.Timestamp.fromDate(
+          new Date(meeting.createdAt),
+        );
+      } catch (error) {
+        console.warn('Invalid createdAt date format:', meeting.createdAt);
+      }
+    }
 
+    if (meeting.updatedAt) {
+      try {
+        firestoreData.updatedAt = Firestore.Timestamp.fromDate(
+          new Date(meeting.updatedAt),
+        );
+      } catch (error) {
+        console.warn('Invalid updatedAt date format:', meeting.updatedAt);
+      }
+    }
     return firestoreData;
   }
 
@@ -270,5 +292,19 @@ export class MeetingModel {
       console.error('Error checking if meeting is favorite:', error);
       return false;
     }
+  }
+
+  static async getMeetingsByGroupId(groupId: string): Promise<Meeting[]> {
+    const meetings = await firestore
+      .collection('meetings')
+      .where('groupId', '==', groupId)
+      .get();
+
+    return meetings.docs.map(doc =>
+      MeetingModel.fromFirestore({
+        id: doc.id,
+        data: () => doc.data() as MeetingDocument,
+      }),
+    );
   }
 }

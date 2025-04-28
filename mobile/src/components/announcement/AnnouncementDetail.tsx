@@ -9,6 +9,7 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
+  Button,
 } from 'react-native';
 
 // Types
@@ -268,7 +269,9 @@ const AnnouncementDetail: React.FC<AnnouncementDetailProps> = ({
                     <TouchableOpacity
                       style={[styles.actionButton, styles.deleteButton]}
                       onPress={handleDelete}>
-                      <Text style={styles.deleteButtonText}>Delete</Text>
+                      <View style={{width: '100%', alignItems: 'center'}}>
+                        <Text style={styles.deleteButtonText}>Delete Ann</Text>
+                      </View>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -362,12 +365,16 @@ const styles = StyleSheet.create({
   actionContainer: {
     flexDirection: 'row',
     marginTop: 16,
+    justifyContent: 'flex-start',
   },
   actionButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 4,
     marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 80,
   },
   editButton: {
     backgroundColor: '#E3F2FD',
@@ -375,6 +382,7 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: '#2196F3',
     fontWeight: '600',
+    textAlign: 'center',
   },
   deleteButton: {
     backgroundColor: '#FFEBEE',
@@ -382,6 +390,7 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     color: '#F44336',
     fontWeight: '600',
+    textAlign: 'center',
   },
   inputLabel: {
     fontSize: 14,

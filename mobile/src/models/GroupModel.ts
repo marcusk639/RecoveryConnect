@@ -10,6 +10,7 @@ import {calculateDistance} from '../utils/locationUtils';
 import {Transaction} from '../types/domain';
 import {MemberModel} from './MemberModel';
 import {MeetingModel} from './MeetingModel';
+import {cloneDeep, zip} from 'lodash';
 
 /**
  * Group model for managing group data
@@ -210,30 +211,20 @@ export class GroupModel {
 
       const newGroup = {...defaultGroup, ...groupData};
       delete newGroup.id; // Remove ID as Firestore will generate one
-      delete newGroup.meetings; // Remove meetings as they're stored separately
 
-      // Ensure lat, lng, and geohash are set if we have location data
-      // First, try to use provided lat/lng
-      let hasLocationData = false;
-      if (groupData.lat && groupData.lng) {
-        // If lat and lng are provided directly, use them
-        newGroup.lat = groupData.lat;
-        newGroup.lng = groupData.lng;
-        hasLocationData = true;
-      } else if (groupData.address) {
-        // TODO: no lat/lng but we have an address, we should geocode it
-        // For now, log a warning - in a real implementation, you would
-        // call a geocoding service here to get lat/lng from the address
-        console.warn('Group created with address but no lat/lng coordinates');
-      } else {
-        console.warn('Group created without location data');
-      }
+      let meetings = cloneDeep(newGroup.meetings);
+      delete newGroup.meetings; // Remove meetings as they're stored separately
 
       const docRef = await firestore()
         .collection('groups')
         .add(GroupModel.toFirestore(newGroup));
 
-      await MeetingModel.createBatch(newGroup.meetings || []);
+      // Add groupId to each meeting
+      meetings = meetings?.map(meeting => ({
+        ...meeting,
+        groupId: docRef.id,
+      }));
+      await MeetingModel.createBatch(meetings || []);
 
       // Get user data
       const userDoc = await firestore()
@@ -244,21 +235,6 @@ export class GroupModel {
 
       // Add current user as a member using the MemberModel
       await MemberModel.addMember(docRef.id, currentUser.uid, userData, true);
-
-      // If we have location data, call the Cloud Function to set the geohash
-      if (hasLocationData) {
-        try {
-          const functions = firestore().app.functions('us-central1');
-          const ensureGeolocation = functions.httpsCallable(
-            'ensureGroupGeolocation',
-          );
-          await ensureGeolocation({groupId: docRef.id});
-          console.log('Successfully set geohash for group');
-        } catch (error) {
-          console.error('Failed to set geohash for group:', error);
-          // Don't throw here, as the group was still created successfully
-        }
-      }
 
       const createdGroup = await docRef.get();
       return {
@@ -689,14 +665,14 @@ export class GroupModel {
     {memberId: string; memberName: string; date: Date; years: number}[]
   > {
     try {
-      // Get all members with sobriety dates
+      // Get all members with sobriety dates from top-level members collection
       const membersWithDates: {id: string; name: string; sobrietyDate: Date}[] =
         [];
 
       const membersSnapshot = await firestore()
-        .collection('groups')
-        .doc(groupId)
         .collection('members')
+        .where('groupId', '==', groupId)
+        .where('sobrietyDate', '!=', null)
         .get();
 
       membersSnapshot.docs.forEach(doc => {
@@ -841,7 +817,7 @@ export class GroupModel {
   }
 
   /**
-   * Search groups by location using a Cloud Function (assumed)
+   * Search groups by location using Cloud Function
    * @param latitude User's latitude
    * @param longitude User's longitude
    * @param radius Radius in miles
@@ -853,38 +829,28 @@ export class GroupModel {
     radius: number,
   ): Promise<HomeGroup[]> {
     try {
-      // TODO: Replace with actual Cloud Function call
-      console.warn(
-        'searchGroupsByLocation: Cloud Function call not implemented yet. Returning empty array.',
-      );
-      // Example of how you might call a Cloud Function:
-      // const functions = firebase.app().functions('your-region'); // Get functions instance
-      // const searchFunction = functions.httpsCallable('searchGroupsByLocation');
-      // const result = await searchFunction({ latitude, longitude, radius });
-      // return result.data as HomeGroup[]; // Assuming the function returns data in this format
-
-      // --- TEMPORARY FALLBACK (REMOVE LATER) ---
-      // Fetch all and filter client-side (inefficient, for testing only)
-      const allGroups = await this.getAllGroups();
-      const filtered = allGroups.filter(group => {
-        if (group.lat && group.lng) {
-          const distance = calculateDistance(
-            latitude,
-            longitude,
-            group.lat,
-            group.lng,
-          );
-          return distance <= radius;
-        }
-        return false;
-      });
       console.log(
-        `Temporary client-side filter found ${filtered.length} groups within ${radius} miles.`,
+        `Calling searchGroupsByLocation cloud function with lat=${latitude}, lng=${longitude}, radius=${radius}`,
       );
-      return filtered;
-      // --- END TEMPORARY FALLBACK ---
 
-      // return []; // Return empty when Cloud Function is ready
+      // Call the Cloud Function to search groups by location
+      const functions = firestore().app.functions('us-central1');
+      const searchFunction = functions.httpsCallable('searchGroupsByLocation');
+
+      const result = await searchFunction({
+        lat: latitude,
+        lng: longitude,
+        radius: radius,
+      });
+
+      console.log(`Cloud function returned ${result.data?.length || 0} groups`);
+
+      const groups = result.data || [];
+
+      console.log(
+        `Found ${groups.length} groups within ${radius} miles using cloud function`,
+      );
+      return groups;
     } catch (error) {
       console.error('Error searching groups by location:', error);
       throw error;

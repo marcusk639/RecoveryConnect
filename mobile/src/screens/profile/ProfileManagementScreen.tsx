@@ -20,7 +20,7 @@ import {useNavigation} from '@react-navigation/native';
 import auth from '@react-native-firebase/auth';
 import storage from '@react-native-firebase/storage';
 import {launchImageLibrary} from 'react-native-image-picker';
-import {MainStackParamList, RootStackParamList} from '../../types';
+import {RootStackParamList} from '../../types';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import DatePicker from '../../components/common/DatePicker';
@@ -34,10 +34,17 @@ import {
   updateUserPrivacySettings,
   updateUserNotificationSettings,
   updateUserPhoto,
+  fetchUserData,
 } from '../../store/slices/authSlice';
 
+// Define the navigation param list for the Profile stack
+type ProfileStackParamList = {
+  ProfileMain: undefined;
+  ProfileManagement: undefined;
+};
+
 type ProfileManagementScreenProps = {
-  navigation: StackNavigationProp<MainStackParamList, 'Profile'>;
+  navigation: StackNavigationProp<ProfileStackParamList, 'ProfileManagement'>;
 };
 
 const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
@@ -76,13 +83,17 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
 
   // Load user data from Redux store and initialize local state
   useEffect(() => {
+    // Get current user
+    const currentUser = auth().currentUser;
+
+    if (!currentUser) {
+      rootNavigation.navigate('Auth');
+      return;
+    }
+
+    // If userData is not available, fetch it
     if (!userData) {
-      // If userData is not available (e.g., direct navigation), redirect or fetch.
-      // Assuming ProfileScreen handles initial fetching.
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        rootNavigation.navigate('Auth');
-      }
+      dispatch(fetchUserData(currentUser.uid));
       return;
     }
 
@@ -111,7 +122,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
     setCelebrationNotifications(
       userData.notificationSettings?.celebrations !== false,
     );
-  }, [userData, rootNavigation]);
+  }, [userData, rootNavigation, dispatch]);
 
   // Show errors from Redux
   useEffect(() => {
@@ -172,8 +183,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
 
       // Local state update for UI responsiveness (already updated via useEffect)
       // setPhotoUrl(downloadUrl);
-
-      Alert.alert('Success', 'Profile photo updated successfully');
     } catch (error) {
       console.error('Error uploading photo:', error);
       Alert.alert('Error', 'Failed to upload photo. Please try again.');
@@ -248,7 +257,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
         }),
       ).unwrap();
       setEditingName(false);
-      Alert.alert('Success', 'Display name updated successfully');
     } catch (error: any) {
       console.error('Error updating display name:', error);
       Alert.alert(
@@ -263,7 +271,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
     try {
       await dispatch(updateUserRecoveryDate(recoveryDate)).unwrap();
       setEditingRecoveryDate(false);
-      Alert.alert('Success', 'Recovery date updated successfully');
     } catch (error: any) {
       console.error('Error updating recovery date:', error);
       Alert.alert(
@@ -282,7 +289,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
           allowDirectMessages,
         }),
       ).unwrap();
-      Alert.alert('Success', 'Privacy settings updated successfully');
     } catch (error: any) {
       console.error('Error updating privacy settings:', error);
       Alert.alert(
@@ -309,7 +315,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
             celebrations: celebrationNotifications,
           }),
         ).unwrap();
-        Alert.alert('Success', 'Notification settings updated successfully');
       } else {
         Alert.alert('Info', 'No changes were made to notification settings.');
       }
@@ -414,8 +419,8 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
                     />
                   </View>
                   <Text style={styles.helperText}>
-                    If enabled, only your first initial will be shown to other
-                    users (e.g., "J.")
+                    Only your first name and last initial will be shown to other
+                    users (e.g., "John S.")
                   </Text>
                   <Button
                     title="Save Name"

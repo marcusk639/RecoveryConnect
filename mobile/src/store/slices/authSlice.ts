@@ -347,32 +347,20 @@ const authSlice = createSlice({
         state.error = (action.payload as string) || 'Failed to fetch user data';
       })
 
-      // Update display name
-      .addCase(updateUserDisplayName.pending, state => {
-        state.status = 'loading';
-      })
       .addCase(updateUserDisplayName.fulfilled, (state, action) => {
-        state.status = 'succeeded';
         state.userData = action.payload;
         state.error = null;
       })
       .addCase(updateUserDisplayName.rejected, (state, action) => {
-        state.status = 'failed';
         state.error =
           (action.payload as string) || 'Failed to update display name';
       })
 
-      // Update recovery date
-      .addCase(updateUserRecoveryDate.pending, state => {
-        state.status = 'loading';
-      })
       .addCase(updateUserRecoveryDate.fulfilled, (state, action) => {
-        state.status = 'succeeded';
         state.userData = action.payload;
         state.error = null;
       })
       .addCase(updateUserRecoveryDate.rejected, (state, action) => {
-        state.status = 'failed';
         state.error =
           (action.payload as string) || 'Failed to update recovery date';
       })
@@ -408,17 +396,11 @@ const authSlice = createSlice({
           'Failed to update notification settings';
       })
 
-      // Update user photo
-      .addCase(updateUserPhoto.pending, state => {
-        state.status = 'loading';
-      })
       .addCase(updateUserPhoto.fulfilled, (state, action) => {
-        state.status = 'succeeded';
         state.userData = action.payload;
         state.error = null;
       })
       .addCase(updateUserPhoto.rejected, (state, action) => {
-        state.status = 'failed';
         state.error =
           (action.payload as string) || 'Failed to update profile photo';
       })

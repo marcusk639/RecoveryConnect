@@ -17,6 +17,7 @@ import Geolocation from '@react-native-community/geolocation';
 import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
 import {GooglePlacesAutocomplete} from 'react-native-google-places-autocomplete';
 import {PERMISSIONS, request, RESULTS} from 'react-native-permissions';
+import theme from '../../theme';
 
 // You would normally store this in a config file or environment variable
 // For security, use API key restrictions in Google Cloud Console
@@ -43,6 +44,7 @@ interface LocationPickerProps {
     city?: string;
     state?: string;
     zip?: string;
+    country?: string;
   }) => void;
   error?: string;
   label?: string;
@@ -70,7 +72,16 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
     if (initialLocation && initialAddress) {
       setLocation(initialLocation);
       setAddress(initialAddress);
+      placesRef.current.setAddressText(initialAddress);
       setShowMap(true);
+    } else if (initialAddress) {
+      // If we have an address but no coordinates, still show the address
+      setAddress(initialAddress);
+      placesRef.current.setAddressText(initialAddress);
+      if (!showMap) {
+        // If we don't have coordinates, we'll hide the map but still show the address text
+        console.log('Showing address without map:', initialAddress);
+      }
     }
   }, [initialLocation, initialAddress]);
 
@@ -273,7 +284,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
         query={{
           key: GOOGLE_MAPS_API_KEY,
           language: 'en',
-          types: 'establishment',
+          types: 'address',
         }}
         fetchDetails={true}
         onFail={error => console.error('Places API Error:', error)}
@@ -284,12 +295,15 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
           predefinedPlacesDescription: {
             color: '#1976D2',
           },
+          row: styles.autocompleteRow,
+          description: styles.autocompleteDescription,
         }}
         textInputProps={{
           placeholderTextColor: '#757575',
         }}
         debounce={300}
         enablePoweredByContainer={false}
+        listViewDisplayed={false}
       />
 
       {/* Current Location Button */}
@@ -341,12 +355,12 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
       )}
 
       {/* Location Details */}
-      {location && address && (
+      {(location && address) || (!location && address) ? (
         <View style={styles.locationDetailsContainer}>
           {placeName && <Text style={styles.placeNameText}>{placeName}</Text>}
           <Text style={styles.addressText}>{address}</Text>
         </View>
-      )}
+      ) : null}
 
       <Text style={styles.helperText}>
         Search for a location or use your current location. You can also drag
@@ -361,10 +375,9 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#424242',
-    marginBottom: 12,
+    fontSize: theme.fontSizes.sm,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.xs,
   },
   autocompleteContainer: {
     flex: 0,
@@ -440,6 +453,12 @@ const styles = StyleSheet.create({
   helperText: {
     color: '#757575',
     fontSize: 12,
+  },
+  autocompleteRow: {
+    // Add appropriate styles for the row
+  },
+  autocompleteDescription: {
+    // Add appropriate styles for the description
   },
 });
 

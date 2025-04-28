@@ -7,7 +7,6 @@ export const ratsFirestore = app.firestore();
 
 // const point = new GeoPoint()
 export const meetingCollection = ratsFirestore.collection("meetings");
-export const stripeEventCollection = ratsFirestore.collection("stripeEvents");
 
 /**
  * Gets houses where attribute == value

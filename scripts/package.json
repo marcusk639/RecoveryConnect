@@ -1,18 +1,17 @@
 {
   "name": "recovery-connect-scripts",
   "version": "1.0.0",
-  "description": "Utility scripts for RecoveryConnect",
-  "main": "migrateMembers.js",
+  "description": "Scripts for testing and managing Recovery Connect app",
+  "main": "index.js",
   "scripts": {
-    "migrate": "node migrateMembers.js --migrate",
-    "migrate-dry-run": "node migrateMembers.js --migrate --dry-run",
-    "cleanup": "node migrateMembers.js --cleanup"
+    "test-chat": "ts-node testChatFunctionality.ts"
   },
   "dependencies": {
-    "commander": "^11.1.0",
-    "firebase-admin": "^11.11.0"
+    "firebase-admin": "^11.5.0"
   },
-  "engines": {
-    "node": ">=16.0.0"
+  "devDependencies": {
+    "@types/node": "^18.15.11",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4"
   }
 }

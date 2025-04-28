@@ -14,6 +14,7 @@ interface GroupsState {
   items: Record<string, HomeGroup>;
   memberGroups: string[];
   adminGroups: string[];
+  nearbyGroups: HomeGroup[];
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   lastFetched: Record<string, number>;
@@ -24,6 +25,7 @@ const initialState: GroupsState = {
   items: {},
   memberGroups: [],
   adminGroups: [],
+  nearbyGroups: [],
   status: 'idle',
   error: null,
   lastFetched: {},
@@ -108,11 +110,9 @@ export const createGroup = createAsyncThunk(
   async (
     {
       groupData,
-      meetings,
       onSuccess,
     }: {
       groupData: Partial<HomeGroup>;
-      meetings: Meeting[];
       onSuccess?: (group: HomeGroup) => void;
     },
     {rejectWithValue},
@@ -125,13 +125,6 @@ export const createGroup = createAsyncThunk(
 
       // Create the group
       const group = await GroupModel.create(groupData);
-
-      // Create or update all meetings linked to this group
-      await Promise.all(
-        meetings.map(meeting =>
-          GroupModel.addMeetingToGroup(group.id!, meeting),
-        ),
-      );
 
       // Call onSuccess callback if provided
       if (onSuccess && typeof onSuccess === 'function') {
@@ -193,6 +186,36 @@ export const leaveGroup = createAsyncThunk(
       return groupId;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to leave group');
+    }
+  },
+);
+
+// Add new thunk for searching groups by location
+export const searchGroupsByLocation = createAsyncThunk(
+  'groups/searchByLocation',
+  async (
+    {
+      latitude,
+      longitude,
+      radius = 25,
+    }: {
+      latitude: number;
+      longitude: number;
+      radius?: number;
+    },
+    {rejectWithValue},
+  ) => {
+    try {
+      const groups = await GroupModel.searchGroupsByLocation(
+        latitude,
+        longitude,
+        radius,
+      );
+      return groups;
+    } catch (error: any) {
+      return rejectWithValue(
+        error.message || 'Failed to search groups by location',
+      );
     }
   },
 );
@@ -348,6 +371,29 @@ const groupsSlice = createSlice({
       .addCase(leaveGroup.rejected, (state, action) => {
         state.status = 'failed';
         state.error = (action.payload as string) || 'Failed to leave group';
+      })
+
+      // Search groups by location
+      .addCase(searchGroupsByLocation.pending, state => {
+        state.status = 'loading';
+      })
+      .addCase(searchGroupsByLocation.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.nearbyGroups = action.payload;
+
+        // Also add groups to items dictionary
+        action.payload.forEach((group: HomeGroup) => {
+          if (group.id) {
+            state.items[group.id] = group;
+          }
+        });
+
+        state.error = null;
+      })
+      .addCase(searchGroupsByLocation.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error =
+          (action.payload as string) || 'Failed to search nearby groups';
       });
   },
 });
@@ -380,5 +426,8 @@ export const selectAdminGroups = createSelector(
 
 export const selectGroupsStatus = (state: RootState) => state.groups.status;
 export const selectGroupsError = (state: RootState) => state.groups.error;
+
+export const selectNearbyGroups = (state: RootState) =>
+  state.groups.nearbyGroups;
 
 export default groupsSlice.reducer;

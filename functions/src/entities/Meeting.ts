@@ -10,6 +10,7 @@ export class Meeting {
   types?: string[];
   lat?: number;
   lng?: number;
+  country?: string;
   locationName?: string; // or the directions, if NA meeting
   type?: MeetingType;
   Location?: string[]; // specific to NA meetings
@@ -18,6 +19,14 @@ export class Meeting {
   link?: string;
   onlineNotes?: string;
   format: string;
+  id?: string;
+  address?: string;
+  location?: string;
+  verified?: boolean;
+  addedBy?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  groupId?: string; // Optional reference to associated group
 }
 
 export type MeetingType =

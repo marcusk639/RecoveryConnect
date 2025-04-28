@@ -18,6 +18,9 @@ export type GroupStackParamList = {
   CreateGroup: {meeting?: Meeting};
   GroupSchedule: {groupId: string; groupName: string};
   AddTransaction: {groupId: string; groupName: string};
+  GroupChat: {groupId: string; groupName: string};
+  GroupChatMediaPicker: {groupId: string};
+  GroupChatInfo: {groupId: string; groupName: string};
 };
 
 // Main Tab Navigation Params
