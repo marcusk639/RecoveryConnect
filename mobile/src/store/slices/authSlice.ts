@@ -3,6 +3,7 @@ import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {RootState} from '../index';
 import {UserModel} from '../../models/UserModel';
 import {MemberModel} from '../../models/MemberModel';
+import firestore from '@react-native-firebase/firestore';
 
 // Define the state structure
 interface AuthState {
@@ -134,37 +135,41 @@ export const updateUserRecoveryDate = createAsyncThunk(
 );
 
 export const updateUserPrivacySettings = createAsyncThunk(
-  'auth/updatePrivacySettings',
+  'auth/updateUserPrivacySettings',
   async (
-    settings: {showRecoveryDate: boolean; allowDirectMessages: boolean},
-    {getState, rejectWithValue},
+    {
+      showRecoveryDate,
+      showPhoneNumber,
+      allowDirectMessages,
+    }: {
+      showRecoveryDate: boolean;
+      showPhoneNumber: boolean;
+      allowDirectMessages: boolean;
+    },
+    {rejectWithValue},
   ) => {
     try {
-      const state = getState() as RootState;
       const currentUser = auth().currentUser;
-
       if (!currentUser) {
-        throw new Error('No authenticated user');
+        return rejectWithValue('No authenticated user found');
       }
 
-      // Update privacy settings in user document
-      await UserModel.updatePrivacySettings(currentUser.uid, settings);
+      // Update in Firestore user document
+      await firestore().collection('users').doc(currentUser.uid).update({
+        'privacySettings.showRecoveryDate': showRecoveryDate,
+        'privacySettings.showPhoneNumber': showPhoneNumber,
+        'privacySettings.allowDirectMessages': allowDirectMessages,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
 
-      // Update showSobrietyDate in all member documents
-      if (
-        settings.showRecoveryDate !==
-        state.auth.userData?.privacySettings?.showRecoveryDate
-      ) {
-        await MemberModel.updateUserAcrossMemberships(currentUser.uid, {
-          showSobrietyDate: settings.showRecoveryDate,
-        });
-      }
+      // Also update the showSobrietyDate and showPhoneNumber fields in all member documents
+      // for this user across all groups
+      await MemberModel.updateUserAcrossMemberships(currentUser.uid, {
+        showSobrietyDate: showRecoveryDate,
+        showPhoneNumber: showPhoneNumber,
+      });
 
-      // Return updated user data
-      return {
-        ...state.auth.userData,
-        privacySettings: settings,
-      };
+      return {showRecoveryDate, showPhoneNumber, allowDirectMessages};
     } catch (error: any) {
       return rejectWithValue(
         error.message || 'Failed to update privacy settings',
@@ -218,10 +223,15 @@ export const updateUserPhoto = createAsyncThunk(
         throw new Error('No authenticated user');
       }
 
-      // Update user document in Firestore
-      await UserModel.update(currentUser.uid, {
-        photoUrl: photoUrl,
-      });
+      // Use new helper method to update photo in both Auth and Firestore
+      const updatedUser = await UserModel.updatePhotoURL(
+        currentUser.uid,
+        photoUrl,
+      );
+
+      if (!updatedUser) {
+        throw new Error('Failed to update user photo');
+      }
 
       // Update profile photo across memberships
       await MemberModel.updateUserAcrossMemberships(currentUser.uid, {
@@ -229,10 +239,7 @@ export const updateUserPhoto = createAsyncThunk(
       });
 
       // Return updated user data
-      return {
-        ...state.auth.userData,
-        photoUrl: photoUrl,
-      };
+      return updatedUser;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to update profile photo');
     }
@@ -303,6 +310,28 @@ export const signOut = createAsyncThunk(
       return null;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to sign out');
+    }
+  },
+);
+
+export const updateUserPhoneNumber = createAsyncThunk(
+  'auth/updateUserPhoneNumber',
+  async (phoneNumber: string, {rejectWithValue}) => {
+    try {
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        return rejectWithValue('No authenticated user found');
+      }
+
+      // Update in Firestore
+      await firestore().collection('users').doc(currentUser.uid).update({
+        phoneNumber,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {phoneNumber};
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to update phone number');
     }
   },
 );
@@ -449,6 +478,23 @@ const authSlice = createSlice({
       .addCase(signOut.rejected, (state, action) => {
         state.status = 'failed';
         state.error = (action.payload as string) || 'Failed to sign out';
+      })
+
+      // Update phone number
+      .addCase(updateUserPhoneNumber.pending, state => {
+        state.status = 'loading';
+      })
+      .addCase(updateUserPhoneNumber.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        if (state.userData) {
+          state.userData.phoneNumber = action.payload.phoneNumber;
+        }
+        state.error = null;
+      })
+      .addCase(updateUserPhoneNumber.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error =
+          (action.payload as string) || 'Failed to update phone number';
       });
   },
 });

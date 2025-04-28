@@ -25,6 +25,7 @@ import {
   selectAuthError,
   signOut,
   fetchUserData,
+  updateUserPrivacySettings,
 } from '../../store/slices/authSlice';
 import {UserModel} from '../../models/UserModel';
 
@@ -51,6 +52,7 @@ interface UserProfile {
   };
   privacySettings: {
     showRecoveryDate: boolean;
+    showPhoneNumber: boolean;
     allowDirectMessages: boolean;
   };
 }
@@ -75,6 +77,7 @@ const ProfileScreen: React.FC = () => {
     },
     privacySettings: {
       showRecoveryDate: false,
+      showPhoneNumber: false,
       allowDirectMessages: true,
     },
   });
@@ -103,6 +106,7 @@ const ProfileScreen: React.FC = () => {
         },
         privacySettings: {
           showRecoveryDate: userData.privacySettings?.showRecoveryDate ?? false,
+          showPhoneNumber: userData.privacySettings?.showPhoneNumber ?? false,
           allowDirectMessages:
             userData.privacySettings?.allowDirectMessages ?? true,
         },
@@ -207,18 +211,43 @@ const ProfileScreen: React.FC = () => {
     // In a real app, this would also update Firestore
   };
 
-  const togglePrivacySetting = (
+  const togglePrivacySetting = async (
     setting: keyof UserProfile['privacySettings'],
   ) => {
+    // Update local state immediately for responsive UI
+    const newValue = !userProfile.privacySettings[setting];
+
     setUserProfile({
       ...userProfile,
       privacySettings: {
         ...userProfile.privacySettings,
-        [setting]: !userProfile.privacySettings[setting],
+        [setting]: newValue,
       },
     });
 
-    // In a real app, this would also update Firestore
+    try {
+      // Update Firestore using Redux action
+      await dispatch(
+        updateUserPrivacySettings({
+          ...userProfile.privacySettings,
+          [setting]: newValue,
+        }),
+      ).unwrap();
+    } catch (error) {
+      console.error('Error updating privacy settings:', error);
+      Alert.alert(
+        'Error',
+        'Failed to update privacy settings. Please try again.',
+      );
+
+      // Revert local state on error
+      setUserProfile({
+        ...userProfile,
+        privacySettings: {
+          ...userProfile.privacySettings,
+        },
+      });
+    }
   };
 
   const formatRecoveryDate = (dateString?: string): string => {
@@ -433,10 +462,10 @@ const ProfileScreen: React.FC = () => {
         </View>
 
         {/* Notification Settings */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notification Settings</Text>
 
-          {/* <View style={styles.settingItem}>
+          <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Meeting Reminders</Text>
               <Text style={styles.settingDescription}>
@@ -452,50 +481,14 @@ const ProfileScreen: React.FC = () => {
                 userProfile.notifications.meetings ? '#2196F3' : '#FFFFFF'
               }
             />
-          </View> */}
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Announcements</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications for group announcements
-              </Text>
-            </View>
-
-            <Switch
-              value={userProfile.notifications.announcements}
-              onValueChange={() => toggleNotificationSetting('announcements')}
-              trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-              thumbColor={
-                userProfile.notifications.announcements ? '#2196F3' : '#FFFFFF'
-              }
-            />
           </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Celebrations</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications for sobriety celebrations
-              </Text>
-            </View>
-
-            <Switch
-              value={userProfile.notifications.celebrations}
-              onValueChange={() => toggleNotificationSetting('celebrations')}
-              trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-              thumbColor={
-                userProfile.notifications.celebrations ? '#2196F3' : '#FFFFFF'
-              }
-            />
-          </View>
-        </View>
+        </View> */}
 
         {/* Privacy Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Privacy Settings</Text>
 
-          {/* <View style={styles.settingItem}>
+          <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Show Recovery Date</Text>
               <Text style={styles.settingDescription}>
@@ -513,7 +506,27 @@ const ProfileScreen: React.FC = () => {
                   : '#FFFFFF'
               }
             />
-          </View> */}
+          </View>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Show Phone Number</Text>
+              <Text style={styles.settingDescription}>
+                Allow others to see your phone number
+              </Text>
+            </View>
+
+            <Switch
+              value={userProfile.privacySettings.showPhoneNumber}
+              onValueChange={() => togglePrivacySetting('showPhoneNumber')}
+              trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+              thumbColor={
+                userProfile.privacySettings.showPhoneNumber
+                  ? '#2196F3'
+                  : '#FFFFFF'
+              }
+            />
+          </View>
 
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>

@@ -1,6 +1,7 @@
 import firestore from '@react-native-firebase/firestore';
 import {GroupMember} from '../types';
 import {GroupMemberDocument} from '../types/schema';
+import auth from '@react-native-firebase/auth';
 
 /**
  * Member model for managing group membership data in top-level collection
@@ -14,16 +15,19 @@ export class MemberModel {
     return {
       id: doc.id,
       groupId: data.groupId,
+      userId: data.userId || doc.id.split('_')[1] || '',
       name: data.displayName,
-      email: data.email,
-      photoURL: data.photoURL,
       isAdmin: data.isAdmin || false,
       position: data.position,
       sobrietyDate: data.sobrietyDate
         ? data.sobrietyDate.toDate().toISOString()
         : undefined,
+      phoneNumber: data.phoneNumber,
+      showSobrietyDate: data.showSobrietyDate || true,
+      showPhoneNumber: data.showPhoneNumber || true,
       joinedAt: data.joinedAt ? data.joinedAt.toDate() : new Date(),
-      showSobrietyDate: data.showSobrietyDate || false,
+      email: data.email,
+      photoUrl: data.photoUrl,
     };
   }
 
@@ -37,19 +41,22 @@ export class MemberModel {
       groupId: member.groupId || '',
     };
 
+    if (member.userId) firestoreData.userId = member.userId;
     if (member.name) firestoreData.displayName = member.name;
-    if (member.email) firestoreData.email = member.email;
-    if (member.photoURL) firestoreData.photoURL = member.photoURL;
     if (member.isAdmin !== undefined) firestoreData.isAdmin = member.isAdmin;
     if (member.position) firestoreData.position = member.position;
     if (member.sobrietyDate)
       firestoreData.sobrietyDate = firestore.Timestamp.fromDate(
         new Date(member.sobrietyDate),
       );
-    if (member.joinedAt)
-      firestoreData.joinedAt = firestore.Timestamp.fromDate(member.joinedAt);
+    if (member.phoneNumber !== undefined)
+      firestoreData.phoneNumber = member.phoneNumber;
     if (member.showSobrietyDate !== undefined)
       firestoreData.showSobrietyDate = member.showSobrietyDate;
+    if (member.showPhoneNumber !== undefined)
+      firestoreData.showPhoneNumber = member.showPhoneNumber;
+    if (member.joinedAt)
+      firestoreData.joinedAt = firestore.Timestamp.fromDate(member.joinedAt);
 
     return firestoreData;
   }
@@ -85,7 +92,7 @@ export class MemberModel {
       const membershipQuery = await firestore()
         .collection('members')
         .where('groupId', '==', groupId)
-        .where(firestore.FieldPath.documentId(), '==', userId)
+        .where('userId', '==', userId)
         .get();
 
       if (!membershipQuery.empty) {
@@ -93,23 +100,32 @@ export class MemberModel {
         return;
       }
 
+      const authUser = auth().currentUser;
+      const phoneNumber = authUser?.phoneNumber;
+
+      // Get the photoURL from userData or from the auth user as fallback
+      const photoUrl = userData?.photoUrl || authUser?.photoURL || null;
+
       // Add member to top-level members collection
-      const memberDoc = {
+      const memberDoc: GroupMember = {
         id: userId,
+        userId: userId,
         groupId: groupId,
-        displayName: userData?.displayName || 'Anonymous',
-        email: userData?.email,
-        photoURL: userData?.photoURL,
-        joinedAt: firestore.FieldValue.serverTimestamp(),
+        name: userData?.displayName || authUser?.displayName || 'Anonymous',
+        joinedAt: new Date(),
         sobrietyDate: userData?.recoveryDate,
+        phoneNumber: userData?.phoneNumber || phoneNumber,
+        email: userData?.email || authUser?.email,
         isAdmin: isAdmin,
-        showSobrietyDate: true,
+        showSobrietyDate: userData?.privacySettings?.showRecoveryDate || true,
+        showPhoneNumber: userData?.privacySettings?.showPhoneNumber || true,
+        photoUrl: photoUrl,
       };
 
       await firestore()
         .collection('members')
         .doc(`${groupId}_${userId}`)
-        .set(memberDoc);
+        .set(MemberModel.toFirestore(memberDoc));
 
       // Update group memberCount
       await firestore()
@@ -312,12 +328,16 @@ export class MemberModel {
     userId: string,
   ): Promise<boolean> {
     try {
-      const memberDoc = await firestore()
+      // Check using both methods for compatibility during migration
+      // First try the modern way with userId field
+      const memberQuery = await firestore()
         .collection('members')
-        .doc(`${groupId}_${userId}`)
+        .where('groupId', '==', groupId)
+        .where('userId', '==', userId)
+        .limit(1)
         .get();
 
-      return memberDoc.exists;
+      return !memberQuery.empty;
     } catch (error) {
       console.error('Error checking if user is a member:', error);
       return false;
@@ -329,10 +349,10 @@ export class MemberModel {
    */
   static async getUserGroups(userId: string): Promise<string[]> {
     try {
+      // Modern approach using userId field
       const membersSnapshot = await firestore()
         .collection('members')
-        .where(firestore.FieldPath.documentId(), '>=', `_${userId}`)
-        .where(firestore.FieldPath.documentId(), '<=', `_${userId}\uf8ff`)
+        .where('userId', '==', userId)
         .get();
 
       return membersSnapshot.docs.map(doc => doc.data().groupId);
@@ -405,39 +425,18 @@ export class MemberModel {
    */
   static async getUserMemberships(userId: string): Promise<GroupMember[]> {
     try {
-      // Get all members where userId matches the suffix pattern of document ID
-      const queryResults = [];
+      // Use the userId field for direct querying
+      const membersSnapshot = await firestore()
+        .collection('members')
+        .where('userId', '==', userId)
+        .get();
 
-      // Perform a paginated scan of the collection
-      // This approach is more scalable for large collections
-      let lastDoc = null;
-      const batchSize = 100;
-      let hasMore = true;
-
-      while (hasMore) {
-        let query = firestore().collection('members').limit(batchSize);
-
-        if (lastDoc) {
-          query = query.startAfter(lastDoc);
-        }
-
-        const snapshot = await query.get();
-
-        if (snapshot.empty || snapshot.docs.length < batchSize) {
-          hasMore = false;
-        } else {
-          lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        }
-
-        // Filter documents where ID ends with _userId
-        const matchingDocs = snapshot.docs.filter(doc =>
-          doc.id.endsWith(`_${userId}`),
-        );
-        queryResults.push(...matchingDocs);
-      }
+      console.log(
+        `Found ${membersSnapshot.docs.length} memberships for user ${userId}`,
+      );
 
       // Convert to GroupMember objects
-      return queryResults.map(doc => this.fromFirestore(doc));
+      return membersSnapshot.docs.map(doc => this.fromFirestore(doc));
     } catch (error) {
       console.error('Error getting user memberships:', error);
       throw error;
@@ -446,6 +445,7 @@ export class MemberModel {
 
   /**
    * Update user's information across all their memberships
+   * Uses the most efficient approach possible with Firestore
    */
   static async updateUserAcrossMemberships(
     userId: string,
@@ -455,70 +455,115 @@ export class MemberModel {
       photoURL?: string;
       email?: string;
       showSobrietyDate?: boolean;
+      phoneNumber?: string;
+      showPhoneNumber?: boolean;
     },
   ): Promise<void> {
     try {
       // Log the start of the operation for debugging
       console.log(`Updating membership documents for user ${userId}`);
 
-      // Get matching document IDs using the getUserMemberships method
-      const userMemberships = await this.getUserMemberships(userId);
+      // Use the userId field for direct querying
+      const membersSnapshot = await firestore()
+        .collection('members')
+        .where('userId', '==', userId)
+        .get();
+
+      console.log(
+        `Found ${membersSnapshot.docs.length} member documents to update`,
+      );
 
       // If no memberships found, exit early
-      if (userMemberships.length === 0) {
+      if (membersSnapshot.empty) {
         console.log('No memberships found for user', userId);
         return;
       }
 
-      console.log(`Found ${userMemberships.length} memberships to update`);
+      // Prepare the update object once - same update will be applied to all documents
+      const updates: Record<string, any> = {};
 
-      // Batch update all memberships
-      const batch = firestore().batch();
-      let updateCount = 0;
-
-      for (const membership of userMemberships) {
-        // The document ID should be ${groupId}_${userId}
-        const docId = `${membership.groupId}_${userId}`;
-        const memberRef = firestore().collection('members').doc(docId);
-        const updates: Record<string, any> = {};
-
-        if (userData.displayName !== undefined) {
-          updates.displayName = userData.displayName;
-        }
-
-        if (userData.sobrietyDate !== undefined) {
-          updates.sobrietyDate = userData.sobrietyDate
-            ? firestore.Timestamp.fromDate(new Date(userData.sobrietyDate))
-            : null;
-        }
-
-        if (userData.photoURL !== undefined) {
-          updates.photoURL = userData.photoURL;
-        }
-
-        if (userData.email !== undefined) {
-          updates.email = userData.email;
-        }
-
-        if (userData.showSobrietyDate !== undefined) {
-          updates.showSobrietyDate = userData.showSobrietyDate;
-        }
-
-        // Only update if there are changes
-        if (Object.keys(updates).length > 0) {
-          batch.update(memberRef, updates);
-          updateCount++;
-        }
+      if (userData.displayName !== undefined) {
+        updates.displayName = userData.displayName;
       }
 
-      // Commit the batch if there are updates
-      if (updateCount > 0) {
+      if (userData.sobrietyDate !== undefined) {
+        updates.sobrietyDate = userData.sobrietyDate
+          ? firestore.Timestamp.fromDate(new Date(userData.sobrietyDate))
+          : null;
+      }
+
+      if (userData.photoURL !== undefined) {
+        updates.photoURL = userData.photoURL;
+      }
+
+      if (userData.email !== undefined) {
+        updates.email = userData.email;
+      }
+
+      if (userData.showSobrietyDate !== undefined) {
+        updates.showSobrietyDate = userData.showSobrietyDate;
+      }
+
+      if (userData.phoneNumber !== undefined) {
+        updates.phoneNumber = userData.phoneNumber;
+      }
+
+      if (userData.showPhoneNumber !== undefined) {
+        updates.showPhoneNumber = userData.showPhoneNumber;
+      }
+
+      // Only proceed if there are changes to make
+      if (Object.keys(updates).length === 0) {
+        console.log('No updates needed for member documents');
+        return;
+      }
+
+      // Add timestamp for all updates
+      updates.updatedAt = firestore.FieldValue.serverTimestamp();
+
+      // Use a single batch update when possible (Firestore limit is 500 operations per batch)
+      const batchSize = 500;
+      const totalDocs = membersSnapshot.docs.length;
+
+      if (totalDocs <= batchSize) {
+        // If we have fewer than 500 documents, use a single batch
+        const batch = firestore().batch();
+
+        membersSnapshot.docs.forEach(doc => {
+          batch.update(doc.ref, updates);
+        });
+
         await batch.commit();
         console.log(
-          `Successfully updated ${updateCount} membership documents for user ${userId}`,
+          `Successfully updated ${totalDocs} membership documents in a single batch`,
         );
       } else {
-        console.log('No updates needed for member documents');
+        // For larger sets, we need multiple batches
+        let processed = 0;
+        let batchCount = 0;
+
+        while (processed < totalDocs) {
+          const batch = firestore().batch();
+          const end = Math.min(processed + batchSize, totalDocs);
+
+          for (let i = processed; i < end; i++) {
+            batch.update(membersSnapshot.docs[i].ref, updates);
+          }
+
+          await batch.commit();
+          batchCount++;
+          processed = end;
+
+          console.log(
+            `Batch ${batchCount}: Updated ${
+              end - processed
+            } documents (${processed}/${totalDocs} total)`,
+          );
+        }
+
+        console.log(
+          `Successfully updated ${totalDocs} membership documents in ${batchCount} batches`,
+        );
       }
     } catch (error) {
       console.error('Error updating user memberships:', error);
@@ -555,46 +600,16 @@ export class MemberModel {
         }
       } catch (queryError) {
         console.warn(
-          'Compound query failed, falling back to collection scan:',
+          'Compound query failed - no collection scan fallback will be used:',
           queryError,
         );
       }
 
-      // Fallback approach: Scan the collection in batches
-      // This is less efficient but more reliable
-      const documents: any[] = [];
-      let lastDoc = null;
-      const batchSize = 100;
-      let hasMore = true;
+      // If we get here, the query failed or returned no results
+      console.log(`No member documents found for user ${userId}`);
+      return [];
 
-      while (hasMore) {
-        let query = firestore().collection('members').limit(batchSize);
-
-        if (lastDoc) {
-          query = query.startAfter(lastDoc);
-        }
-
-        const snapshot = await query.get();
-
-        if (snapshot.empty || snapshot.docs.length < batchSize) {
-          hasMore = false;
-        } else {
-          lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        }
-
-        // Filter documents where ID contains _userId
-        const matchingDocs = snapshot.docs.filter(doc =>
-          doc.id.includes(`_${userId}`),
-        );
-        documents.push(...matchingDocs);
-      }
-
-      console.log(
-        `Found ${documents.length} member documents for user ${userId} using collection scan`,
-      );
-
-      // Convert to GroupMember objects
-      return documents.map(doc => this.fromFirestore(doc));
+      // Collection scan has been removed per requirements
     } catch (error) {
       console.error('Error getting user member documents:', error);
       throw new Error(
@@ -652,6 +667,35 @@ export class MemberModel {
       throw new Error(
         `Failed to update photo URL for user ${userId}: ${error}`,
       );
+    }
+  }
+
+  /**
+   * Update phone number visibility
+   */
+  static async updatePhoneNumberVisibility(
+    groupId: string,
+    userId: string,
+    showPhoneNumber: boolean,
+  ): Promise<void> {
+    try {
+      const memberDocRef = firestore()
+        .collection('members')
+        .doc(`${groupId}_${userId}`);
+
+      const memberDoc = await memberDocRef.get();
+
+      if (!memberDoc.exists) {
+        throw new Error('Member not found in this group');
+      }
+
+      // Update phone number visibility
+      await memberDocRef.update({
+        showPhoneNumber: showPhoneNumber,
+      });
+    } catch (error) {
+      console.error('Error updating phone number visibility:', error);
+      throw error;
     }
   }
 }

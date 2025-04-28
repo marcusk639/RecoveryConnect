@@ -100,6 +100,9 @@ export interface GroupMemberDocument {
   id: string; // User ID
   groupId: string; // Group ID
   displayName: string;
+  showPhoneNumber: boolean;
+  userId?: string;
+  phoneNumber?: string;
   email?: string;
   photoURL?: string;
   joinedAt: Timestamp;
@@ -107,6 +110,7 @@ export interface GroupMemberDocument {
   position?: string; // Position in the group (secretary, treasurer, etc.)
   isAdmin: boolean;
   showSobrietyDate: boolean; // Privacy setting specific to this group
+  photoUrl?: string;
 }
 
 /**

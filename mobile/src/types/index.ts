@@ -87,19 +87,23 @@ export interface HomeGroup {
   type: MeetingType;
   treasurers: string[];
   treasury: Treasury;
+  distanceInKm?: number; // Added for search results with distance calculations
 }
 
 export interface GroupMember {
   id: string;
   groupId: string;
-  name: string;
+  userId: string;
   email?: string;
-  photoURL?: string;
-  isAdmin: boolean;
+  name: string;
   position?: string;
+  isAdmin?: boolean;
   sobrietyDate?: string;
+  phoneNumber?: string;
+  showSobrietyDate?: boolean;
+  showPhoneNumber?: boolean;
   joinedAt: Date;
-  showSobrietyDate: boolean;
+  photoUrl?: string;
 }
 
 export interface SobrietyMilestone {

@@ -35,6 +35,7 @@ import {
   updateUserNotificationSettings,
   updateUserPhoto,
   fetchUserData,
+  updateUserPhoneNumber,
 } from '../../store/slices/authSlice';
 
 // Define the navigation param list for the Profile stack
@@ -66,13 +67,16 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
   const [editingRecoveryDate, setEditingRecoveryDate] =
     useState<boolean>(false);
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const [editingPhoneNumber, setEditingPhoneNumber] = useState<boolean>(false);
 
   // Form values - Maintain local copies for editing
   const [displayName, setDisplayName] = useState<string>('');
   const [useInitialOnly, setUseInitialOnly] = useState<boolean>(false);
   const [recoveryDate, setRecoveryDate] = useState<string>('');
   const [photoUrl, setPhotoUrl] = useState<string>('');
-  const [showRecoveryDate, setShowRecoveryDate] = useState<boolean>(false);
+  const [phoneNumber, setPhoneNumber] = useState<string>('');
+  const [showRecoveryDate, setShowRecoveryDate] = useState<boolean>(true);
+  const [showPhoneNumber, setShowPhoneNumber] = useState<boolean>(true);
   const [allowDirectMessages, setAllowDirectMessages] = useState<boolean>(true);
   const [meetingNotifications, setMeetingNotifications] =
     useState<boolean>(true);
@@ -100,6 +104,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
     // Set form values from Redux state when userData changes
     setDisplayName(userData.displayName || '');
     setPhotoUrl(userData.photoUrl || '');
+    setPhoneNumber(userData.phoneNumber || currentUser.phoneNumber || '');
 
     // Determine useInitialOnly based on fetched displayName
     if (
@@ -111,7 +116,8 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
     }
 
     setRecoveryDate(userData.recoveryDate || '');
-    setShowRecoveryDate(userData.privacySettings?.showRecoveryDate || false);
+    setShowRecoveryDate(userData.privacySettings?.showRecoveryDate || true);
+    setShowPhoneNumber(userData.privacySettings?.showPhoneNumber || true);
     setAllowDirectMessages(
       userData.privacySettings?.allowDirectMessages !== false,
     );
@@ -280,12 +286,27 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
     }
   };
 
+  // Save phone number
+  const savePhoneNumber = async () => {
+    try {
+      await dispatch(updateUserPhoneNumber(phoneNumber)).unwrap();
+      Alert.alert('Success', 'Phone number updated successfully');
+    } catch (error: any) {
+      console.error('Error updating phone number:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to update phone number. Please try again.',
+      );
+    }
+  };
+
   // Save privacy settings via Redux
   const savePrivacySettings = async () => {
     try {
       await dispatch(
         updateUserPrivacySettings({
           showRecoveryDate,
+          showPhoneNumber,
           allowDirectMessages,
         }),
       ).unwrap();
@@ -337,6 +358,25 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
       </SafeAreaView>
     );
   }
+
+  // Formatting helpers
+  const formatPhoneNumber = (phone: string): string => {
+    // Basic US phone number formatting: (555) 555-5555
+    if (!phone) return 'Not set';
+
+    // Strip all non-digits
+    const cleaned = phone.replace(/\D/g, '');
+
+    // Check for US format (10 digits)
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(
+        6,
+      )}`;
+    }
+
+    // International number or other format
+    return phone;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -439,6 +479,49 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
               )}
             </View>
 
+            {/* Phone Number */}
+            <View style={styles.fieldContainer}>
+              <View style={styles.fieldLabelContainer}>
+                <Text style={styles.fieldLabel}>Phone Number</Text>
+                <TouchableOpacity
+                  onPress={() => setEditingPhoneNumber(!editingPhoneNumber)}
+                  style={styles.editButton}>
+                  <Text style={styles.editButtonText}>
+                    {editingPhoneNumber ? 'Cancel' : 'Edit'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {editingPhoneNumber ? (
+                <View>
+                  <Input
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    placeholder="Your phone number"
+                    keyboardType="phone-pad"
+                  />
+                  <Text style={styles.helperText}>
+                    This will be used for calls and text messages if you choose
+                    to share it.
+                  </Text>
+                  <Button
+                    title="Save Phone Number"
+                    onPress={savePhoneNumber}
+                    loading={loading}
+                    disabled={loading}
+                    size="small"
+                    style={styles.saveButton}
+                  />
+                </View>
+              ) : (
+                <Text style={styles.fieldValue}>
+                  {userData?.phoneNumber
+                    ? formatPhoneNumber(userData.phoneNumber)
+                    : 'Not set'}
+                </Text>
+              )}
+            </View>
+
             {/* Recovery Date */}
             <View style={styles.fieldContainer}>
               <View style={styles.fieldLabelContainer}>
@@ -523,6 +606,23 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
               Allow your recovery date to be visible to members of your home
               groups.
             </Text>
+
+            <View style={styles.switchContainer}>
+              <Text style={styles.switchLabel}>
+                Share phone number with groups
+              </Text>
+              <Switch
+                value={showPhoneNumber}
+                onValueChange={setShowPhoneNumber}
+                trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                thumbColor={showPhoneNumber ? '#2196F3' : '#FFFFFF'}
+              />
+            </View>
+            <Text style={styles.helperText}>
+              Allow your phone number to be visible to members of your home
+              groups. They will be able to call or text you directly.
+            </Text>
+
             <View style={styles.switchContainer}>
               <Text style={styles.switchLabel}>Allow direct messages</Text>
               <Switch
