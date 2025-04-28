@@ -1,6 +1,6 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
-import {RootState} from '../index';
+import {RootState, AppDispatch} from '../index';
 import {UserModel} from '../../models/UserModel';
 import {MemberModel} from '../../models/MemberModel';
 import firestore from '@react-native-firebase/firestore';
@@ -55,35 +55,35 @@ const initialState: AuthState = {
 };
 
 const mapUserDocumentToUserData = (
-  userDoc: UserDocument | null,
+  userDocData: UserDocument | null,
   docId: string,
 ): UserData | null => {
-  if (!userDoc) return null;
+  if (!userDocData) return null;
   return {
     id: docId,
-    uid: userDoc.uid,
-    email: userDoc.email,
-    displayName: userDoc.displayName,
-    photoURL: userDoc.photoURL,
-    homeGroups: userDoc.homeGroups,
-    adminGroups: userDoc.adminGroups,
-    phoneNumber: userDoc.phoneNumber,
-    showPhoneNumber: userDoc.showPhoneNumber,
-    showSobrietyDate: userDoc.showSobrietyDate,
+    uid: userDocData.uid,
+    email: userDocData.email,
+    displayName: userDocData.displayName,
+    photoURL: userDocData.photoUrl,
+    homeGroups: userDocData.homeGroups,
+    adminGroups: userDocData.adminGroups,
+    phoneNumber: userDocData.phoneNumber,
+    showPhoneNumber: userDocData.showPhoneNumber,
+    showSobrietyDate: userDocData.showSobrietyDate,
     sobrietyStartDate:
-      userDoc.sobrietyStartDate?.toDate().toISOString() || null,
-    subscriptionTier: userDoc.subscriptionTier || 'free',
+      userDocData.sobrietyStartDate?.toDate().toISOString() || null,
+    subscriptionTier: userDocData.subscriptionTier || 'free',
     subscriptionValidUntil:
-      userDoc.subscriptionValidUntil?.toDate().toISOString() || null,
-    role: userDoc.role,
-    favoriteMeetings: userDoc.favoriteMeetings,
-    notificationSettings: userDoc.notificationSettings
-      ? {...userDoc.notificationSettings}
+      userDocData.subscriptionValidUntil?.toDate().toISOString() || null,
+    role: userDocData.role,
+    favoriteMeetings: userDocData.favoriteMeetings,
+    notificationSettings: userDocData.notificationSettings
+      ? {...userDocData.notificationSettings}
       : null,
-    privacySettings: userDoc.privacySettings
-      ? {...userDoc.privacySettings}
+    privacySettings: userDocData.privacySettings
+      ? {...userDocData.privacySettings}
       : null,
-    fcmTokens: userDoc.fcmTokens,
+    fcmTokens: userDocData.fcmTokens,
   };
 };
 
@@ -104,12 +104,19 @@ export const checkAuthState = createAsyncThunk(
   },
 );
 
-export const fetchUserData = createAsyncThunk(
+export const fetchUserData = createAsyncThunk<UserData | null, string>(
   'auth/fetchUserData',
   async (uid: string, {rejectWithValue}) => {
     try {
-      const userDoc = await UserModel.getById(uid);
-      return mapUserDocumentToUserData(userDoc, uid);
+      const docSnap = await firestore().collection('users').doc(uid).get();
+
+      if (!docSnap.exists) {
+        console.warn(`No user document found for UID: ${uid} in Firestore.`);
+        return null;
+      }
+
+      const userDocData = docSnap.data() as UserDocument;
+      return mapUserDocumentToUserData(userDocData, uid);
     } catch (error: any) {
       console.error('Fetch user data error:', error);
       return rejectWithValue(error.message || 'Failed to fetch user data');
@@ -117,15 +124,12 @@ export const fetchUserData = createAsyncThunk(
   },
 );
 
-export const updateDisplayName = createAsyncThunk(
+export const updateDisplayName = createAsyncThunk<
+  {displayName: string},
+  {displayName: string; useInitialOnly: boolean}
+>(
   'auth/updateDisplayName',
-  async (
-    {
-      displayName,
-      useInitialOnly,
-    }: {displayName: string; useInitialOnly: boolean},
-    {getState, rejectWithValue},
-  ) => {
+  async ({displayName, useInitialOnly}, {getState, rejectWithValue}) => {
     const state = getState() as RootState;
     const currentUser = state.auth.user;
     if (!currentUser) return rejectWithValue('User not logged in');
@@ -151,43 +155,44 @@ export const updateDisplayName = createAsyncThunk(
   },
 );
 
-export const updateSobrietyDate = createAsyncThunk(
-  'auth/updateSobrietyDate',
-  async ({date}: {date: Date | null}, {getState, rejectWithValue}) => {
-    const state = getState() as RootState;
-    const currentUser = state.auth.user;
-    if (!currentUser) return rejectWithValue('User not logged in');
+export const updateSobrietyDate = createAsyncThunk<
+  {sobrietyStartDate: string | null},
+  {date: Date | null}
+>('auth/updateSobrietyDate', async ({date}, {getState, rejectWithValue}) => {
+  const state = getState() as RootState;
+  const currentUser = state.auth.user;
+  if (!currentUser) return rejectWithValue('User not logged in');
 
-    try {
-      const firestoreTimestamp = date
-        ? firestore.Timestamp.fromDate(date)
-        : null;
-      await firestore().collection('users').doc(currentUser.uid).update({
-        sobrietyStartDate: firestoreTimestamp,
-      });
+  try {
+    const firestoreTimestamp = date ? firestore.Timestamp.fromDate(date) : null;
+    await firestore().collection('users').doc(currentUser.uid).update({
+      sobrietyStartDate: firestoreTimestamp,
+    });
 
-      return {sobrietyStartDate: date ? date.toISOString() : null};
-    } catch (error: any) {
-      console.error('Error updating sobriety date:', error);
-      return rejectWithValue(error.message || 'Failed to update sobriety date');
-    }
+    return {sobrietyStartDate: date ? date.toISOString() : null};
+  } catch (error: any) {
+    console.error('Error updating sobriety date:', error);
+    return rejectWithValue(error.message || 'Failed to update sobriety date');
+  }
+});
+
+export const updateUserPrivacySettings = createAsyncThunk<
+  {
+    showSobrietyDate: boolean;
+    showPhoneNumber: boolean;
+    privacySettings: {allowDirectMessages: boolean} | null;
   },
-);
-
-export const updateUserPrivacySettings = createAsyncThunk(
+  {
+    showSobrietyDate: boolean;
+    allowDirectMessages: boolean;
+    showPhoneNumber: boolean;
+  }
+>(
   'auth/updateUserPrivacySettings',
-  async (
-    settings: {
-      showSobrietyDate: boolean;
-      allowDirectMessages: boolean;
-      showPhoneNumber: boolean;
-    },
-    {getState, rejectWithValue},
-  ) => {
+  async (settings, {getState, rejectWithValue}) => {
     const state = getState() as RootState;
     const currentUser = state.auth.user;
     if (!currentUser) return rejectWithValue('User not logged in');
-    const currentPrivacySettings = state.auth.userData?.privacySettings;
 
     try {
       const userUpdates: Partial<{[key: string]: any}> = {
@@ -223,30 +228,27 @@ export const updateUserPrivacySettings = createAsyncThunk(
   },
 );
 
-export const updateUserNotificationSettings = createAsyncThunk(
+export const updateUserNotificationSettings = createAsyncThunk<
+  {
+    notificationSettings?: {
+      meetings?: boolean;
+      announcements?: boolean;
+      celebrations?: boolean;
+    } | null;
+  },
+  {meetings: boolean; announcements: boolean; celebrations: boolean},
+  {state: RootState}
+>(
   'auth/updateNotificationSettings',
-  async (
-    settings: {
-      meetings: boolean;
-      announcements: boolean;
-      celebrations: boolean;
-    },
-    {getState, rejectWithValue},
-  ) => {
+  async (settings, {getState, rejectWithValue}) => {
+    const state = getState();
+    const currentUser = state.auth.user;
+    if (!currentUser) return rejectWithValue('User not logged in');
+
     try {
-      const state = getState() as RootState;
-      const currentUser = auth().currentUser;
-
-      if (!currentUser) {
-        throw new Error('No authenticated user');
-      }
-
       await UserModel.updateNotificationSettings(currentUser.uid, settings);
 
-      return {
-        ...state.auth.userData,
-        notificationSettings: settings,
-      };
+      return {notificationSettings: settings};
     } catch (error: any) {
       return rejectWithValue(
         error.message || 'Failed to update notification settings',
@@ -255,36 +257,28 @@ export const updateUserNotificationSettings = createAsyncThunk(
   },
 );
 
-export const updateUserPhoto = createAsyncThunk(
-  'auth/updateUserPhoto',
-  async (photoUrl: string, {getState, rejectWithValue}) => {
-    try {
-      const state = getState() as RootState;
-      const currentUser = auth().currentUser;
+export const updateUserPhoto = createAsyncThunk<
+  {photoURL: string | null},
+  string,
+  {state: RootState}
+>('auth/updateUserPhoto', async (photoUrl, {getState, rejectWithValue}) => {
+  const state = getState();
+  const currentUser = state.auth.user;
+  if (!currentUser) return rejectWithValue('User not logged in');
 
-      if (!currentUser) {
-        throw new Error('No authenticated user');
-      }
+  try {
+    await UserModel.updatePhotoURL(currentUser.uid, photoUrl);
 
-      const updatedUser = await UserModel.updatePhotoURL(
-        currentUser.uid,
-        photoUrl,
-      );
+    await MemberModel.updateUserAcrossMemberships(currentUser.uid, {
+      photoURL: photoUrl,
+    });
 
-      if (!updatedUser) {
-        throw new Error('Failed to update user photo');
-      }
-
-      await MemberModel.updateUserAcrossMemberships(currentUser.uid, {
-        photoURL: photoUrl,
-      });
-
-      return updatedUser;
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to update profile photo');
-    }
-  },
-);
+    return {photoURL: photoUrl};
+  } catch (error: any) {
+    console.error('Error updating photo URL:', error);
+    return rejectWithValue(error.message || 'Failed to update profile photo');
+  }
+});
 
 export const signIn = createAsyncThunk(
   'auth/signIn',
@@ -383,13 +377,6 @@ const authSlice = createSlice({
     setUser: (state, action: PayloadAction<FirebaseAuthTypes.User | null>) => {
       state.user = action.payload;
       state.isAuthenticated = !!action.payload;
-      if (!action.payload) {
-        state.userData = null;
-        state.status = 'idle';
-        state.lastFetched = null;
-        state.error = null;
-        state.location = null;
-      }
     },
     setLocation: (state, action: PayloadAction<Location | null>) => {
       state.location = action.payload;
@@ -397,20 +384,6 @@ const authSlice = createSlice({
   },
   extraReducers: builder => {
     builder
-      .addCase(checkAuthState.pending, state => {
-        state.status = 'loading';
-      })
-      .addCase(checkAuthState.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        state.user = action.payload;
-        state.isAuthenticated = !!action.payload;
-        state.error = null;
-      })
-      .addCase(checkAuthState.rejected, (state, action) => {
-        state.status = 'failed';
-        state.error = action.error.message || 'Failed to check auth state';
-      })
-
       .addCase(fetchUserData.pending, state => {
         state.status = 'loading';
       })
@@ -426,7 +399,7 @@ const authSlice = createSlice({
       .addCase(fetchUserData.rejected, (state, action) => {
         state.status = 'failed';
         state.userData = null;
-        state.error = (action.payload as string) || 'Failed to fetch user data';
+        state.error = action.payload as string;
       })
 
       .addCase(updateDisplayName.fulfilled, (state, action) => {
@@ -453,9 +426,6 @@ const authSlice = createSlice({
         state.status = 'failed';
       })
 
-      .addCase(updateUserPrivacySettings.pending, state => {
-        state.status = 'loading';
-      })
       .addCase(updateUserPrivacySettings.fulfilled, (state, action) => {
         if (state.userData) {
           state.userData.showSobrietyDate = action.payload.showSobrietyDate;
@@ -473,28 +443,47 @@ const authSlice = createSlice({
         state.status = 'failed';
       })
 
-      .addCase(updateUserNotificationSettings.pending, state => {
-        state.status = 'loading';
-      })
-      .addCase(updateUserNotificationSettings.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        state.userData = action.payload;
-        state.error = null;
-      })
+      .addCase(
+        updateUserNotificationSettings.fulfilled,
+        (
+          state,
+          action: PayloadAction<{
+            notificationSettings?: {
+              meetings?: boolean;
+              announcements?: boolean;
+              celebrations?: boolean;
+            } | null;
+          }>,
+        ) => {
+          if (state.userData) {
+            state.userData.notificationSettings = {
+              ...(state.userData.notificationSettings || {}),
+              ...action.payload.notificationSettings,
+            };
+          }
+          state.status = 'succeeded';
+          state.error = null;
+        },
+      )
       .addCase(updateUserNotificationSettings.rejected, (state, action) => {
+        state.error = action.payload as string;
         state.status = 'failed';
-        state.error =
-          (action.payload as string) ||
-          'Failed to update notification settings';
       })
 
-      .addCase(updateUserPhoto.fulfilled, (state, action) => {
-        state.userData = action.payload;
-        state.error = null;
-      })
+      .addCase(
+        updateUserPhoto.fulfilled,
+        (state, action: PayloadAction<{photoURL: string | null}>) => {
+          if (state.userData) {
+            state.userData.photoURL = action.payload.photoURL;
+          }
+          state.status = 'succeeded';
+          state.error = null;
+        },
+      )
       .addCase(updateUserPhoto.rejected, (state, action) => {
         state.error =
           (action.payload as string) || 'Failed to update profile photo';
+        state.status = 'failed';
       })
 
       .addCase(signIn.pending, state => {
@@ -502,7 +491,6 @@ const authSlice = createSlice({
       })
       .addCase(signIn.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.user = action.payload;
         state.isAuthenticated = true;
         state.error = null;
       })
@@ -516,7 +504,6 @@ const authSlice = createSlice({
       })
       .addCase(signUp.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.user = action.payload;
         state.isAuthenticated = true;
         state.error = null;
       })
@@ -530,12 +517,6 @@ const authSlice = createSlice({
       })
       .addCase(signOut.fulfilled, state => {
         state.status = 'succeeded';
-        state.user = null;
-        state.userData = null;
-        state.isAuthenticated = false;
-        state.error = null;
-        state.lastFetched = null;
-        state.location = null;
       })
       .addCase(signOut.rejected, (state, action) => {
         state.status = 'failed';
@@ -546,10 +527,10 @@ const authSlice = createSlice({
         state.status = 'loading';
       })
       .addCase(updateUserPhoneNumber.fulfilled, (state, action) => {
-        state.status = 'succeeded';
         if (state.userData) {
           state.userData.phoneNumber = action.payload.phoneNumber;
         }
+        state.status = 'succeeded';
         state.error = null;
       })
       .addCase(updateUserPhoneNumber.rejected, (state, action) => {

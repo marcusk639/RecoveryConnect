@@ -26,8 +26,10 @@ import {
   signOut,
   fetchUserData,
   updateUserPrivacySettings,
+  updateSobrietyDate,
 } from '../../store/slices/authSlice';
 import {UserModel} from '../../models/UserModel';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 
 // Define the navigation param list for the Profile stack
 type ProfileStackParamList = {
@@ -44,7 +46,7 @@ type ProfileScreenNavigationProp = StackNavigationProp<
 interface UserProfile {
   displayName: string;
   email: string;
-  recoveryDate?: string;
+  recoveryDate?: string | null;
   notifications: {
     meetings: boolean;
     announcements: boolean;
@@ -83,9 +85,13 @@ const ProfileScreen: React.FC = () => {
   });
 
   const [editNameVisible, setEditNameVisible] = useState(false);
-  const [editDateVisible, setEditDateVisible] = useState(false);
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState('');
-  const [newRecoveryDate, setNewRecoveryDate] = useState('');
+  const [tempSobrietyDate, setTempSobrietyDate] = useState<Date | undefined>(
+    userData?.sobrietyStartDate
+      ? new Date(userData.sobrietyStartDate)
+      : undefined,
+  );
 
   // Load user data from Redux or fetch if needed
   useEffect(() => {
@@ -98,22 +104,26 @@ const ProfileScreen: React.FC = () => {
       setUserProfile({
         displayName: userData.displayName || '',
         email: userData.email || '',
-        recoveryDate: userData.recoveryDate,
+        recoveryDate: userData.sobrietyStartDate,
         notifications: {
           meetings: userData.notificationSettings?.meetings ?? true,
           announcements: userData.notificationSettings?.announcements ?? true,
           celebrations: userData.notificationSettings?.celebrations ?? true,
         },
         privacySettings: {
-          showRecoveryDate: userData.privacySettings?.showRecoveryDate ?? false,
-          showPhoneNumber: userData.privacySettings?.showPhoneNumber ?? false,
+          showRecoveryDate: userData.showSobrietyDate ?? false,
+          showPhoneNumber: userData.showPhoneNumber ?? false,
           allowDirectMessages:
             userData.privacySettings?.allowDirectMessages ?? true,
         },
       });
 
       setNewDisplayName(userData.displayName || '');
-      setNewRecoveryDate(userData.recoveryDate || '');
+      setTempSobrietyDate(
+        userData.sobrietyStartDate
+          ? new Date(userData.sobrietyStartDate)
+          : undefined,
+      );
     }
   }, [user, userData, authStatus]);
 
@@ -149,25 +159,20 @@ const ProfileScreen: React.FC = () => {
     }
 
     try {
-      // Update using UserModel
       const currentUser = auth().currentUser;
-      if (currentUser) {
+      if (currentUser && userData) {
         await currentUser.updateProfile({
           displayName: newDisplayName,
         });
-
-        if (userData) {
-          await UserModel.update(currentUser.uid, {
-            ...userData,
-            displayName: newDisplayName,
-          });
-
-          // Refresh user data in Redux
-          dispatch(fetchUserData(currentUser.uid));
-        }
-
+        await firestore().collection('users').doc(currentUser.uid).update({
+          displayName: newDisplayName,
+        });
+        await UserModel.update(currentUser.uid, {
+          displayName: newDisplayName,
+        });
+        dispatch(fetchUserData(currentUser.uid));
         setEditNameVisible(false);
-        Alert.alert('Success', 'Display name updated successfully');
+        Alert.alert('Success', 'Display name updated');
       }
     } catch (error) {
       console.error('Error updating display name:', error);
@@ -175,26 +180,40 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  const updateRecoveryDate = async () => {
-    // Validate date format (YYYY-MM-DD)
-    if (newRecoveryDate && !/^\d{4}-\d{2}-\d{2}$/.test(newRecoveryDate)) {
-      Alert.alert('Error', 'Please use the format YYYY-MM-DD');
-      return;
-    }
+  const showDatePicker = () => {
+    setDatePickerVisibility(true);
+    setTempSobrietyDate(
+      userData?.sobrietyStartDate
+        ? new Date(userData.sobrietyStartDate)
+        : new Date(),
+    );
+  };
 
-    try {
-      // In a real app, this would update Firestore
-      setUserProfile({
-        ...userProfile,
-        recoveryDate: newRecoveryDate,
+  const hideDatePicker = () => {
+    setDatePickerVisibility(false);
+  };
+
+  const handleConfirmDate = (date: Date) => {
+    dispatch(updateSobrietyDate({date}))
+      .unwrap()
+      .then(() => {
+        Alert.alert('Success', 'Sobriety date updated.');
+      })
+      .catch(error => {
+        Alert.alert('Error', error.message || 'Failed to update date.');
       });
+    hideDatePicker();
+  };
 
-      setEditDateVisible(false);
-      Alert.alert('Success', 'Recovery date updated successfully');
-    } catch (error) {
-      console.error('Error updating recovery date:', error);
-      Alert.alert('Error', 'Failed to update recovery date. Please try again.');
-    }
+  const clearSobrietyDate = () => {
+    dispatch(updateSobrietyDate({date: null}))
+      .unwrap()
+      .then(() => {
+        Alert.alert('Success', 'Sobriety date cleared.');
+      })
+      .catch(error => {
+        Alert.alert('Error', error.message || 'Failed to clear date.');
+      });
   };
 
   const toggleNotificationSetting = (
@@ -212,97 +231,93 @@ const ProfileScreen: React.FC = () => {
   };
 
   const togglePrivacySetting = async (
-    setting: keyof UserProfile['privacySettings'],
+    setting: 'showSobrietyDate' | 'showPhoneNumber' | 'allowDirectMessages',
   ) => {
-    // Update local state immediately for responsive UI
-    const newValue = !userProfile.privacySettings[setting];
+    if (!userData) return;
 
-    setUserProfile({
-      ...userProfile,
-      privacySettings: {
-        ...userProfile.privacySettings,
-        [setting]: newValue,
-      },
-    });
+    // Get current values, providing defaults
+    const currentShowSobrietyDate = userData.showSobrietyDate ?? false;
+    const currentShowPhoneNumber = userData.showPhoneNumber ?? false;
+    const currentAllowDirectMessages =
+      userData.privacySettings?.allowDirectMessages ?? true;
+
+    // Determine the new value for the toggled setting
+    let newValue: boolean;
+    if (setting === 'showSobrietyDate') {
+      newValue = !currentShowSobrietyDate;
+    } else if (setting === 'showPhoneNumber') {
+      newValue = !currentShowPhoneNumber;
+    } else {
+      // allowDirectMessages
+      newValue = !currentAllowDirectMessages;
+    }
+
+    // Construct the full payload for the update thunk
+    const settingsPayload = {
+      showSobrietyDate:
+        setting === 'showSobrietyDate' ? newValue : currentShowSobrietyDate,
+      showPhoneNumber:
+        setting === 'showPhoneNumber' ? newValue : currentShowPhoneNumber,
+      allowDirectMessages:
+        setting === 'allowDirectMessages'
+          ? newValue
+          : currentAllowDirectMessages,
+    };
 
     try {
-      // Update Firestore using Redux action
-      await dispatch(
-        updateUserPrivacySettings({
-          ...userProfile.privacySettings,
-          [setting]: newValue,
-        }),
-      ).unwrap();
-    } catch (error) {
+      await dispatch(updateUserPrivacySettings(settingsPayload)).unwrap();
+      // Optional: Add success feedback if needed
+      // Alert.alert('Success', 'Privacy setting updated.');
+    } catch (error: any) {
       console.error('Error updating privacy settings:', error);
       Alert.alert(
         'Error',
-        'Failed to update privacy settings. Please try again.',
+        error.message || 'Failed to update privacy settings. Please try again.',
       );
-
-      // Revert local state on error
-      setUserProfile({
-        ...userProfile,
-        privacySettings: {
-          ...userProfile.privacySettings,
-        },
-      });
     }
   };
 
-  const formatRecoveryDate = (dateString?: string): string => {
+  const formatSobrietyDateForDisplay = (dateString?: string | null): string => {
     if (!dateString) return 'Not set';
-
     try {
       const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
       return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
       });
     } catch (error) {
+      console.error('Error formatting date:', error);
       return dateString;
     }
   };
 
-  const calculateSobrietyTime = (dateString?: string): string => {
+  const calculateSobrietyTime = (dateString?: string | null): string => {
     if (!dateString) return '';
-
     try {
       const recoveryDate = new Date(dateString);
+      if (isNaN(recoveryDate.getTime())) return '';
       const today = new Date();
-
-      // Calculate difference in milliseconds
       const diffTime = Math.abs(today.getTime() - recoveryDate.getTime());
-
-      // Convert to days
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-      // Calculate years, months, days
       const years = Math.floor(diffDays / 365);
       const months = Math.floor((diffDays % 365) / 30);
       const days = diffDays % 30;
-
       let sobrietyText = '';
-
-      if (years > 0) {
+      if (years > 0)
         sobrietyText += `${years} ${years === 1 ? 'year' : 'years'}`;
-      }
-
-      if (months > 0) {
+      if (months > 0)
         sobrietyText += sobrietyText
           ? `, ${months} ${months === 1 ? 'month' : 'months'}`
           : `${months} ${months === 1 ? 'month' : 'months'}`;
-      }
-
-      if (days > 0 || (!years && !months)) {
+      if (days > 0 || (!years && !months))
         sobrietyText += sobrietyText
           ? `, ${days} ${days === 1 ? 'day' : 'days'}`
           : `${days} ${days === 1 ? 'day' : 'days'}`;
-      }
-
       return sobrietyText;
     } catch (error) {
+      console.error('Error calculating sobriety time:', error);
       return '';
     }
   };
@@ -355,55 +370,6 @@ const ProfileScreen: React.FC = () => {
     </Modal>
   );
 
-  const renderEditDateModal = () => (
-    <Modal
-      visible={editDateVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setEditDateVisible(false)}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Recovery Date</Text>
-            <TouchableOpacity
-              onPress={() => setEditDateVisible(false)}
-              style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.modalBody}>
-            <Text style={styles.modalLabel}>Recovery Date</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newRecoveryDate}
-              onChangeText={setNewRecoveryDate}
-              placeholder="YYYY-MM-DD"
-            />
-            <Text style={styles.modalHelper}>
-              This date is used to calculate your sober time and for sobriety
-              celebrations.
-            </Text>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setEditDateVisible(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={updateRecoveryDate}>
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -411,137 +377,108 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              {userData?.photoUrl ? (
+              {userData?.photoURL ? (
                 <Image
-                  source={{uri: userData.photoUrl}}
+                  source={{uri: userData.photoURL}}
                   style={styles.avatarImage}
                 />
               ) : (
                 <Text style={styles.avatarText}>
-                  {userProfile.displayName
-                    ? userProfile.displayName.charAt(0).toUpperCase()
-                    : 'A'}
+                  {userData?.displayName
+                    ? userData.displayName.charAt(0).toUpperCase()
+                    : 'U'}
                 </Text>
               )}
             </View>
-
             <View style={styles.profileInfo}>
-              <Text style={styles.displayName}>{userProfile.displayName}</Text>
-              <Text style={styles.email}>{userProfile.email}</Text>
-
-              {userProfile.recoveryDate && (
+              <Text style={styles.displayName}>
+                {userData?.displayName || 'User'}
+              </Text>
+              <Text style={styles.email}>{userData?.email || 'No email'}</Text>
+              {userData?.sobrietyStartDate && (
                 <View style={styles.sobrietyContainer}>
                   <Text style={styles.sobrietyLabel}>Sober Time:</Text>
                   <Text style={styles.sobrietyTime}>
-                    {calculateSobrietyTime(userProfile.recoveryDate)}
+                    {calculateSobrietyTime(userData.sobrietyStartDate)}
                   </Text>
                 </View>
               )}
             </View>
           </View>
-
           <View style={styles.profileActions}>
             <TouchableOpacity
               style={styles.editButton}
-              onPress={() => {
-                // Navigate to the ProfileManagementScreen which is in the same folder
-                navigation.navigate('ProfileManagement');
-              }}>
-              <Text style={styles.editButtonText}>Edit Profile</Text>
+              onPress={() => setEditNameVisible(true)}>
+              <Text style={styles.editButtonText}>Edit Name</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={showDatePicker}>
+              <Text style={styles.editButtonText}>Edit Sobriety Date</Text>
+            </TouchableOpacity>
+            {userData?.sobrietyStartDate && (
+              <TouchableOpacity
+                style={[styles.editButton, styles.clearButtonRed]}
+                onPress={clearSobrietyDate}>
+                <Text
+                  style={[styles.editButtonText, styles.clearButtonTextRed]}>
+                  Clear Date
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
-
-          {userProfile.recoveryDate && (
-            <View style={styles.recoveryDateContainer}>
-              <Text style={styles.recoveryDateLabel}>Recovery Date:</Text>
-              <Text style={styles.recoveryDate}>
-                {formatRecoveryDate(userProfile.recoveryDate)}
-              </Text>
-            </View>
-          )}
+          <View style={styles.recoveryDateContainer}>
+            <Text style={styles.recoveryDateLabel}>Sobriety Date:</Text>
+            <Text style={styles.recoveryDate}>
+              {formatSobrietyDateForDisplay(userData?.sobrietyStartDate)}
+            </Text>
+          </View>
         </View>
-
-        {/* Notification Settings */}
-        {/* <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notification Settings</Text>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Meeting Reminders</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications before your scheduled meetings
-              </Text>
-            </View>
-
-            <Switch
-              value={userProfile.notifications.meetings}
-              onValueChange={() => toggleNotificationSetting('meetings')}
-              trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-              thumbColor={
-                userProfile.notifications.meetings ? '#2196F3' : '#FFFFFF'
-              }
-            />
-          </View>
-        </View> */}
 
         {/* Privacy Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Privacy Settings</Text>
-
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Show Recovery Date</Text>
+              <Text style={styles.settingLabel}>Show Sobriety Time/Date</Text>
               <Text style={styles.settingDescription}>
-                Allow others to see your recovery date
+                Allow others to see your sobriety time/date in groups
               </Text>
             </View>
-
             <Switch
-              value={userProfile.privacySettings.showRecoveryDate}
-              onValueChange={() => togglePrivacySetting('showRecoveryDate')}
+              value={userData?.showSobrietyDate ?? false}
+              onValueChange={() => togglePrivacySetting('showSobrietyDate')}
               trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-              thumbColor={
-                userProfile.privacySettings.showRecoveryDate
-                  ? '#2196F3'
-                  : '#FFFFFF'
-              }
+              thumbColor={userData?.showSobrietyDate ? '#2196F3' : '#FFFFFF'}
             />
           </View>
-
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Show Phone Number</Text>
               <Text style={styles.settingDescription}>
-                Allow others to see your phone number
+                Allow group members to see your phone number
               </Text>
             </View>
-
             <Switch
-              value={userProfile.privacySettings.showPhoneNumber}
+              value={userData?.showPhoneNumber ?? false}
               onValueChange={() => togglePrivacySetting('showPhoneNumber')}
               trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-              thumbColor={
-                userProfile.privacySettings.showPhoneNumber
-                  ? '#2196F3'
-                  : '#FFFFFF'
-              }
+              thumbColor={userData?.showPhoneNumber ? '#2196F3' : '#FFFFFF'}
             />
           </View>
-
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Allow Direct Messages</Text>
               <Text style={styles.settingDescription}>
-                Allow others to send you direct messages
+                Allow members to send you direct messages
               </Text>
             </View>
-
             <Switch
-              value={userProfile.privacySettings.allowDirectMessages}
+              value={userData?.privacySettings?.allowDirectMessages ?? true}
               onValueChange={() => togglePrivacySetting('allowDirectMessages')}
               trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
               thumbColor={
-                userProfile.privacySettings.allowDirectMessages
+                userData?.privacySettings?.allowDirectMessages ?? true
                   ? '#2196F3'
                   : '#FFFFFF'
               }
@@ -549,41 +486,16 @@ const ProfileScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Account Actions */}
+        {/* Account Actions - Simplified for clarity */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-
-          <TouchableOpacity
-            style={styles.accountAction}
-            onPress={() =>
-              Alert.alert(
-                'Coming Soon',
-                'This feature will be available in a future update.',
-              )
-            }>
-            <Text style={styles.accountActionText}>Change Password</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.accountAction}
             onPress={() => {
-              // Navigate to the ProfileManagementScreen which is in the same folder
               navigation.navigate('ProfileManagement');
             }}>
-            <Text style={styles.accountActionText}>Edit Profile</Text>
+            <Text style={styles.accountActionText}>Manage Profile Details</Text>
           </TouchableOpacity>
-
-          {/* <TouchableOpacity
-            style={styles.accountAction}
-            onPress={() =>
-              Alert.alert(
-                'Coming Soon',
-                'This feature will be available in a future update.',
-              )
-            }>
-            <Text style={styles.accountActionText}>Manage Linked Groups</Text>
-          </TouchableOpacity> */}
-
           <TouchableOpacity
             style={[styles.accountAction, styles.signOutAction]}
             onPress={confirmSignOut}>
@@ -591,7 +503,7 @@ const ProfileScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* App Info */}
+        {/* App Info - Keep as is */}
         <View style={styles.section}>
           <Text style={styles.appInfo}>Recovery Connect v1.0.0</Text>
           <View style={styles.linksContainer}>
@@ -607,7 +519,14 @@ const ProfileScreen: React.FC = () => {
       </ScrollView>
 
       {renderEditNameModal()}
-      {renderEditDateModal()}
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        date={tempSobrietyDate || new Date()}
+        maximumDate={new Date()}
+        onConfirm={handleConfirmDate}
+        onCancel={hideDatePicker}
+      />
     </SafeAreaView>
   );
 };
@@ -865,6 +784,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  clearButtonRed: {
+    backgroundColor: '#F44336',
+  },
+  clearButtonTextRed: {
+    color: '#FFFFFF',
   },
 });
 

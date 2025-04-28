@@ -47,7 +47,8 @@ export interface UserDocument {
   uid: string; // Firebase Auth UID
   email: string | null;
   displayName: string | null;
-  photoURL: string | null;
+  recoveryDate?: Timestamp;
+  photoUrl: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   lastLogin: Timestamp;
@@ -62,6 +63,7 @@ export interface UserDocument {
   };
   privacySettings: {
     allowDirectMessages: boolean; // default: true
+    showRecoveryDate: boolean; // default: false
   };
   homeGroups?: string[]; // Array of group IDs user is member of
   adminGroups?: string[]; // Array of group IDs user is admin of

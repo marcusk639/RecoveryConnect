@@ -29,8 +29,8 @@ import {
   selectUserData,
   selectAuthStatus,
   selectAuthError,
-  updateUserDisplayName,
-  updateUserRecoveryDate,
+  updateDisplayName,
+  updateSobrietyDate,
   updateUserPrivacySettings,
   updateUserNotificationSettings,
   updateUserPhoto,
@@ -73,7 +73,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
   const [displayName, setDisplayName] = useState<string>('');
   const [useInitialOnly, setUseInitialOnly] = useState<boolean>(false);
   const [recoveryDate, setRecoveryDate] = useState<string>('');
-  const [photoUrl, setPhotoUrl] = useState<string>('');
+  const [photoURL, setPhotoURL] = useState<string>('');
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [showRecoveryDate, setShowRecoveryDate] = useState<boolean>(true);
   const [showPhoneNumber, setShowPhoneNumber] = useState<boolean>(true);
@@ -103,7 +103,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
 
     // Set form values from Redux state when userData changes
     setDisplayName(userData.displayName || '');
-    setPhotoUrl(userData.photoUrl || '');
+    setPhotoURL(userData.photoURL || '');
     setPhoneNumber(userData.phoneNumber || currentUser.phoneNumber || '');
 
     // Determine useInitialOnly based on fetched displayName
@@ -115,9 +115,9 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
       setUseInitialOnly(true);
     }
 
-    setRecoveryDate(userData.recoveryDate || '');
-    setShowRecoveryDate(userData.privacySettings?.showRecoveryDate || true);
-    setShowPhoneNumber(userData.privacySettings?.showPhoneNumber || true);
+    setRecoveryDate(userData.sobrietyStartDate || '');
+    setShowRecoveryDate(userData.showSobrietyDate ?? true);
+    setShowPhoneNumber(userData.showPhoneNumber ?? true);
     setAllowDirectMessages(
       userData.privacySettings?.allowDirectMessages !== false,
     );
@@ -188,7 +188,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
       await dispatch(updateUserPhoto(downloadUrl)).unwrap();
 
       // Local state update for UI responsiveness (already updated via useEffect)
-      // setPhotoUrl(downloadUrl);
+      // setPhotoURL(downloadUrl);
     } catch (error) {
       console.error('Error uploading photo:', error);
       Alert.alert('Error', 'Failed to upload photo. Please try again.');
@@ -257,7 +257,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
     }
     try {
       await dispatch(
-        updateUserDisplayName({
+        updateDisplayName({
           displayName: displayName.trim(),
           useInitialOnly: useInitialOnly,
         }),
@@ -275,7 +275,12 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
   // Save recovery date via Redux
   const saveRecoveryDate = async () => {
     try {
-      await dispatch(updateUserRecoveryDate(recoveryDate)).unwrap();
+      const dateToSend = recoveryDate ? new Date(recoveryDate) : null;
+      if (dateToSend && isNaN(dateToSend.getTime())) {
+        Alert.alert('Error', 'Invalid date selected.');
+        return;
+      }
+      await dispatch(updateSobrietyDate({date: dateToSend})).unwrap();
       setEditingRecoveryDate(false);
     } catch (error: any) {
       console.error('Error updating recovery date:', error);
@@ -305,7 +310,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
     try {
       await dispatch(
         updateUserPrivacySettings({
-          showRecoveryDate,
+          showSobrietyDate: showRecoveryDate,
           showPhoneNumber,
           allowDirectMessages,
         }),
@@ -398,8 +403,8 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
           <View style={styles.photoSection}>
             <View style={styles.photoContainer}>
               {/* Display photo from local state (updated from Redux) */}
-              {photoUrl ? (
-                <Image source={{uri: photoUrl}} style={styles.profilePhoto} />
+              {photoURL ? (
+                <Image source={{uri: photoURL}} style={styles.profilePhoto} />
               ) : (
                 <View style={styles.profileInitials}>
                   <Text style={styles.initialsText}>
@@ -416,7 +421,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.changePhotoText}>
-                    {photoUrl ? 'Change Photo' : 'Add Photo'}
+                    {photoURL ? 'Change Photo' : 'Add Photo'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -574,13 +579,14 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
                 <View>
                   <Text style={styles.fieldValue}>
                     {/* Display recovery date from Redux store */}
-                    {userData?.recoveryDate
-                      ? formatDateForDisplay(userData.recoveryDate)
+                    {userData?.sobrietyStartDate
+                      ? formatDateForDisplay(userData.sobrietyStartDate)
                       : 'Not set'}
                   </Text>
-                  {userData?.recoveryDate && (
+                  {userData?.sobrietyStartDate && (
                     <Text style={styles.sobrietyText}>
-                      {calculateSobrietyTime(userData.recoveryDate)} of sobriety
+                      {calculateSobrietyTime(userData.sobrietyStartDate)} of
+                      sobriety
                     </Text>
                   )}
                 </View>

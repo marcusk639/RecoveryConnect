@@ -19,8 +19,8 @@ export class UserModel {
     const data = doc.data();
     return {
       uid: doc.id,
-      email: data.email,
-      displayName: data.displayName,
+      email: data.email || '',
+      displayName: data.displayName || '',
       recoveryDate: data.recoveryDate
         ? data.recoveryDate.toDate().toISOString()
         : undefined,
@@ -29,10 +29,10 @@ export class UserModel {
       lastLogin: data.lastLogin.toDate(),
       notificationSettings: data.notificationSettings,
       privacySettings: data.privacySettings,
-      homeGroups: data.homeGroups,
+      homeGroups: data.homeGroups || [],
       role: data.role,
       favoriteMeetings: data.favoriteMeetings,
-      photoUrl: data.photoUrl,
+      photoUrl: data.photoUrl || '',
     };
   }
 
