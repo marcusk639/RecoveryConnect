@@ -131,17 +131,6 @@ export const fetchMeetings = createAsyncThunk(
       return rejectWithValue(error.message || 'Failed to fetch meetings');
     }
   },
-  {
-    // Only fetch if data is stale
-    condition: (_, {getState}) => {
-      const state = getState() as RootState;
-
-      // If already loading, don't fetch again
-      if (state.meetings.status === 'loading') return false;
-
-      return isDataStale(state.meetings.lastFetched);
-    },
-  },
 );
 
 export const toggleFavoriteMeeting = createAsyncThunk(

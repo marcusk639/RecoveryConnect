@@ -64,7 +64,7 @@ const MeetingsScreen: React.FC = () => {
   const [usingCustomLocation, setUsingCustomLocation] = useState(false);
   const [searchRadius, setSearchRadius] = useState<number>(10);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [showTypeFilterModal, setShowTypeFilterModal] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<
     MeetingType | 'All'
   >('All');
@@ -90,10 +90,25 @@ const MeetingsScreen: React.FC = () => {
   ];
 
   const meetings = useMemo(() => {
-    return filteredMeetings.filter(meeting => {
-      return meeting.name.toLowerCase().includes(nameQuery.toLowerCase());
+    const formatFiltered = filteredMeetings.filter(meeting => {
+      if (showOnline && showInPerson) {
+        return true;
+      }
+      if (showOnline && meeting.online) {
+        return true;
+      }
+      if (showInPerson && !meeting.online) {
+        return true;
+      }
+      return false;
     });
-  }, [filteredMeetings, nameQuery]);
+
+    if (!nameQuery) return formatFiltered;
+    const lowerNameQuery = nameQuery.toLowerCase();
+    return formatFiltered.filter(meeting => {
+      return meeting.name.toLowerCase().includes(lowerNameQuery);
+    });
+  }, [filteredMeetings, nameQuery, showOnline, showInPerson]);
 
   const activeLocation = usingCustomLocation
     ? customLocation
@@ -110,6 +125,7 @@ const MeetingsScreen: React.FC = () => {
       );
       dispatch(
         fetchMeetings({
+          location: currentUserLocation || undefined,
           filters: {
             type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
           },
@@ -143,6 +159,7 @@ const MeetingsScreen: React.FC = () => {
         );
         dispatch(
           fetchMeetings({
+            location: customLocation || undefined,
             filters: {
               type:
                 selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
@@ -191,7 +208,8 @@ const MeetingsScreen: React.FC = () => {
   }, [
     getUserLocation,
     usingCustomLocation,
-    customLocation,
+    customLocation?.lat,
+    customLocation?.lng,
     dispatch,
     selectedTypeFilter,
   ]);
@@ -219,24 +237,11 @@ const MeetingsScreen: React.FC = () => {
   };
 
   const fetchMeetingsWithCriteria = (locationToUse: Location | null) => {
-    if (!locationToUse) {
-      dispatch(
-        fetchMeetings({
-          filters: {
-            type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-          },
-        }),
-      );
-    } else {
-      dispatch(
-        fetchMeetings({
-          location: locationToUse,
-          filters: {
-            type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-          },
-        }),
-      );
-    }
+    const filters: any = {
+      type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+    };
+
+    dispatch(fetchMeetings({location: locationToUse || undefined, filters}));
   };
 
   const onRefresh = () => {
@@ -254,16 +259,23 @@ const MeetingsScreen: React.FC = () => {
     setSelectedTypeFilter('All');
     setShowOnline(true);
     setShowInPerson(true);
-    setSearchRadius(10);
     setUsingCustomLocation(false);
     setCustomLocation(null);
     setCustomLocationAddress(null);
-    getUserLocation();
+    fetchMeetingsWithCriteria(currentUserLocation);
   };
 
   const showMeetingDetails = (meeting: Meeting) => {
     setSelectedMeeting(meeting);
     setMeetingDetailsVisible(true);
+  };
+
+  const onFilterModalClose = () => {
+    setShowFilterModal(false);
+    setShowLocationPicker(false);
+    fetchMeetingsWithCriteria(
+      usingCustomLocation ? customLocation : currentUserLocation,
+    );
   };
 
   const handleToggleFavorite = (meetingId: string) => {
@@ -346,22 +358,22 @@ const MeetingsScreen: React.FC = () => {
     );
   };
 
-  const renderTypeFilterModal = () => (
+  const renderFilterModal = () => (
     <Modal
-      visible={showTypeFilterModal}
+      visible={showFilterModal}
       animationType="slide"
       transparent={true}
-      onRequestClose={() => setShowTypeFilterModal(false)}>
+      onRequestClose={() => setShowFilterModal(false)}>
       <TouchableOpacity
         style={styles.modalOverlay}
         activeOpacity={1}
-        onPressOut={() => setShowTypeFilterModal(false)}>
+        onPressOut={() => setShowFilterModal(false)}>
         <View style={styles.filterModalContainer}>
           <View style={styles.pullIndicator} />
           <View style={styles.locationModalHeader}>
-            <Text style={styles.locationModalTitle}>Meeting Type</Text>
+            <Text style={styles.locationModalTitle}>Filters</Text>
             <TouchableOpacity
-              onPress={() => setShowTypeFilterModal(false)}
+              onPress={() => setShowFilterModal(false)}
               style={styles.closeButton}>
               <Icon name="close" size={24} color="#757575" />
             </TouchableOpacity>
@@ -373,6 +385,7 @@ const MeetingsScreen: React.FC = () => {
               style={[
                 styles.typeFilterButton,
                 showInPerson && styles.typeFilterActive,
+                !showOnline && !showInPerson && styles.typeFilterInactive,
               ]}
               onPress={() => setShowInPerson(!showInPerson)}>
               <Text
@@ -387,6 +400,7 @@ const MeetingsScreen: React.FC = () => {
               style={[
                 styles.typeFilterButton,
                 showOnline && styles.typeFilterActive,
+                !showOnline && !showInPerson && styles.typeFilterInactive,
               ]}
               onPress={() => setShowOnline(!showOnline)}>
               <Text
@@ -399,6 +413,12 @@ const MeetingsScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
+          {!showOnline && !showInPerson && (
+            <Text style={styles.filterWarningText}>
+              Warning: No meeting formats selected.
+            </Text>
+          )}
+
           <Text style={styles.filterSectionTitle}>Program Type</Text>
           <FlatList
             data={meetingTypes}
@@ -410,9 +430,8 @@ const MeetingsScreen: React.FC = () => {
                   selectedTypeFilter === type && styles.modalItemButtonActive,
                 ]}
                 onPress={() => {
-                  setSelectedTypeFilter(type);
-                  fetchMeetingsWithCriteria(activeLocation);
-                  setShowTypeFilterModal(false);
+                  const newType = selectedTypeFilter === type ? 'All' : type;
+                  setSelectedTypeFilter(newType);
                 }}>
                 <Text
                   style={[
@@ -427,6 +446,12 @@ const MeetingsScreen: React.FC = () => {
               </TouchableOpacity>
             )}
           />
+
+          <TouchableOpacity
+            style={styles.applyFilterButton}
+            onPress={onFilterModalClose}>
+            <Text style={styles.applyFilterButtonText}>Done</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     </Modal>
@@ -484,11 +509,11 @@ const MeetingsScreen: React.FC = () => {
       {selectedMeeting && (
         <View style={styles.modalOverlay}>
           <View style={styles.detailsModalContent}>
-            <View style={styles.locationModalHeader}>
-              <Text style={styles.locationModalTitle}>Meeting Details</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Meeting Details</Text>
               <TouchableOpacity
                 onPress={() => setMeetingDetailsVisible(false)}
-                style={styles.closeButton}>
+                style={styles.modalCloseButton}>
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -607,6 +632,19 @@ const MeetingsScreen: React.FC = () => {
     </Modal>
   );
 
+  const getLocationChipText = () => {
+    if (usingCustomLocation && customLocationAddress) {
+      const addressPart = customLocationAddress.split(',')[0].trim();
+      if (addressPart.length > 15) {
+        return `${addressPart.substring(0, 15)}...`;
+      }
+      return addressPart;
+    } else if (usingCustomLocation) {
+      return 'Custom Location';
+    }
+    return 'Near Me';
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerContainer}>
@@ -642,10 +680,10 @@ const MeetingsScreen: React.FC = () => {
         <View style={styles.filterButtonsRow}>
           <TouchableOpacity
             style={styles.filterChipButton}
-            onPress={() => setShowTypeFilterModal(true)}>
+            onPress={() => setShowFilterModal(true)}>
             <Icon name="filter-variant" size={18} color="#1976D2" />
             <Text style={styles.filterChipButtonText}>
-              {selectedTypeFilter === 'All' ? 'Type' : selectedTypeFilter}
+              {selectedTypeFilter === 'All' ? 'Filters' : selectedTypeFilter}
             </Text>
             <Icon name="chevron-down" size={18} color="#1976D2" />
           </TouchableOpacity>
@@ -654,19 +692,19 @@ const MeetingsScreen: React.FC = () => {
             style={styles.filterChipButton}
             onPress={() => setShowLocationPicker(true)}>
             <Icon name="map-marker-outline" size={18} color="#1976D2" />
-            <Text style={styles.filterChipButtonText}>
-              {customLocationAddress || 'Location'}
+            <Text
+              style={styles.filterChipButtonText}
+              numberOfLines={1}
+              ellipsizeMode="tail">
+              {getLocationChipText()}
             </Text>
             <Icon name="chevron-down" size={18} color="#1976D2" />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.filterChipButton}
+            style={[styles.filterChipButton, styles.resetChipButton]}
             onPress={resetFilters}>
             <Icon name="filter-variant-remove" size={18} color="#757575" />
-            <Text style={[styles.filterChipButtonText, {color: '#757575'}]}>
-              Reset
-            </Text>
           </TouchableOpacity>
         </View>
 
@@ -730,7 +768,7 @@ const MeetingsScreen: React.FC = () => {
               <Text style={styles.emptySubtext}>
                 {error
                   ? 'There was an error loading meetings.'
-                  : 'Try adjusting your search location, radius, or filters.'}
+                  : 'Try adjusting your search location or filters.'}
               </Text>
               <TouchableOpacity
                 style={styles.resetEmptyButton}
@@ -742,7 +780,7 @@ const MeetingsScreen: React.FC = () => {
         />
       )}
 
-      {renderTypeFilterModal()}
+      {renderFilterModal()}
       {renderLocationPickerModal()}
       {renderMeetingDetailsModal()}
     </SafeAreaView>
@@ -813,6 +851,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 4,
     marginRight: 2,
+    maxWidth: 100,
+  },
+  resetChipButton: {
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 10,
   },
   radiusContainer: {
     marginTop: 8,
@@ -979,6 +1022,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
   },
@@ -1001,42 +1045,6 @@ const styles = StyleSheet.create({
     color: '#424242',
     marginBottom: 12,
     marginTop: 8,
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
-  },
-  applyButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: '#2196F3',
-    alignItems: 'center',
-  },
-  applyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  filterModalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 16,
-    paddingBottom: 34,
-    maxHeight: '70%',
-  },
-  pullIndicator: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2.5,
-    marginBottom: 16,
-    alignSelf: 'center',
   },
   typeFilterContainer: {
     flexDirection: 'row',
@@ -1064,6 +1072,9 @@ const styles = StyleSheet.create({
   typeFilterActiveText: {
     color: '#1E88E5',
     fontWeight: '600',
+  },
+  typeFilterInactive: {
+    borderColor: '#E57373',
   },
   modalItemButton: {
     flexDirection: 'row',
@@ -1197,6 +1208,65 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 15,
+  },
+  filterWarningText: {
+    fontSize: 12,
+    color: '#D32F2F',
+    textAlign: 'center',
+    marginTop: -8,
+    marginBottom: 8,
+  },
+  applyFilterButton: {
+    marginTop: 16,
+    backgroundColor: '#2196F3',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  applyFilterButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  filterModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    paddingBottom: 34,
+    maxHeight: '70%',
+  },
+  pullIndicator: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2.5,
+    marginBottom: 16,
+    alignSelf: 'center',
+  },
+  applyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#212121',
+    flex: 1,
+  },
+  modalCloseButton: {
+    padding: 8,
+    marginLeft: 16,
   },
 });
 
