@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -22,27 +22,20 @@ import {StackNavigationProp} from '@react-navigation/stack';
 import Slider from '@react-native-community/slider';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
-  setUserLocation,
+  setUserLocation as setReduxUserLocation,
   fetchMeetings,
   filterMeetings,
   toggleFavoriteMeeting,
   selectFilteredMeetings,
   selectMeetingsStatus,
   selectMeetingsError,
-  selectUserLocation,
+  selectUserLocation as selectReduxUserLocation,
 } from '../../store/slices/meetingsSlice';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import LocationPicker from '../../components/groups/LocationPicker';
 
 // Types for meetings data
 import {Meeting, MeetingType, Location, DaysAndTimes} from '../../types';
-
-// Filter options type
-interface FilterOptions {
-  showOnline: boolean;
-  showInPerson: boolean;
-  meetingType: MeetingType | null;
-  day: keyof DaysAndTimes | null;
-  radius: number; // search radius in miles
-}
 
 const MeetingsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
@@ -52,25 +45,31 @@ const MeetingsScreen: React.FC = () => {
   const filteredMeetings = useAppSelector(selectFilteredMeetings);
   const status = useAppSelector(selectMeetingsStatus);
   const error = useAppSelector(selectMeetingsError);
-  const userLocation = useAppSelector(selectUserLocation);
+  const reduxUserLocation = useAppSelector(selectReduxUserLocation);
 
   const isLoading = status === 'loading';
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [nameQuery, setNameQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [meetingDetailsVisible, setMeetingDetailsVisible] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Filter state
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
-    showOnline: true,
-    showInPerson: true,
-    meetingType: null,
-    day: null,
-    radius: 10, // Default to 10 miles radius
-  });
+  const [currentUserLocation, setCurrentUserLocation] =
+    useState<Location | null>(reduxUserLocation);
+  const [customLocation, setCustomLocation] = useState<Location | null>(null);
+  const [customLocationAddress, setCustomLocationAddress] = useState<
+    string | null
+  >(null);
+  const [usingCustomLocation, setUsingCustomLocation] = useState(false);
+  const [searchRadius, setSearchRadius] = useState<number>(10);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showTypeFilterModal, setShowTypeFilterModal] = useState(false);
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<
+    MeetingType | 'All'
+  >('All');
+  const [showOnline, setShowOnline] = useState(true);
+  const [showInPerson, setShowInPerson] = useState(true);
 
   const days: (keyof DaysAndTimes)[] = [
     'sunday',
@@ -82,26 +81,41 @@ const MeetingsScreen: React.FC = () => {
     'saturday',
   ] as const;
 
-  const meetingTypes: MeetingType[] = [
+  const meetingTypes: (MeetingType | 'All')[] = [
+    'All',
     'AA',
     'NA',
-    'IOP',
-    'Religious',
     'Celebrate Recovery',
     'Custom',
   ];
 
-  // Get user's current location
-  const getUserLocation = useCallback(async () => {
-    setLocationError(null);
+  const meetings = useMemo(() => {
+    return filteredMeetings.filter(meeting => {
+      return meeting.name.toLowerCase().includes(nameQuery.toLowerCase());
+    });
+  }, [filteredMeetings, nameQuery]);
 
-    // Request permission (for Android)
-    if (Platform.OS === 'android') {
-      const granted = await requestLocationPermission();
-      if (!granted) {
-        setLocationError('Location permission denied');
-        return;
-      }
+  const activeLocation = usingCustomLocation
+    ? customLocation
+    : currentUserLocation;
+
+  const getUserLocation = useCallback(async () => {
+    if (usingCustomLocation) return;
+
+    setLocationError(null);
+    const hasPermission = await requestLocationPermission();
+    if (!hasPermission) {
+      setLocationError(
+        'Location permission denied. Search for a location manually.',
+      );
+      dispatch(
+        fetchMeetings({
+          filters: {
+            type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+          },
+        }),
+      );
+      return;
     }
 
     Geolocation.getCurrentPosition(
@@ -110,34 +124,36 @@ const MeetingsScreen: React.FC = () => {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
-        // Dispatch location to Redux
-        dispatch(setUserLocation(location));
-
-        // Instead of relying on the setUserLocation to trigger the fetch,
-        // we'll do it explicitly with filters
-        const filters = {
-          day: filterOptions.day || undefined,
-          type: filterOptions.meetingType || undefined,
-        };
-        dispatch(fetchMeetings({location, filters}));
+        setCurrentUserLocation(location);
+        dispatch(setReduxUserLocation(location));
+        dispatch(
+          fetchMeetings({
+            location,
+            filters: {
+              type:
+                selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+            },
+          }),
+        );
       },
       error => {
         console.error('Error getting location:', error);
         setLocationError(
-          'Unable to get your location. Please check app permissions.',
+          'Unable to get your location. Check permissions or search manually.',
         );
-        // Try to fetch meetings without location but with current filters
-        const filters = {
-          day: filterOptions.day || undefined,
-          type: filterOptions.meetingType || undefined,
-        };
-        dispatch(fetchMeetings({filters}));
+        dispatch(
+          fetchMeetings({
+            filters: {
+              type:
+                selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+            },
+          }),
+        );
       },
       {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
     );
-  }, [dispatch, filterOptions]);
+  }, [dispatch, selectedTypeFilter, usingCustomLocation]);
 
-  // For Android, request location permission
   const requestLocationPermission = async () => {
     try {
       if (Platform.OS === 'android') {
@@ -159,108 +175,109 @@ const MeetingsScreen: React.FC = () => {
     }
   };
 
-  // Initialize - get location on component mount
   useEffect(() => {
-    getUserLocation();
-  }, [getUserLocation]);
+    if (!usingCustomLocation) {
+      getUserLocation();
+    } else if (customLocation) {
+      dispatch(
+        fetchMeetings({
+          location: customLocation,
+          filters: {
+            type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+          },
+        }),
+      );
+    }
+  }, [
+    getUserLocation,
+    usingCustomLocation,
+    customLocation,
+    dispatch,
+    selectedTypeFilter,
+  ]);
 
-  // Apply filters when they change
   useEffect(() => {
     applyFilters();
-  }, [filterOptions, searchQuery]);
+  }, [nameQuery, selectedTypeFilter, showOnline, showInPerson]);
 
-  // Show error alert if there's an error from Redux
   useEffect(() => {
     if (error) {
       Alert.alert('Error', error);
     }
   }, [error]);
 
-  // Apply filters to meetings
   const applyFilters = () => {
-    // Update the filtered results in state
     dispatch(
       filterMeetings({
-        searchQuery,
-        showOnline: filterOptions.showOnline,
-        showInPerson: filterOptions.showInPerson,
-        meetingType: filterOptions.meetingType,
-        day: filterOptions.day,
+        searchQuery: nameQuery,
+        showOnline: showOnline,
+        showInPerson: showInPerson,
+        meetingType:
+          selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
       }),
     );
+  };
 
-    // Also fetch new meetings with the updated filters if we have location
-    if (userLocation) {
+  const fetchMeetingsWithCriteria = (locationToUse: Location | null) => {
+    if (!locationToUse) {
       dispatch(
         fetchMeetings({
-          location: userLocation,
           filters: {
-            day: filterOptions.day || undefined,
-            type: filterOptions.meetingType || undefined,
+            type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+          },
+        }),
+      );
+    } else {
+      dispatch(
+        fetchMeetings({
+          location: locationToUse,
+          filters: {
+            type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
           },
         }),
       );
     }
   };
 
-  // Handle refresh
-  const onRefresh = async () => {
+  const onRefresh = () => {
     setRefreshing(true);
-
-    // Pass current filter options when refreshing
-    const filters = {
-      day: filterOptions.day || undefined,
-      type: filterOptions.meetingType || undefined,
-    };
-
-    if (userLocation) {
-      dispatch(fetchMeetings({location: userLocation, filters}));
-    } else {
-      await getUserLocation();
-    }
-
+    fetchMeetingsWithCriteria(activeLocation);
     setRefreshing(false);
   };
 
-  // Handle search input changes
   const handleSearchChange = (text: string) => {
-    setSearchQuery(text);
+    setNameQuery(text);
   };
 
-  // Reset all filters to default values
   const resetFilters = () => {
-    setFilterOptions({
-      showOnline: true,
-      showInPerson: true,
-      meetingType: null,
-      day: null,
-      radius: 10,
-    });
-    setSearchQuery('');
+    setNameQuery('');
+    setSelectedTypeFilter('All');
+    setShowOnline(true);
+    setShowInPerson(true);
+    setSearchRadius(10);
+    setUsingCustomLocation(false);
+    setCustomLocation(null);
+    setCustomLocationAddress(null);
+    getUserLocation();
   };
 
-  // Show meeting details
   const showMeetingDetails = (meeting: Meeting) => {
     setSelectedMeeting(meeting);
     setMeetingDetailsVisible(true);
   };
 
-  // Toggle favorite status
   const handleToggleFavorite = (meetingId: string) => {
     dispatch(toggleFavoriteMeeting(meetingId));
   };
 
-  // Format day and time for display
   const formatDayAndTime = (meeting: Meeting): string => {
     if (meeting.day && meeting.time) {
-      // Capitalize first letter of day
       const day = meeting.day.charAt(0).toUpperCase() + meeting.day.slice(1);
       return `${day}s at ${meeting.time}`;
     }
     return 'Time not specified';
   };
 
-  // Format address for display
   const formatAddress = (meeting: Meeting): string => {
     if (meeting.online) {
       return 'Online Meeting';
@@ -275,18 +292,17 @@ const MeetingsScreen: React.FC = () => {
     return parts.length > 0 ? parts.join(', ') : 'Address not specified';
   };
 
-  // Calculate distance between two points using Haversine formula
   const calculateDistance = (meeting: Meeting): string => {
-    if (!userLocation || !meeting.lat || !meeting.lng) {
+    if (!activeLocation || !meeting.lat || !meeting.lng) {
       return '';
     }
 
-    const R = 3958.8; // Earth's radius in miles
-    const dLat = ((meeting.lat - userLocation.lat) * Math.PI) / 180;
-    const dLon = ((meeting.lng - userLocation.lng) * Math.PI) / 180;
+    const R = 3958.8;
+    const dLat = ((meeting.lat - activeLocation.lat) * Math.PI) / 180;
+    const dLon = ((meeting.lng - activeLocation.lng) * Math.PI) / 180;
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((userLocation.lat * Math.PI) / 180) *
+      Math.cos((activeLocation.lat * Math.PI) / 180) *
         Math.cos((meeting.lat * Math.PI) / 180) *
         Math.sin(dLon / 2) *
         Math.sin(dLon / 2);
@@ -296,252 +312,169 @@ const MeetingsScreen: React.FC = () => {
     return distance.toFixed(1) + ' mi';
   };
 
-  // Render meeting list item
-  const renderMeetingItem = ({item}: {item: Meeting}) => (
-    <TouchableOpacity
-      style={styles.meetingCard}
-      onPress={() => showMeetingDetails(item)}>
-      <View style={styles.meetingHeader}>
-        <View style={styles.meetingTimeContainer}>
-          <Text style={styles.meetingDay}>{formatDayAndTime(item)}</Text>
-          {userLocation && item.lat && item.lng && (
-            <Text style={styles.meetingDistance}>
-              {calculateDistance(item)}
-            </Text>
-          )}
-        </View>
-        {/* <TouchableOpacity
-          style={styles.favoriteButton}
-          onPress={() => item.id && handleToggleFavorite(item.id)}>
-          <Text style={styles.favoriteIcon}>{item.isFavorite ? '★' : '☆'}</Text>
-        </TouchableOpacity> */}
-      </View>
+  const renderMeetingItem = ({item}: {item: Meeting}) => {
+    const distanceText = calculateDistance(item);
 
-      <View style={styles.meetingContent}>
-        <Text style={styles.meetingName}>{item.name}</Text>
-        <Text style={styles.meetingLocation}>{formatAddress(item)}</Text>
-        <View style={styles.meetingTags}>
-          <View style={styles.formatTag}>
-            <Text style={styles.formatTagText}>{item.type}</Text>
+    return (
+      <TouchableOpacity
+        style={styles.meetingCard}
+        onPress={() => showMeetingDetails(item)}>
+        <View style={styles.meetingHeader}>
+          <View style={styles.meetingTimeContainer}>
+            <Text style={styles.meetingDay}>{formatDayAndTime(item)}</Text>
+            {distanceText && (
+              <Text style={styles.meetingDistance}>{distanceText}</Text>
+            )}
           </View>
-          {item.online && (
-            <View style={[styles.formatTag, styles.onlineTag]}>
-              <Text style={styles.formatTagText}>Online</Text>
-            </View>
-          )}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
 
-  // Render filter modal
-  const renderFilterModal = () => (
+        <View style={styles.meetingContent}>
+          <Text style={styles.meetingName}>{item.name}</Text>
+          <Text style={styles.meetingLocation}>{formatAddress(item)}</Text>
+          <View style={styles.meetingTags}>
+            <View style={styles.formatTag}>
+              <Text style={styles.formatTagText}>{item.type}</Text>
+            </View>
+            {item.online && (
+              <View style={[styles.formatTag, styles.onlineTag]}>
+                <Text style={styles.formatTagText}>Online</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderTypeFilterModal = () => (
     <Modal
-      visible={filterModalVisible}
+      visible={showTypeFilterModal}
       animationType="slide"
       transparent={true}
-      onRequestClose={() => setFilterModalVisible(false)}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filter Meetings</Text>
+      onRequestClose={() => setShowTypeFilterModal(false)}>
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPressOut={() => setShowTypeFilterModal(false)}>
+        <View style={styles.filterModalContainer}>
+          <View style={styles.pullIndicator} />
+          <View style={styles.locationModalHeader}>
+            <Text style={styles.locationModalTitle}>Meeting Type</Text>
             <TouchableOpacity
-              onPress={() => setFilterModalVisible(false)}
+              onPress={() => setShowTypeFilterModal(false)}
               style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>✕</Text>
+              <Icon name="close" size={24} color="#757575" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalScrollView}>
-            <Text style={styles.filterSectionTitle}>Meeting Type</Text>
-            <View style={styles.typeFilterContainer}>
-              <TouchableOpacity
+          <Text style={styles.filterSectionTitle}>Format</Text>
+          <View style={styles.typeFilterContainer}>
+            <TouchableOpacity
+              style={[
+                styles.typeFilterButton,
+                showInPerson && styles.typeFilterActive,
+              ]}
+              onPress={() => setShowInPerson(!showInPerson)}>
+              <Text
                 style={[
-                  styles.typeFilterButton,
-                  filterOptions.showInPerson && styles.typeFilterActive,
-                ]}
-                onPress={() =>
-                  setFilterOptions({
-                    ...filterOptions,
-                    showInPerson: !filterOptions.showInPerson,
-                  })
-                }>
-                <Text
-                  style={[
-                    styles.typeFilterText,
-                    filterOptions.showInPerson && styles.typeFilterActiveText,
-                  ]}>
-                  In-Person
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typeFilterButton,
-                  filterOptions.showOnline && styles.typeFilterActive,
-                ]}
-                onPress={() =>
-                  setFilterOptions({
-                    ...filterOptions,
-                    showOnline: !filterOptions.showOnline,
-                  })
-                }>
-                <Text
-                  style={[
-                    styles.typeFilterText,
-                    filterOptions.showOnline && styles.typeFilterActiveText,
-                  ]}>
-                  Online
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.filterSectionTitle}>Program Type</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filterScrollView}>
-              <TouchableOpacity
-                style={[
-                  styles.formatFilterButton,
-                  filterOptions.meetingType === null &&
-                    styles.formatFilterActive,
-                ]}
-                onPress={() =>
-                  setFilterOptions({
-                    ...filterOptions,
-                    meetingType: null,
-                  })
-                }>
-                <Text
-                  style={[
-                    styles.formatFilterText,
-                    filterOptions.meetingType === null &&
-                      styles.formatFilterActiveText,
-                  ]}>
-                  All
-                </Text>
-              </TouchableOpacity>
-
-              {meetingTypes.map(type => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.formatFilterButton,
-                    filterOptions.meetingType === type &&
-                      styles.formatFilterActive,
-                  ]}
-                  onPress={() =>
-                    setFilterOptions({
-                      ...filterOptions,
-                      meetingType:
-                        filterOptions.meetingType === type ? null : type,
-                    })
-                  }>
-                  <Text
-                    style={[
-                      styles.formatFilterText,
-                      filterOptions.meetingType === type &&
-                        styles.formatFilterActiveText,
-                    ]}>
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.filterSectionTitle}>Day of Week</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filterScrollView}>
-              <TouchableOpacity
-                style={[
-                  styles.dayFilterButton,
-                  filterOptions.day === null && styles.dayFilterActive,
-                ]}
-                onPress={() =>
-                  setFilterOptions({
-                    ...filterOptions,
-                    day: null,
-                  })
-                }>
-                <Text
-                  style={[
-                    styles.dayFilterText,
-                    filterOptions.day === null && styles.dayFilterActiveText,
-                  ]}>
-                  All
-                </Text>
-              </TouchableOpacity>
-
-              {days.map(day => (
-                <TouchableOpacity
-                  key={Math.random().toString()}
-                  style={[
-                    styles.dayFilterButton,
-                    filterOptions.day === day && styles.dayFilterActive,
-                  ]}
-                  onPress={() =>
-                    setFilterOptions({
-                      ...filterOptions,
-                      day: filterOptions.day === day ? null : day,
-                    })
-                  }>
-                  <Text
-                    style={[
-                      styles.dayFilterText,
-                      filterOptions.day === day && styles.dayFilterActiveText,
-                    ]}>
-                    {day.charAt(0).toUpperCase() + day.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.filterSectionTitle}>Search Radius</Text>
-            <View style={styles.radiusContainer}>
-              <Text style={styles.radiusValue}>
-                {filterOptions.radius} miles
+                  styles.typeFilterText,
+                  showInPerson && styles.typeFilterActiveText,
+                ]}>
+                In-Person
               </Text>
-              <Slider
-                style={styles.radiusSlider}
-                minimumValue={1}
-                maximumValue={50}
-                step={1}
-                value={filterOptions.radius}
-                onValueChange={value =>
-                  setFilterOptions({
-                    ...filterOptions,
-                    radius: value,
-                  })
-                }
-                minimumTrackTintColor="#2196F3"
-                maximumTrackTintColor="#E0E0E0"
-                thumbTintColor="#2196F3"
-              />
-            </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.typeFilterButton,
+                showOnline && styles.typeFilterActive,
+              ]}
+              onPress={() => setShowOnline(!showOnline)}>
+              <Text
+                style={[
+                  styles.typeFilterText,
+                  showOnline && styles.typeFilterActiveText,
+                ]}>
+                Online
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.modalFooter}>
+          <Text style={styles.filterSectionTitle}>Program Type</Text>
+          <FlatList
+            data={meetingTypes}
+            keyExtractor={item => item}
+            renderItem={({item: type}) => (
               <TouchableOpacity
-                style={styles.resetButton}
-                onPress={resetFilters}>
-                <Text style={styles.resetButtonText}>Reset Filters</Text>
+                style={[
+                  styles.modalItemButton,
+                  selectedTypeFilter === type && styles.modalItemButtonActive,
+                ]}
+                onPress={() => {
+                  setSelectedTypeFilter(type);
+                  fetchMeetingsWithCriteria(activeLocation);
+                  setShowTypeFilterModal(false);
+                }}>
+                <Text
+                  style={[
+                    styles.modalItemText,
+                    selectedTypeFilter === type && styles.modalItemTextActive,
+                  ]}>
+                  {type}
+                </Text>
+                {selectedTypeFilter === type && (
+                  <Icon name="check" size={20} color="#FFFFFF" />
+                )}
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.applyButton}
-                onPress={() => setFilterModalVisible(false)}>
-                <Text style={styles.applyButtonText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+            )}
+          />
         </View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 
-  // Render meeting details modal
+  const renderLocationPickerModal = () => (
+    <Modal
+      visible={showLocationPicker}
+      animationType="slide"
+      onRequestClose={() => setShowLocationPicker(false)}>
+      <SafeAreaView style={styles.locationModalContainer}>
+        <View style={styles.locationModalHeader}>
+          <Text style={styles.locationModalTitle}>Search Location</Text>
+          <TouchableOpacity
+            onPress={() => setShowLocationPicker(false)}
+            style={styles.closeButton}>
+            <Icon name="close" size={24} color="#757575" />
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.locationModalContent}>
+          <LocationPicker
+            onLocationSelect={locationData => {
+              const newLocation: Location = {
+                lat: locationData.latitude,
+                lng: locationData.longitude,
+                city: locationData.city,
+                state: locationData.state,
+                zip: locationData.zip,
+              };
+              setCustomLocation(newLocation);
+              setCustomLocationAddress(locationData.address);
+              setUsingCustomLocation(true);
+            }}
+            initialAddress={customLocationAddress || ''}
+            label="Search for meetings near..."
+          />
+          <TouchableOpacity
+            style={styles.useMyLocationButton}
+            onPress={() => {
+              setShowLocationPicker(false);
+            }}>
+            <Text style={styles.useMyLocationText}>Done</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+
   const renderMeetingDetailsModal = () => (
     <Modal
       visible={meetingDetailsVisible}
@@ -551,8 +484,8 @@ const MeetingsScreen: React.FC = () => {
       {selectedMeeting && (
         <View style={styles.modalOverlay}>
           <View style={styles.detailsModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Meeting Details</Text>
+            <View style={styles.locationModalHeader}>
+              <Text style={styles.locationModalTitle}>Meeting Details</Text>
               <TouchableOpacity
                 onPress={() => setMeetingDetailsVisible(false)}
                 style={styles.closeButton}>
@@ -564,7 +497,6 @@ const MeetingsScreen: React.FC = () => {
               contentContainerStyle={{
                 flexGrow: 1,
                 justifyContent: 'flex-start',
-                // alignItems: 'center',
                 width: '100%',
               }}
               style={styles.meetingDetailContent}>
@@ -595,7 +527,6 @@ const MeetingsScreen: React.FC = () => {
                   <TouchableOpacity
                     style={styles.linkButton}
                     onPress={() => {
-                      // Open meeting link
                       Linking.openURL(selectedMeeting.link || '#');
                     }}>
                     <Text style={styles.linkButtonText}>Join Meeting</Text>
@@ -613,7 +544,7 @@ const MeetingsScreen: React.FC = () => {
                 <Text style={styles.detailsText}>{selectedMeeting.type}</Text>
               </View>
 
-              {selectedMeeting.lat && selectedMeeting.lng && userLocation && (
+              {activeLocation && selectedMeeting.lat && selectedMeeting.lng && (
                 <View style={styles.detailsSection}>
                   <Text style={styles.detailsLabel}>Distance:</Text>
                   <Text style={styles.detailsText}>
@@ -642,67 +573,34 @@ const MeetingsScreen: React.FC = () => {
                 </View>
               )}
 
-              <View style={styles.detailsSection}>
-                <TouchableOpacity
-                  style={styles.directionsButton}
-                  onPress={() => {
-                    // Open map directions if meeting has coordinates
-                    if (selectedMeeting.lat && selectedMeeting.lng) {
-                      const scheme = Platform.select({
-                        ios: 'maps:0,0?q=',
-                        android: 'geo:0,0?q=',
-                      });
-                      const latLng = `${selectedMeeting.lat},${selectedMeeting.lng}`;
-                      const label = selectedMeeting.name;
-                      const url = Platform.select({
-                        ios: `${scheme}${label}@${latLng}`,
-                        android: `${scheme}${latLng}(${label})`,
-                      });
-
-                      if (url) {
-                        Linking.openURL(url);
-                      }
-                    }
-                  }}
-                  disabled={
-                    !selectedMeeting.lat ||
-                    !selectedMeeting.lng ||
-                    selectedMeeting.online
-                  }>
-                  <Text
-                    style={[
-                      styles.directionsButtonText,
-                      (!selectedMeeting.lat ||
-                        !selectedMeeting.lng ||
-                        selectedMeeting.online) &&
-                        styles.disabledButtonText,
-                    ]}>
-                    Get Directions
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              {!selectedMeeting.online &&
+                selectedMeeting.lat &&
+                selectedMeeting.lng && (
+                  <View style={styles.detailsSection}>
+                    <TouchableOpacity
+                      style={styles.directionsButton}
+                      onPress={() => {
+                        const scheme = Platform.select({
+                          ios: 'maps:0,0?q=',
+                          android: 'geo:0,0?q=',
+                        });
+                        const latLng = `${selectedMeeting.lat},${selectedMeeting.lng}`;
+                        const label = selectedMeeting.name;
+                        const url = Platform.select({
+                          ios: `${scheme}${label}@${latLng}`,
+                          android: `${scheme}${latLng}(${label})`,
+                        });
+                        if (url) Linking.openURL(url);
+                      }}>
+                      <Text style={styles.directionsButtonText}>
+                        Get Directions
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
             </ScrollView>
 
-            <View style={styles.detailsFooter}>
-              {/* <TouchableOpacity
-                style={[
-                  styles.detailsActionButton,
-                  selectedMeeting.isFavorite
-                    ? styles.removeButton
-                    : styles.addButton,
-                ]}
-                onPress={() => {
-                  if (selectedMeeting.id) {
-                    handleToggleFavorite(selectedMeeting.id);
-                  }
-                }}>
-                <Text style={styles.detailsActionButtonText}>
-                  {selectedMeeting.isFavorite
-                    ? 'Remove from My Meetings'
-                    : 'Add to My Meetings'}
-                </Text>
-              </TouchableOpacity> */}
-            </View>
+            <View style={styles.detailsFooter}></View>
           </View>
         </View>
       )}
@@ -711,89 +609,141 @@ const MeetingsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.searchFilterContainer}>
-        <View style={styles.searchContainer}>
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerTitle}>Find Meetings</Text>
+        <Text style={styles.headerSubtitle}>
+          {usingCustomLocation && customLocationAddress
+            ? `Near ${
+                customLocationAddress.split(',')[0] || 'selected location'
+              }`
+            : currentUserLocation
+            ? `Near your location`
+            : 'Search for recovery meetings'}
+        </Text>
+      </View>
+
+      <View style={styles.searchControlsContainer}>
+        <View style={styles.searchInputContainer}>
+          <Icon
+            name="magnify"
+            size={20}
+            color="#757575"
+            style={styles.searchIcon}
+          />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search meetings..."
-            value={searchQuery}
+            placeholder="Search by name..."
+            value={nameQuery}
             onChangeText={handleSearchChange}
+            returnKeyType="search"
           />
         </View>
 
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => setFilterModalVisible(true)}>
-          <Text style={styles.filterButtonText}>Filter</Text>
-        </TouchableOpacity>
+        <View style={styles.filterButtonsRow}>
+          <TouchableOpacity
+            style={styles.filterChipButton}
+            onPress={() => setShowTypeFilterModal(true)}>
+            <Icon name="filter-variant" size={18} color="#1976D2" />
+            <Text style={styles.filterChipButtonText}>
+              {selectedTypeFilter === 'All' ? 'Type' : selectedTypeFilter}
+            </Text>
+            <Icon name="chevron-down" size={18} color="#1976D2" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.filterChipButton}
+            onPress={() => setShowLocationPicker(true)}>
+            <Icon name="map-marker-outline" size={18} color="#1976D2" />
+            <Text style={styles.filterChipButtonText}>
+              {customLocationAddress || 'Location'}
+            </Text>
+            <Icon name="chevron-down" size={18} color="#1976D2" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.filterChipButton}
+            onPress={resetFilters}>
+            <Icon name="filter-variant-remove" size={18} color="#757575" />
+            <Text style={[styles.filterChipButtonText, {color: '#757575'}]}>
+              Reset
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* {activeLocation && (
+          <View style={styles.radiusContainer}>
+            <Text style={styles.radiusLabel}>
+              Search radius: {searchRadius} miles
+            </Text>
+            <Slider
+              style={styles.radiusSlider}
+              minimumValue={1}
+              maximumValue={100}
+              step={1}
+              value={searchRadius}
+              onValueChange={setSearchRadius}
+              onSlidingComplete={value =>
+                fetchMeetingsWithCriteria(activeLocation)
+              }
+              minimumTrackTintColor="#2196F3"
+              maximumTrackTintColor="#E0E0E0"
+              thumbTintColor="#2196F3"
+            />
+          </View>
+        )} */}
       </View>
 
-      {/* Location error message */}
-      {locationError && (
+      {locationError && !activeLocation && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{locationError}</Text>
           <TouchableOpacity
             style={styles.retryButton}
-            onPress={getUserLocation}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            onPress={() => setShowLocationPicker(true)}>
+            <Text style={styles.retryButtonText}>Search Location</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Active filters display */}
-      {(filterOptions.day ||
-        filterOptions.meetingType ||
-        filterOptions.radius !== 10) && (
-        <View style={styles.activeFiltersContainer}>
-          <Text style={styles.activeFiltersText}>
-            Filters:
-            {filterOptions.radius !== 10
-              ? ` ${filterOptions.radius} mi radius`
-              : ''}
-            {filterOptions.day
-              ? ` | ${
-                  filterOptions.day.charAt(0).toUpperCase() +
-                  filterOptions.day.slice(1)
-                }`
-              : ''}
-            {filterOptions.meetingType ? ` | ${filterOptions.meetingType}` : ''}
-            {!filterOptions.showOnline || !filterOptions.showInPerson
-              ? ` | ${
-                  !filterOptions.showOnline ? 'In-person only' : 'Online only'
-                }`
-              : ''}
-          </Text>
-          <TouchableOpacity onPress={resetFilters}>
-            <Text style={styles.clearFiltersText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {isLoading ? (
+      {isLoading && !refreshing ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color="#2196F3" />
+          <Text style={styles.loadingText}>Finding meetings...</Text>
         </View>
       ) : (
         <FlatList
-          data={filteredMeetings}
+          data={meetings}
           renderItem={renderMeetingItem}
-          keyExtractor={() => Math.random().toString()}
+          keyExtractor={item => item.id || Math.random().toString()}
           contentContainerStyle={styles.meetingsList}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No meetings found</Text>
+              <Icon
+                name="calendar-search"
+                size={64}
+                color="#BDBDBD"
+                style={{marginBottom: 16}}
+              />
+              <Text style={styles.emptyText}>No Meetings Found</Text>
               <Text style={styles.emptySubtext}>
-                Try adjusting your search or filters
+                {error
+                  ? 'There was an error loading meetings.'
+                  : 'Try adjusting your search location, radius, or filters.'}
               </Text>
+              <TouchableOpacity
+                style={styles.resetEmptyButton}
+                onPress={resetFilters}>
+                <Text style={styles.resetEmptyButtonText}>Reset Search</Text>
+              </TouchableOpacity>
             </View>
           }
         />
       )}
 
-      {renderFilterModal()}
+      {renderTypeFilterModal()}
+      {renderLocationPickerModal()}
       {renderMeetingDetailsModal()}
     </SafeAreaView>
   );
@@ -804,54 +754,95 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  header: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#2196F3',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#212121',
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
-  searchFilterContainer: {
-    flexDirection: 'row',
+  headerSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  searchControlsContainer: {
     padding: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
   },
-  searchContainer: {
-    flex: 1,
-    marginRight: 16,
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    flex: 1,
+    height: 44,
     fontSize: 16,
+    color: '#212121',
   },
-  filterButton: {
-    backgroundColor: '#2196F3',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
+  filterButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    gap: 8,
   },
-  filterButtonText: {
-    color: '#FFFFFF',
+  filterChipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 16,
+  },
+  filterChipButtonText: {
+    color: '#1976D2',
     fontWeight: '600',
+    fontSize: 14,
+    marginLeft: 4,
+    marginRight: 2,
+  },
+  radiusContainer: {
+    marginTop: 8,
+  },
+  radiusLabel: {
+    fontSize: 14,
+    color: '#616161',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  radiusSlider: {
+    width: '100%',
+    height: 40,
   },
   loaderContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#757575',
   },
   errorContainer: {
     backgroundColor: '#FFEBEE',
-    padding: 16,
-    margin: 16,
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
     borderRadius: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -861,96 +852,83 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
     flex: 1,
     marginRight: 8,
+    fontSize: 14,
   },
   retryButton: {
-    backgroundColor: '#D32F2F',
+    backgroundColor: '#FFCDD2',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 4,
+    borderRadius: 16,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: '#D32F2F',
     fontWeight: '600',
-    fontSize: 12,
-  },
-  activeFiltersContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#E3F2FD',
-    padding: 10,
-  },
-  activeFiltersText: {
     fontSize: 14,
-    color: '#1976D2',
-  },
-  clearFiltersText: {
-    fontSize: 14,
-    color: '#2196F3',
-    fontWeight: '600',
   },
   meetingsList: {
     padding: 16,
+    paddingTop: 8,
   },
   meetingCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    overflow: 'hidden',
   },
   meetingHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   meetingTimeContainer: {
-    flex: 1,
+    flexShrink: 1,
+    marginRight: 8,
   },
   meetingDay: {
     fontSize: 14,
-    color: '#757575',
-    marginBottom: 4,
+    color: '#616161',
+    marginBottom: 2,
+    fontWeight: '500',
   },
   meetingDistance: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#2196F3',
-  },
-  favoriteButton: {
-    padding: 4,
-  },
-  favoriteIcon: {
-    fontSize: 24,
-    color: '#FFC107',
+    color: '#1976D2',
   },
   meetingContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
   },
   meetingName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: '#212121',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   meetingLocation: {
     fontSize: 14,
     color: '#757575',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   meetingTags: {
     flexDirection: 'row',
+    alignItems: 'center',
   },
   formatTag: {
     backgroundColor: '#E0E0E0',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginRight: 8,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginRight: 6,
   },
   onlineTag: {
     backgroundColor: '#E3F2FD',
@@ -958,176 +936,85 @@ const styles = StyleSheet.create({
   formatTagText: {
     fontSize: 12,
     color: '#616161',
+    fontWeight: '500',
   },
   emptyContainer: {
+    flexGrow: 1,
     padding: 48,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40,
   },
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#9E9E9E',
+    color: '#757575',
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#BDBDBD',
+    color: '#9E9E9E',
     textAlign: 'center',
+    marginBottom: 24,
+  },
+  resetEmptyButton: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  resetEmptyButtonText: {
+    color: '#1976D2',
+    fontWeight: '600',
+    fontSize: 15,
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 24,
-    maxHeight: '80%',
-  },
-  modalScrollView: {
-    // flex: 1,
-    width: '100%',
-  },
-  detailsModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 24,
-    maxHeight: '80%',
-  },
-  modalHeader: {
+  locationModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
   },
-  modalTitle: {
+  locationModalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#212121',
   },
   closeButton: {
-    padding: 4,
+    padding: 8,
   },
   closeButtonText: {
-    fontSize: 20,
+    fontSize: 24,
     color: '#757575',
+    lineHeight: 24,
   },
   filterSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#212121',
+    color: '#424242',
     marginBottom: 12,
-    marginTop: 16,
-  },
-  typeFilterContainer: {
-    flexDirection: 'row',
-    marginBottom: 24,
-  },
-  typeFilterButton: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    marginRight: 12,
-    alignItems: 'center',
-  },
-  typeFilterActive: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#2196F3',
-  },
-  typeFilterText: {
-    fontSize: 14,
-    color: '#757575',
-  },
-  typeFilterActiveText: {
-    color: '#2196F3',
-    fontWeight: '600',
-  },
-  filterScrollView: {
-    marginBottom: 24,
-  },
-  dayFilterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 16,
-    marginRight: 8,
-  },
-  dayFilterActive: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#2196F3',
-  },
-  dayFilterText: {
-    fontSize: 14,
-    color: '#757575',
-  },
-  dayFilterActiveText: {
-    color: '#2196F3',
-    fontWeight: '600',
-  },
-  formatFilterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 16,
-    marginRight: 8,
-  },
-  formatFilterActive: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#2196F3',
-  },
-  formatFilterText: {
-    fontSize: 14,
-    color: '#757575',
-  },
-  formatFilterActiveText: {
-    color: '#2196F3',
-    fontWeight: '600',
-  },
-  radiusContainer: {
-    marginBottom: 24,
-  },
-  radiusValue: {
-    fontSize: 14,
-    color: '#212121',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  radiusSlider: {
-    width: '100%',
-    height: 40,
+    marginTop: 8,
   },
   modalFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  resetButton: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    flex: 1,
-    marginRight: 12,
-    alignItems: 'center',
-  },
-  resetButtonText: {
-    color: '#757575',
-    fontSize: 16,
-    fontWeight: '600',
+    justifyContent: 'flex-end',
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
   },
   applyButton: {
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     borderRadius: 8,
     backgroundColor: '#2196F3',
-    flex: 1,
     alignItems: 'center',
   },
   applyButtonText: {
@@ -1135,79 +1022,159 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  meetingDetailContent: {
+  filterModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    paddingBottom: 34,
+    maxHeight: '70%',
+  },
+  pullIndicator: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2.5,
     marginBottom: 16,
-    width: '100%',
+    alignSelf: 'center',
+  },
+  typeFilterContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 12,
+  },
+  typeFilterButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: '#BDBDBD',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeFilterActive: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#2196F3',
+  },
+  typeFilterText: {
+    fontSize: 14,
+    color: '#616161',
+    fontWeight: '500',
+  },
+  typeFilterActiveText: {
+    color: '#1E88E5',
+    fontWeight: '600',
+  },
+  modalItemButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  modalItemButtonActive: {
+    backgroundColor: '#2196F3',
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: '#424242',
+  },
+  modalItemTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  locationModalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  locationModalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  useMyLocationButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#E3F2FD',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  useMyLocationText: {
+    color: '#1976D2',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  detailsModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 24,
+    paddingTop: 16,
+    maxHeight: '85%',
+  },
+  meetingDetailContent: {
+    paddingBottom: 16,
   },
   detailsName: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#212121',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   detailsSection: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   detailsLabel: {
     fontSize: 14,
     color: '#757575',
     marginBottom: 4,
+    fontWeight: '500',
   },
   detailsText: {
     fontSize: 16,
     color: '#212121',
     marginBottom: 4,
+    lineHeight: 22,
   },
   detailsSubtext: {
     fontSize: 14,
     color: '#757575',
+    lineHeight: 20,
   },
   detailsNotes: {
     fontSize: 14,
-    color: '#757575',
+    color: '#616161',
     fontStyle: 'italic',
     marginTop: 8,
-  },
-  detailsTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 4,
-  },
-  detailsTag: {
-    backgroundColor: '#E0E0E0',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  detailsTagText: {
-    fontSize: 12,
-    color: '#616161',
+    lineHeight: 20,
   },
   linkButton: {
     backgroundColor: '#2196F3',
     borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     alignSelf: 'flex-start',
-    marginTop: 8,
+    marginTop: 12,
   },
   linkButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: 15,
   },
   directionsButton: {
     backgroundColor: '#E3F2FD',
     borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     alignSelf: 'flex-start',
     marginTop: 8,
   },
   directionsButtonText: {
-    color: '#2196F3',
+    color: '#1E88E5',
     fontWeight: '600',
+    fontSize: 15,
   },
   disabledButtonText: {
     color: '#BDBDBD',
@@ -1216,35 +1183,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#EEEEEE',
     paddingTop: 16,
-  },
-  detailsActionButton: {
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  addButton: {
-    backgroundColor: '#E3F2FD',
-  },
-  removeButton: {
-    backgroundColor: '#FFEBEE',
-  },
-  detailsActionButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2196F3',
+    marginTop: 16,
   },
   createGroupButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#4CAF50',
     borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     alignSelf: 'flex-start',
     marginTop: 8,
   },
   createGroupButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: 15,
   },
 });
 

@@ -5,12 +5,17 @@ import {
   getCustomMeetings,
   getAlcoholicsAnonymousMeetings,
 } from "./utils/meetings";
-import { Meeting, MeetingSearchCriteria } from "./entities/Meeting";
+import {
+  Meeting,
+  MeetingSearchCriteria,
+  MeetingType,
+} from "./entities/Meeting";
 import * as admin from "firebase-admin";
 import * as geofire from "geofire-common";
 // Import the v1 namespace specifically
 import * as functionsV1 from "firebase-functions/v1";
 import { migrateGeohashes } from "./migrations/migrateGeohashes";
+import { Query } from "firebase-admin/firestore";
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
@@ -139,6 +144,7 @@ export const searchGroupsByLocation = functions.https.onCall(
       lat: number;
       lng: number;
       radius: number;
+      type: MeetingType;
     };
     try {
       // Validate required parameters
@@ -159,7 +165,11 @@ export const searchGroupsByLocation = functions.https.onCall(
       const bounds = geofire.geohashQueryBounds(center, radiusInM);
       const promises = [];
 
-      const groupsRef = admin.firestore().collection("groups");
+      let groupsRef: Query = admin.firestore().collection("groups");
+
+      if (data.type) {
+        groupsRef = groupsRef.where("type", "==", data.type);
+      }
 
       for (const b of bounds) {
         const q = groupsRef.orderBy("geohash").startAt(b[0]).endAt(b[1]);
