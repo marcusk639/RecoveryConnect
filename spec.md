@@ -92,3 +92,20 @@ Core Problem Statement
 - Additional fellowship-specific customizations
   Conclusion
   The Recovery Connect MVP delivers essential functionality that solves real problems for 12-step homegroups while maintaining the highest standards of privacy and respect for recovery traditions. The focused feature set enables rapid development and deployment while providing immediate value to users.
+
+Possible down the line features:
+
+Resource Directory (High-Level)
+Action: This requires significant new work:
+Define ResourceDocument schema (name, type, description, location, contact, website, verification status, listing tier/expiry).
+Build dedicated screens for browsing/searching resources.
+Establish a secure vetting and approval workflow for listings (manual or semi-automated).
+Integrate a payment provider for listing fees.
+Implement backend search/filtering for resources.
+Tool: No direct code edits suggested yet; this phase needs more detailed planning.
+
+TODO:
+
+Populate groups from AA meeting guide meetings
+Sobriety tracker with chip visuals
+Sponsorship functions

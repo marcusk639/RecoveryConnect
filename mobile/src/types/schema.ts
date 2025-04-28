@@ -2,6 +2,7 @@
 
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
 import {Meeting, MeetingType, Treasury} from '.';
+import firestore from '@react-native-firebase/firestore';
 
 export type Timestamp = FirebaseFirestoreTypes.Timestamp;
 
@@ -42,29 +43,33 @@ export interface TreasuryOverviewDocument {
  * Firestore User Document
  */
 export interface UserDocument {
+  id: string; // Matches UID from Auth, often document ID in users collection
   uid: string; // Firebase Auth UID
-  email: string; // User's email address
-  displayName: string; // First name or initial
-  recoveryDate?: Timestamp; // Optional recovery date
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   lastLogin: Timestamp;
-
+  phoneNumber?: string | null;
+  showPhoneNumber?: boolean;
+  sobrietyStartDate?: Timestamp | null; // Use this as the definitive start date
+  showSobrietyDate?: boolean; // Controls visibility of duration/date
   notificationSettings: {
     meetings: boolean; // default: true
     announcements: boolean; // default: true
     celebrations: boolean; // default: true
   };
-
   privacySettings: {
-    showRecoveryDate: boolean; // default: false
     allowDirectMessages: boolean; // default: true
   };
-
-  homeGroups: string[]; // Array of group IDs
+  homeGroups?: string[]; // Array of group IDs user is member of
+  adminGroups?: string[]; // Array of group IDs user is admin of
   role: 'user' | 'admin';
   favoriteMeetings?: string[]; // Array of meeting IDs
-  photoUrl?: string;
+  fcmTokens?: string[]; // For push notifications
+  subscriptionTier?: 'free' | 'plus'; // For premium features
+  subscriptionValidUntil?: Timestamp;
 }
 
 /**
