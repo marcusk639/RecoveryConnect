@@ -147,7 +147,7 @@ const MainTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: 'Meetings',
           tabBarIcon: ({focused}) => <MeetingsIcon focused={focused} />,
-          headerTitle: 'Meetings',
+          headerShown: false,
         }}
       />
       <Tab.Screen
