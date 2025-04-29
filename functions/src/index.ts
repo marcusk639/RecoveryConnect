@@ -16,6 +16,7 @@ import * as geofire from "geofire-common";
 import * as functionsV1 from "firebase-functions/v1";
 import { migrateGeohashes } from "./migrations/migrateGeohashes";
 import { Query } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/v1/https";
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
@@ -436,7 +437,7 @@ function formatMeetingForFirestore(meeting: any): Meeting {
     name: meeting.name || "Unnamed Meeting",
     day: meeting.day || "",
     time: meeting.time || "",
-    location: meeting.location_name || "",
+    locationName: meeting.location_name || "",
     address: meeting.address || "",
     city: meeting.city || "",
     state: meeting.state || "",
@@ -504,3 +505,320 @@ function findRelevantMeetings(meetings: any[], groupData: any) {
     return hasNameOverlap(meeting, groupData.name);
   });
 }
+
+export const setUserAsSuperAdmin = functions.https.onCall(
+  async (request, context) => {
+    // Check if request is made by an authenticated admin
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Unauthorized");
+    }
+
+    // Verify the caller has permission to set super admin (existing super admin)
+    const callerUid = request.auth.uid;
+    const callerSnapshot = await admin.auth().getUser(callerUid);
+    const callerCustomClaims = callerSnapshot.customClaims || {};
+
+    if (!callerCustomClaims.superAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Only super admins can create other super admins"
+      );
+    }
+
+    // Get the user ID to promote
+    const userId = request.auth.uid;
+    if (!userId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "User ID is required"
+      );
+    }
+
+    try {
+      // Set custom user claim
+      await admin.auth().setCustomUserClaims(userId, { superAdmin: true });
+
+      // Optionally update Firestore document as well
+      await admin.firestore().collection("users").doc(userId).update({
+        role: "superAdmin",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Force token refresh
+      await admin.auth().revokeRefreshTokens(userId);
+
+      return { success: true, message: "User promoted to super admin" };
+    } catch (error) {
+      throw new functions.https.HttpsError("internal", error.message);
+    }
+  }
+);
+
+/**
+ * Generates a unique invite code and link for a group.
+ * - Checks if caller is an admin of the group.
+ * - Creates an invite document in Firestore.
+ * - Returns the code and a deep link.
+ */
+export const generateGroupInvite = functions.https.onCall(
+  async (request, context) => {
+    const { groupId } = request.data;
+    const inviterUid = request.auth?.uid;
+
+    if (!inviterUid) {
+      throw new HttpsError("unauthenticated", "User must be logged in.");
+    }
+    if (!groupId) {
+      throw new HttpsError("invalid-argument", "Group ID is required.");
+    }
+
+    try {
+      const groupRef = admin.firestore().collection("groups").doc(groupId);
+      const groupSnap = await groupRef.get();
+
+      if (!groupSnap.exists) {
+        throw new HttpsError("not-found", "Group not found.");
+      }
+
+      const groupData = groupSnap.data();
+      const admins = groupData?.admins || groupData?.adminUids || []; // Support both field names
+
+      // --- Authorization Check ---
+      if (!admins.includes(inviterUid)) {
+        // Allow any member to invite if group has NO admins (unclaimed scenario?)
+        // Or enforce strict admin-only invites. Let's assume admin-only for now.
+        if (admins.length > 0) {
+          throw new HttpsError(
+            "permission-denied",
+            "Only group admins can generate invites."
+          );
+        }
+        // If admins array is empty, maybe allow any member? Add check if needed.
+        // For now, require at least one admin to invite.
+        if (admins.length === 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Group needs at least one admin to send invites."
+          );
+        }
+      }
+
+      // --- Generate Unique Code ---
+      let code: string;
+      let codeExists = true;
+      const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // User-friendly chars
+      const codeLength = 6;
+
+      while (codeExists) {
+        code = "";
+        for (let i = 0; i < codeLength; i++) {
+          code += characters.charAt(
+            Math.floor(Math.random() * characters.length)
+          );
+        }
+        // Check if code already exists (rare, but possible)
+        const existingInvite = await admin
+          .firestore()
+          .collection("groupInvites")
+          .where("code", "==", code)
+          .limit(1)
+          .get();
+        codeExists = !existingInvite.empty;
+      }
+
+      // --- Create Invite Document ---
+      const expiresAt = admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // Expires in 7 days
+      );
+
+      const inviteRef = admin.firestore().collection("groupInvites").doc(); // Auto-generate ID
+      await inviteRef.set({
+        code: code,
+        groupId: groupId,
+        groupName: groupData?.name || "Unknown Group", // Denormalize for email
+        inviterUid: inviterUid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: expiresAt,
+        status: "pending", // Initial status
+      });
+
+      // --- Construct Deep Link ---
+      // Use your app's custom scheme or universal link base URL
+      const deepLinkBase = "recoveryconnect://"; // iOS custom scheme
+      const universalLinkBase = "https://recoveryconnect.app/"; // Your domain for Android App Links / iOS Universal Links
+      // Choose based on platform if possible, or use universal link primarily
+      const link = `${universalLinkBase}join?code=${code}`;
+
+      console.log(
+        `Generated invite code ${code} for group ${groupId} by user ${inviterUid}`
+      );
+      return { code, link };
+    } catch (error) {
+      console.error("Error in generateGroupInvite:", error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError(
+        "internal",
+        "Failed to generate group invite.",
+        error
+      );
+    }
+  }
+);
+
+/**
+ * Sends an invitation email using a generated invite code.
+ * - Checks if caller is an admin of the group.
+ * - Looks up group details.
+ * - Sends email via configured service.
+ */
+export const sendGroupInviteEmail = functions.https.onCall(
+  async (request, context) => {
+    const { groupId, inviteeEmail, inviteCode } = request.data;
+    const inviterUid = request.auth?.uid;
+
+    if (!inviterUid) {
+      throw new HttpsError("unauthenticated", "User must be logged in.");
+    }
+    if (!groupId || !inviteeEmail || !inviteCode) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Missing required fields: groupId, inviteeEmail, inviteCode."
+      );
+    }
+
+    // Basic email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Invalid email format provided."
+      );
+    }
+
+    try {
+      const groupRef = admin.firestore().collection("groups").doc(groupId);
+      const inviteQuery = admin
+        .firestore()
+        .collection("groupInvites")
+        .where("code", "==", inviteCode)
+        .where("groupId", "==", groupId)
+        .limit(1);
+      const userRef = admin.firestore().collection("users").doc(inviterUid);
+
+      const [groupSnap, inviteSnap, userSnap] = await Promise.all([
+        groupRef.get(),
+        inviteQuery.get(),
+        userRef.get(),
+      ]);
+
+      if (!groupSnap.exists) {
+        throw new HttpsError("not-found", "Group not found.");
+      }
+      if (inviteSnap.empty) {
+        throw new HttpsError(
+          "not-found",
+          `Invite code ${inviteCode} is invalid or does not belong to this group.`
+        );
+      }
+
+      const groupData = groupSnap.data();
+      const inviteData = inviteSnap.docs[0].data();
+      const userData = userSnap.data();
+
+      // --- Authorization Check ---
+      const admins = groupData?.admins || groupData?.adminUids || [];
+      if (!admins.includes(inviterUid)) {
+        if (admins.length > 0) {
+          // Only deny if admins exist
+          throw new HttpsError(
+            "permission-denied",
+            "Only group admins can send invites."
+          );
+        }
+        if (admins.length === 0) {
+          // Deny if no admins exist yet
+          throw new HttpsError(
+            "failed-precondition",
+            "Group needs at least one admin to send invites."
+          );
+        }
+      }
+
+      // --- Check Invite Status ---
+      if (inviteData.status !== "pending") {
+        throw new HttpsError(
+          "failed-precondition",
+          `Invite code ${inviteCode} has already been ${inviteData.status}.`
+        );
+      }
+      if (inviteData.expiresAt.toDate() < new Date()) {
+        // Optionally update status to 'expired' here
+        await inviteSnap.docs[0].ref.update({ status: "expired" });
+        throw new HttpsError(
+          "failed-precondition",
+          `Invite code ${inviteCode} has expired.`
+        );
+      }
+
+      // --- Construct Deep Link ---
+      const deepLinkBase = "recoveryconnect://";
+      const universalLinkBase = "https://recoveryconnect.app/";
+      const link = `${universalLinkBase}join?code=${inviteCode}`;
+
+      // --- Prepare Email Content ---
+      const inviterName = userData?.displayName || "A member";
+      const groupName = groupData?.name || "the group";
+      const subject = `Invitation to join ${groupName} on Recovery Connect`;
+      const emailBody = `
+            <p>Hello,</p>
+            <p>${inviterName} has invited you to join the recovery group "${groupName}" on the Recovery Connect app.</p>
+            <p>Recovery Connect helps groups stay connected and organized while respecting anonymity.</p>
+            <p>To join the group, download the Recovery Connect app and use the invite code below, or click the link:</p>
+            <p style="font-size: 1.5em; font-weight: bold; margin: 15px 0; letter-spacing: 2px;">${inviteCode}</p>
+            <p><a href="${link}" style="display: inline-block; padding: 10px 15px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px;">Join Group Now</a></p>
+            <p>If the button doesn't work, copy and paste this link into your browser: <br/> ${link}</p>
+            <p>This invite code expires in 7 days.</p>
+            <p>If you did not expect this invitation, please ignore this email.</p>
+            <br/>
+            <p>Sincerely,</p>
+            <p>The Recovery Connect Team</p>
+        `; // Improve formatting as needed
+
+      // --- Send Email ---
+      // Replace this with your actual email sending logic
+      console.log(`Simulating email send to: ${inviteeEmail}`);
+      console.log(`Subject: ${subject}`);
+      console.log(`Body: (HTML)`);
+      // await sendEmail({
+      //     to: inviteeEmail,
+      //     subject: subject,
+      //     html: emailBody,
+      // });
+
+      // --- Update Invite Doc (Optional: Track email sent) ---
+      // You could add a field like 'emailSentAt' to the invite doc
+      await inviteSnap.docs[0].ref.update({
+        emailSentTo: inviteeEmail, // Record where it was sent
+        emailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(
+        `Invite email triggered for ${inviteeEmail} for group ${groupId} by user ${inviterUid}`
+      );
+      return { success: true };
+    } catch (error) {
+      console.error("Error in sendGroupInviteEmail:", error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError(
+        "internal",
+        "Failed to send group invite email.",
+        error
+      );
+    }
+  }
+);
+
+// ... other functions ...

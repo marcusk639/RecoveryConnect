@@ -1,0 +1,11 @@
+{
+  "folders": [
+	{
+		"name": "RecoveryConnect",
+		"path": "."
+	}
+],
+  "settings": {
+    "java.configuration.updateBuildConfiguration": "automatic"
+  }
+}

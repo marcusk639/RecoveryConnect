@@ -4,6 +4,7 @@ import {createStackNavigator} from '@react-navigation/stack';
 
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import ProfileManagementScreen from '../screens/profile/ProfileManagementScreen';
+import SobrietyTrackerScreen from '../screens/profile/SobrietyTrackerScreen';
 // import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
 // import EmailVerificationScreen from '../screens/profile/EmailVerificationScreen';
 
@@ -26,6 +27,13 @@ const ProfileNavigator = () => {
       <Stack.Screen
         name="ProfileManagement"
         component={ProfileManagementScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="SobrietyTracker"
+        component={SobrietyTrackerScreen}
         options={{
           headerShown: false,
         }}

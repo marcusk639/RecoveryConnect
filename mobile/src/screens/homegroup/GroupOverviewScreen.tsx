@@ -8,6 +8,8 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  Modal,
+  TextInput,
 } from 'react-native';
 import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
@@ -22,6 +24,7 @@ import {
   selectGroupById,
   selectGroupsStatus,
   leaveGroup,
+  requestGroupAdminAccess,
 } from '../../store/slices/groupsSlice';
 import {
   fetchAnnouncementsForGroup,
@@ -52,6 +55,7 @@ const GroupOverviewScreen: React.FC = () => {
   const route = useRoute<GroupOverviewScreenRouteProp>();
   const navigation = useNavigation<GroupOverviewScreenNavigationProp>();
   const {groupId, groupName} = route.params;
+  const currentUser = auth().currentUser;
 
   const dispatch = useAppDispatch();
 
@@ -76,6 +80,9 @@ const GroupOverviewScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [leaveGroupLoading, setLeaveGroupLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [claimModalVisible, setClaimModalVisible] = useState(false);
+  const [adminRequestMessage, setAdminRequestMessage] = useState('');
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
 
   useEffect(() => {
     loadGroupData();
@@ -191,6 +198,68 @@ const GroupOverviewScreen: React.FC = () => {
     ]);
   };
 
+  // Check if the group is unclaimed
+  const isGroupUnclaimed = useCallback(() => {
+    return (
+      group &&
+      (!group.admins || group.admins.length === 0 || group.isClaimed === false)
+    );
+  }, [group]);
+
+  // Check if the current user has a pending admin request
+  const hasPendingAdminRequest = useCallback(() => {
+    if (!group || !group.pendingAdminRequests || !currentUser) {
+      return false;
+    }
+    return group.pendingAdminRequests.some(
+      request => request.uid === currentUser.uid,
+    );
+  }, [group, currentUser]);
+
+  // Check if the current user is already an admin
+  const isCurrentUserAdmin = useCallback(() => {
+    if (!group || !group.admins || !currentUser) {
+      return false;
+    }
+    return group.admins.includes(currentUser.uid);
+  }, [group, currentUser]);
+
+  const handleRequestAdminAccess = async () => {
+    if (!currentUser) {
+      Alert.alert(
+        'Please sign in',
+        'You must be signed in to request admin access',
+      );
+      return;
+    }
+
+    setRequestSubmitting(true);
+    try {
+      await dispatch(
+        requestGroupAdminAccess({
+          groupId,
+          userId: currentUser.uid,
+          message: adminRequestMessage,
+        }),
+      ).unwrap();
+
+      setClaimModalVisible(false);
+      Alert.alert(
+        'Request Submitted',
+        'Your request to become an admin for this group has been submitted and is pending review.',
+      );
+    } catch (error) {
+      console.error('Error submitting admin request:', error);
+      Alert.alert(
+        'Error',
+        'Failed to submit your request. Please try again later.',
+      );
+    } finally {
+      setRequestSubmitting(false);
+      setAdminRequestMessage('');
+    }
+  };
+
   // Show loading indicator while initial data is loading
   if (loading && !group) {
     return (
@@ -239,6 +308,28 @@ const GroupOverviewScreen: React.FC = () => {
           </Text>
           <Text style={styles.groupDescriptionText}>{group.description}</Text>
         </View>
+
+        {/* Claim Group Button - Only show if group is unclaimed and user doesn't have a pending request */}
+        {isGroupUnclaimed() &&
+          !hasPendingAdminRequest() &&
+          !isCurrentUserAdmin() && (
+            <TouchableOpacity
+              style={styles.claimGroupButton}
+              onPress={() => setClaimModalVisible(true)}>
+              <Text style={styles.claimGroupButtonText}>
+                Is this your group? Claim Admin Access
+              </Text>
+            </TouchableOpacity>
+          )}
+
+        {/* Show pending status if user has submitted a request */}
+        {hasPendingAdminRequest() && (
+          <View style={styles.pendingRequestContainer}>
+            <Text style={styles.pendingRequestText}>
+              Admin request pending review
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Members section */}
@@ -449,6 +540,58 @@ const GroupOverviewScreen: React.FC = () => {
           <Text style={styles.leaveGroupButtonText}>Leave Group</Text>
         )}
       </TouchableOpacity>
+
+      {/* Claim Group Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={claimModalVisible}
+        onRequestClose={() => setClaimModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Request Admin Access</Text>
+
+            <Text style={styles.modalDescription}>
+              As a group admin, you'll help maintain accurate meeting
+              information and details for the recovery community.
+            </Text>
+
+            <Text style={styles.inputLabel}>
+              Please explain your connection to this group:
+            </Text>
+            <TextInput
+              style={styles.messageInput}
+              multiline={true}
+              numberOfLines={4}
+              placeholder="e.g., 'I am the group secretary' or 'I attend regularly'"
+              value={adminRequestMessage}
+              onChangeText={setAdminRequestMessage}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setClaimModalVisible(false);
+                  setAdminRequestMessage('');
+                }}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleRequestAdminAccess}
+                disabled={requestSubmitting}>
+                {requestSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit Request</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -713,6 +856,100 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#2196F3',
+  },
+  claimGroupButton: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  claimGroupButtonText: {
+    color: '#2196F3',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  pendingRequestContainer: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  pendingRequestText: {
+    color: '#FFA000',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 20,
+    width: '100%',
+    maxWidth: 500,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#212121',
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: '#757575',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#424242',
+    marginBottom: 8,
+  },
+  messageInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 4,
+    padding: 12,
+    fontSize: 14,
+    color: '#212121',
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 20,
+  },
+  cancelButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginRight: 12,
+  },
+  cancelButtonText: {
+    color: '#757575',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  submitButton: {
+    backgroundColor: '#2196F3',
+    borderRadius: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  submitButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
 

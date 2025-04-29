@@ -1,7 +1,8 @@
-import React from 'react';
+import React, {useState, useEffect} from 'react';
+import {Platform, TouchableOpacity, View, Text, StyleSheet} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {Text, View, Platform} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Import types
 import {MainTabParamList} from '../types/navigation';
@@ -9,115 +10,72 @@ import {MainTabParamList} from '../types/navigation';
 // Import screens and navigators
 import GroupStackNavigator from './GroupStackNavigator';
 import MeetingsScreen from '../screens/meetings/MeetingScreen';
-import ProfileScreen from '../screens/profile/ProfileScreen';
-import GroupSearchScreen from '../screens/homegroup/GroupSearchScreen';
 import ProfileNavigator from './ProfileNavigator';
+import GroupSearchScreen from '../screens/homegroup/GroupSearchScreen';
+import AdminPanelScreen from '../screens/admin/AdminPanelScreen';
+import {GroupModel} from '../models/GroupModel';
+import {UserModel} from '../models/UserModel';
 
-// Tab Icons
+// Define tab icons
 const HomeIcon = ({focused}: {focused: boolean}) => (
-  <View
-    style={{
-      width: 24,
-      height: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: focused ? '#E3F2FD' : 'transparent',
-      borderRadius: 12,
-    }}>
-    <Text
-      style={{
-        fontSize: 16,
-        color: focused ? '#2196F3' : '#9E9E9E',
-      }}>
-      🏠
-    </Text>
-  </View>
+  <Icon
+    name={focused ? 'home' : 'home-outline'}
+    size={28}
+    color={focused ? '#2196F3' : '#9E9E9E'}
+  />
 );
 
 const MeetingsIcon = ({focused}: {focused: boolean}) => (
-  <View
-    style={{
-      width: 24,
-      height: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: focused ? '#E3F2FD' : 'transparent',
-      borderRadius: 12,
-    }}>
-    <Text
-      style={{
-        fontSize: 16,
-        color: focused ? '#2196F3' : '#9E9E9E',
-      }}>
-      📅
-    </Text>
-  </View>
-);
-
-const TreasuryIcon = ({focused}: {focused: boolean}) => (
-  <View
-    style={{
-      width: 24,
-      height: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: focused ? '#E3F2FD' : 'transparent',
-      borderRadius: 12,
-    }}>
-    <Text
-      style={{
-        fontSize: 16,
-        color: focused ? '#2196F3' : '#9E9E9E',
-      }}>
-      💰
-    </Text>
-  </View>
-);
-
-const ProfileIcon = ({focused}: {focused: boolean}) => (
-  <View
-    style={{
-      width: 24,
-      height: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: focused ? '#E3F2FD' : 'transparent',
-      borderRadius: 12,
-    }}>
-    <Text
-      style={{
-        fontSize: 16,
-        color: focused ? '#2196F3' : '#9E9E9E',
-      }}>
-      👤
-    </Text>
-  </View>
+  <Icon
+    name={focused ? 'calendar' : 'calendar-outline'}
+    size={28}
+    color={focused ? '#2196F3' : '#9E9E9E'}
+  />
 );
 
 const GroupSearchIcon = ({focused}: {focused: boolean}) => (
-  <View
-    style={{
-      width: 24,
-      height: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: focused ? '#E3F2FD' : 'transparent',
-      borderRadius: 12,
-    }}>
-    <Text
-      style={{
-        fontSize: 16,
-        color: focused ? '#2196F3' : '#9E9E9E',
-      }}>
-      🔍
-    </Text>
-  </View>
+  <Icon
+    name={focused ? 'account-group' : 'account-group-outline'}
+    size={28}
+    color={focused ? '#2196F3' : '#9E9E9E'}
+  />
+);
+
+const ProfileIcon = ({focused}: {focused: boolean}) => (
+  <Icon
+    name={focused ? 'account-circle' : 'account-circle-outline'}
+    size={28}
+    color={focused ? '#2196F3' : '#9E9E9E'}
+  />
+);
+
+const AdminPanelIcon = ({focused}: {focused: boolean}) => (
+  <Icon
+    name={focused ? 'shield-account' : 'shield-account-outline'}
+    size={28}
+    color={focused ? '#2196F3' : '#9E9E9E'}
+  />
 );
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const MainTabNavigator: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkSuperAdmin = async () => {
+      try {
+        const isSuperAdminUser = await UserModel.isSuperAdmin();
+        setIsSuperAdmin(isSuperAdminUser);
+      } catch (error) {
+        console.error('Error checking super admin status:', error);
+        setIsSuperAdmin(false);
+      }
+    };
+
+    checkSuperAdmin();
+  }, []);
 
   return (
     <Tab.Navigator
@@ -169,6 +127,19 @@ const MainTabNavigator: React.FC = () => {
           headerShown: false,
         }}
       />
+
+      {/* Admin Panel Tab - Only visible to super admins */}
+      {isSuperAdmin && (
+        <Tab.Screen
+          name="AdminPanel"
+          component={AdminPanelScreen}
+          options={{
+            tabBarLabel: 'Admin',
+            tabBarIcon: ({focused}) => <AdminPanelIcon focused={focused} />,
+            headerShown: false,
+          }}
+        />
+      )}
     </Tab.Navigator>
   );
 };

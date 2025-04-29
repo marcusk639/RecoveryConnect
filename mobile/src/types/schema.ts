@@ -78,26 +78,33 @@ export interface UserDocument {
  * Firestore Group Document
  */
 export interface GroupDocument {
-  id: string;
+  id?: string;
   name: string;
   description: string;
-  meetings: Meeting[];
   location: string;
   address?: string;
+  meetings: Meeting[];
   city?: string;
   state?: string;
   zip?: string;
   lat?: number;
   lng?: number;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  foundedDate?: Timestamp;
+  createdAt: FirebaseFirestoreTypes.Timestamp;
+  updatedAt: FirebaseFirestoreTypes.Timestamp;
+  foundedDate?: FirebaseFirestoreTypes.Timestamp;
   memberCount: number;
-  admins: string[];
-  placeName?: string;
-  type: MeetingType;
+  admins: string[]; // Keep for backward compatibility
+  adminUids: string[]; // New field explicitly for admin user IDs
+  isClaimed: boolean; // Flag to indicate if group has been claimed
+  pendingAdminRequests: {
+    uid: string;
+    requestedAt: FirebaseFirestoreTypes.Timestamp;
+    message?: string;
+  }[]; // Array to store admin requests
   treasurers: string[];
-  treasury: Treasury;
+  placeName?: string;
+  type: string;
+  treasury?: Treasury;
 }
 
 /**

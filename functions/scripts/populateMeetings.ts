@@ -25,6 +25,16 @@ const STEP = 0.25; // Grid step in degrees - adjust for desired overlap/coverage
 // Keep track of processed *generated* meeting IDs in this run to avoid duplicate batch writes
 const processedMeetingHashIds = new Set<string>();
 
+export const daysOfWeek = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
 // Define the structure expected from the Meeting Guide API
 // Based on https://github.com/meeting-guide/api/blob/main/src/sync/sources/app.php
 interface ApiMeeting {
@@ -122,19 +132,6 @@ function initializeFirebaseAdmin(): admin.app.App {
 }
 
 /**
- * Simple string hashing function for generating meeting IDs
- * Based on the djb2 algorithm
- */
-function hashString(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) + hash + str.charCodeAt(i);
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return hash;
-}
-
-/**
  * Generates a unique hash ID for a meeting based on key properties using SHA-1.
  * @param meeting The meeting object to generate a hash for.
  * @returns A 24-character hexadecimal string hash.
@@ -145,7 +142,8 @@ export function generateMeetingHash(meeting: Meeting): string {
     meeting.name?.trim() || "",
     meeting.day || "", // CRITICAL: Include the day
     meeting.time || "",
-    meeting.address?.trim() || "", // Use full address string for location part
+    meeting.link || "",
+    meeting.formattedAddress?.trim() || "", // Use full address string for location part
     // Optional: Add more fields ONLY if they are consistently available and define uniqueness
     // meeting.locationName?.trim() || "",
     // meeting.link?.trim() || "",
@@ -218,12 +216,12 @@ function mapApiToFirestore(apiMeeting: ApiMeeting): Meeting | null {
     return null;
   }
 
-  // Validate day string ('0'-'6')
+  // Validate day string ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
   let validDay: string | undefined = undefined;
   if (apiMeeting.day !== undefined && apiMeeting.day !== null) {
     const dayNum = parseInt(apiMeeting.day, 10);
     if (!isNaN(dayNum) && dayNum >= 0 && dayNum <= 6) {
-      validDay = apiMeeting.day;
+      validDay = daysOfWeek[dayNum];
     } else {
       console.warn(
         `Invalid day format for meeting ${apiMeeting.id}: ${apiMeeting.day}`
@@ -255,7 +253,8 @@ function mapApiToFirestore(apiMeeting: ApiMeeting): Meeting | null {
 
   // Populate the Meeting instance first
   meeting.name = apiMeeting.name;
-  meeting.time = apiMeeting.time || "";
+  meeting.time =
+    apiMeeting.time?.substring(0, apiMeeting.time?.lastIndexOf(":")) || "";
   meeting.street = apiMeeting.address;
   meeting.address = `${apiMeeting.address}, ${apiMeeting.city}, ${apiMeeting.state} ${apiMeeting.postal_code}`;
   meeting.city = apiMeeting.city;

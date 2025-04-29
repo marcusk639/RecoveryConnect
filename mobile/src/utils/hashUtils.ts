@@ -2,19 +2,6 @@ import {Meeting} from '../types';
 import HashUtil from 'js-sha1'; // Import the SHA-1 library
 
 /**
- * Simple string hashing function for generating meeting IDs
- * Based on the djb2 algorithm
- */
-function hashString(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) + hash + str.charCodeAt(i);
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return hash;
-}
-
-/**
  * Generates a unique hash ID for a meeting based on key properties using SHA-1.
  * Ensures consistency with the ID generation logic used in the population script.
  * @param meeting The meeting object to generate a hash for.

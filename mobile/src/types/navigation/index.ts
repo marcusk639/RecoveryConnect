@@ -30,6 +30,7 @@ export type MainTabParamList = {
   Treasury: undefined;
   Profile: undefined;
   GroupSearch: undefined;
+  AdminPanel: undefined;
 };
 
 // Auth Stack Navigation Params
