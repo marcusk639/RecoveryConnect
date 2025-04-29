@@ -3,9 +3,13 @@ import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {RootState, AppDispatch} from '../index';
 import {UserModel} from '../../models/UserModel';
 import {MemberModel} from '../../models/MemberModel';
-import firestore from '@react-native-firebase/firestore';
 import {UserDocument, Timestamp} from '../../types/schema';
-import {Location} from '../../types';
+import {
+  Location,
+  User,
+  NotificationSettings,
+  PrivacySettings,
+} from '../../types';
 
 interface UserData {
   uid: string;
@@ -42,6 +46,7 @@ interface AuthState {
   isAuthenticated: boolean;
   lastFetched: number | null;
   location: Location | null;
+  pendingNavigation: {route: string; params: any} | null;
 }
 
 const initialState: AuthState = {
@@ -52,38 +57,69 @@ const initialState: AuthState = {
   isAuthenticated: false,
   lastFetched: null,
   location: null,
+  pendingNavigation: null,
 };
 
-const mapUserDocumentToUserData = (
-  userDocData: UserDocument | null,
-  docId: string,
+const mapUserToSliceData = (
+  user: User | UserDocument | Partial<User> | null | undefined,
 ): UserData | null => {
-  if (!userDocData) return null;
+  if (!user || !user.uid) return null;
+
+  const photoUrl = ('photoUrl' in user ? user.photoUrl : null) ?? null;
+
+  const sobrietyStartDateISO =
+    ('recoveryDate' in user
+      ? user.recoveryDate
+      : 'sobrietyStartDate' in user && user.sobrietyStartDate
+      ? (user.sobrietyStartDate as Timestamp).toDate().toISOString()
+      : null) ?? null;
+
+  const notificationSettingsData = user.notificationSettings ?? {};
+  const privacySettingsData = user.privacySettings ?? {};
+
+  const adminGroups = 'adminGroups' in user ? user.adminGroups : undefined;
+  const subscriptionTier =
+    ('subscriptionTier' in user ? user.subscriptionTier : 'free') ?? 'free';
+  const subscriptionValidUntilISO =
+    ('subscriptionValidUntil' in user && user.subscriptionValidUntil
+      ? (user.subscriptionValidUntil as Timestamp).toDate().toISOString()
+      : null) ?? null;
+  const fcmTokens = ('fcmTokens' in user ? user.fcmTokens : []) ?? [];
+  const phoneNumber = ('phoneNumber' in user ? user.phoneNumber : null) ?? null;
+
   return {
-    id: docId,
-    uid: userDocData.uid,
-    email: userDocData.email,
-    displayName: userDocData.displayName,
-    photoURL: userDocData.photoUrl,
-    homeGroups: userDocData.homeGroups,
-    adminGroups: userDocData.adminGroups,
-    phoneNumber: userDocData.phoneNumber,
-    showPhoneNumber: userDocData.showPhoneNumber,
-    showSobrietyDate: userDocData.showSobrietyDate,
-    sobrietyStartDate:
-      userDocData.sobrietyStartDate?.toDate().toISOString() || null,
-    subscriptionTier: userDocData.subscriptionTier || 'free',
-    subscriptionValidUntil:
-      userDocData.subscriptionValidUntil?.toDate().toISOString() || null,
-    role: userDocData.role,
-    favoriteMeetings: userDocData.favoriteMeetings,
-    notificationSettings: userDocData.notificationSettings
-      ? {...userDocData.notificationSettings}
-      : null,
-    privacySettings: userDocData.privacySettings
-      ? {...userDocData.privacySettings}
-      : null,
-    fcmTokens: userDocData.fcmTokens,
+    id: user.uid,
+    uid: user.uid,
+    email: user.email ?? null,
+    displayName: user.displayName ?? null,
+    photoURL: photoUrl,
+    homeGroups: user.homeGroups ?? [],
+    adminGroups: adminGroups,
+    phoneNumber: phoneNumber,
+    showPhoneNumber: privacySettingsData.showPhoneNumber ?? false,
+    showSobrietyDate: privacySettingsData.showRecoveryDate ?? false,
+    sobrietyStartDate: sobrietyStartDateISO as string | null,
+    subscriptionTier: subscriptionTier as 'free' | 'plus',
+    subscriptionValidUntil: subscriptionValidUntilISO,
+    role: user.role ?? 'user',
+    favoriteMeetings: user.favoriteMeetings ?? [],
+    notificationSettings: {
+      meetings: notificationSettingsData.meetings ?? true,
+      announcements: notificationSettingsData.announcements ?? true,
+      celebrations: notificationSettingsData.celebrations ?? true,
+      ...((notificationSettingsData as any).groupChatMentions !== undefined && {
+        groupChatMentions: (notificationSettingsData as any).groupChatMentions,
+      }),
+      ...((notificationSettingsData as any).allowPushNotifications !==
+        undefined && {
+        allowPushNotifications: (notificationSettingsData as any)
+          .allowPushNotifications,
+      }),
+    },
+    privacySettings: {
+      allowDirectMessages: privacySettingsData.allowDirectMessages ?? true,
+    },
+    fcmTokens: fcmTokens,
   };
 };
 
@@ -104,33 +140,32 @@ export const checkAuthState = createAsyncThunk(
   },
 );
 
-export const fetchUserData = createAsyncThunk<UserData | null, string>(
-  'auth/fetchUserData',
-  async (uid: string, {rejectWithValue}) => {
-    try {
-      const docSnap = await firestore().collection('users').doc(uid).get();
-
-      if (!docSnap.exists) {
-        console.warn(`No user document found for UID: ${uid} in Firestore.`);
-        return null;
-      }
-
-      const userDocData = docSnap.data() as UserDocument;
-      return mapUserDocumentToUserData(userDocData, uid);
-    } catch (error: any) {
-      console.error('Fetch user data error:', error);
-      return rejectWithValue(error.message || 'Failed to fetch user data');
+export const fetchUserData = createAsyncThunk<
+  UserData | null,
+  string,
+  {rejectValue: string}
+>('auth/fetchUserData', async (uid: string, {rejectWithValue}) => {
+  try {
+    const user: User | null = await UserModel.getById(uid);
+    const userData = mapUserToSliceData(user);
+    if (!userData) {
+      console.warn(`No user document found or mapping failed for UID: ${uid}`);
     }
-  },
-);
+    return userData;
+  } catch (error: any) {
+    console.error('Fetch user data error (UserModel):', error);
+    return rejectWithValue(error.message || 'Failed to fetch user data');
+  }
+});
 
 export const updateDisplayName = createAsyncThunk<
   {displayName: string},
-  {displayName: string; useInitialOnly: boolean}
+  {displayName: string; useInitialOnly: boolean},
+  {state: RootState; rejectValue: string}
 >(
   'auth/updateDisplayName',
   async ({displayName, useInitialOnly}, {getState, rejectWithValue}) => {
-    const state = getState() as RootState;
+    const state = getState();
     const currentUser = state.auth.user;
     if (!currentUser) return rejectWithValue('User not logged in');
 
@@ -140,116 +175,124 @@ export const updateDisplayName = createAsyncThunk<
         : displayName.trim();
 
       await currentUser.updateProfile({displayName: formattedName});
-      await firestore()
-        .collection('users')
-        .doc(currentUser.uid)
-        .update({displayName: formattedName});
+      await UserModel.update(currentUser.uid, {displayName: formattedName});
       await MemberModel.updateUserAcrossMemberships(currentUser.uid, {
         displayName: formattedName,
       });
 
       return {displayName: formattedName};
     } catch (error: any) {
-      return rejectWithValue('Failed to update display name');
+      console.error('Error updating display name (UserModel):', error);
+      return rejectWithValue(error.message || 'Failed to update display name');
     }
   },
 );
 
 export const updateSobrietyDate = createAsyncThunk<
   {sobrietyStartDate: string | null},
-  {date: Date | null}
+  {date: Date | null},
+  {state: RootState; rejectValue: string}
 >('auth/updateSobrietyDate', async ({date}, {getState, rejectWithValue}) => {
-  const state = getState() as RootState;
+  const state = getState();
   const currentUser = state.auth.user;
   if (!currentUser) return rejectWithValue('User not logged in');
 
   try {
-    const firestoreTimestamp = date ? firestore.Timestamp.fromDate(date) : null;
-    await firestore().collection('users').doc(currentUser.uid).update({
-      sobrietyStartDate: firestoreTimestamp,
+    const dateISO = date ? date.toISOString() : null;
+    await UserModel.update(currentUser.uid, {
+      recoveryDate: dateISO || undefined,
     });
 
-    return {sobrietyStartDate: date ? date.toISOString() : null};
+    return {sobrietyStartDate: dateISO};
   } catch (error: any) {
-    console.error('Error updating sobriety date:', error);
+    console.error('Error updating sobriety date (UserModel):', error);
     return rejectWithValue(error.message || 'Failed to update sobriety date');
   }
 });
 
 export const updateUserPrivacySettings = createAsyncThunk<
   {
-    showSobrietyDate: boolean;
-    showPhoneNumber: boolean;
-    privacySettings: {allowDirectMessages: boolean} | null;
+    userData: UserData | null;
   },
   {
     showSobrietyDate: boolean;
     allowDirectMessages: boolean;
     showPhoneNumber: boolean;
-  }
+  },
+  {state: RootState; rejectValue: string}
 >(
   'auth/updateUserPrivacySettings',
-  async (settings, {getState, rejectWithValue}) => {
-    const state = getState() as RootState;
-    const currentUser = state.auth.user;
-    if (!currentUser) return rejectWithValue('User not logged in');
-
-    try {
-      const userUpdates: Partial<{[key: string]: any}> = {
-        'privacySettings.allowDirectMessages': settings.allowDirectMessages,
-        showSobrietyDate: settings.showSobrietyDate,
-        showPhoneNumber: settings.showPhoneNumber,
-      };
-      const memberUpdates = {
-        showSobrietyDate: settings.showSobrietyDate,
-        showPhoneNumber: settings.showPhoneNumber,
-      };
-
-      await firestore()
-        .collection('users')
-        .doc(currentUser.uid)
-        .update(userUpdates);
-      await MemberModel.updateUserAcrossMemberships(
-        currentUser.uid,
-        memberUpdates,
-      );
-
-      return {
-        showSobrietyDate: settings.showSobrietyDate,
-        showPhoneNumber: settings.showPhoneNumber,
-        privacySettings: {
-          allowDirectMessages: settings.allowDirectMessages,
-        },
-      };
-    } catch (error: any) {
-      console.error('Error updating privacy settings:', error);
-      return rejectWithValue('Failed to update privacy settings');
-    }
-  },
-);
-
-export const updateUserNotificationSettings = createAsyncThunk<
-  {
-    notificationSettings?: {
-      meetings?: boolean;
-      announcements?: boolean;
-      celebrations?: boolean;
-    } | null;
-  },
-  {meetings: boolean; announcements: boolean; celebrations: boolean},
-  {state: RootState}
->(
-  'auth/updateNotificationSettings',
   async (settings, {getState, rejectWithValue}) => {
     const state = getState();
     const currentUser = state.auth.user;
     if (!currentUser) return rejectWithValue('User not logged in');
 
     try {
-      await UserModel.updateNotificationSettings(currentUser.uid, settings);
+      const userUpdatePayload: Partial<User> = {
+        privacySettings: {
+          showRecoveryDate: settings.showSobrietyDate,
+          allowDirectMessages: settings.allowDirectMessages,
+          showPhoneNumber: settings.showPhoneNumber,
+        },
+      };
 
-      return {notificationSettings: settings};
+      const updatedUser = await UserModel.update(
+        currentUser.uid,
+        userUpdatePayload,
+      );
+
+      const memberUpdates = {
+        showSobrietyDate: settings.showSobrietyDate,
+        showPhoneNumber: settings.showPhoneNumber,
+      };
+      await MemberModel.updateUserAcrossMemberships(
+        currentUser.uid,
+        memberUpdates,
+      );
+
+      return {
+        userData: mapUserToSliceData(updatedUser),
+      };
     } catch (error: any) {
+      console.error('Error updating privacy settings (UserModel):', error);
+      return rejectWithValue(
+        error.message || 'Failed to update privacy settings',
+      );
+    }
+  },
+);
+
+export const updateUserNotificationSettings = createAsyncThunk<
+  {
+    userData: UserData | null;
+  },
+  Partial<NotificationSettings>,
+  {state: RootState; rejectValue: string}
+>(
+  'auth/updateNotificationSettings',
+  async (
+    settings: Partial<NotificationSettings>,
+    {getState, rejectWithValue},
+  ) => {
+    const state = getState();
+    const currentUser = state.auth.user;
+    if (!currentUser) return rejectWithValue('User not logged in');
+
+    try {
+      const userUpdatePayload: Partial<User> = {
+        notificationSettings: settings as NotificationSettings,
+      };
+
+      const updatedUser = await UserModel.update(
+        currentUser.uid,
+        userUpdatePayload,
+      );
+
+      return {
+        userData: mapUserToSliceData(updatedUser),
+      };
+    } catch (error: any) {
+      console.error('Error updating notification settings (UserModel):', error);
       return rejectWithValue(
         error.message || 'Failed to update notification settings',
       );
@@ -346,26 +389,47 @@ export const signOut = createAsyncThunk(
   },
 );
 
-export const updateUserPhoneNumber = createAsyncThunk(
+export const updateUserPhoneNumber = createAsyncThunk<
+  {phoneNumber: string | null},
+  string | null,
+  {state: RootState; rejectValue: string}
+>(
   'auth/updateUserPhoneNumber',
-  async (phoneNumber: string, {rejectWithValue}) => {
-    try {
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        return rejectWithValue('No authenticated user found');
-      }
+  async (phoneNumber, {getState, rejectWithValue}) => {
+    const state = getState();
+    const currentUser = state.auth.user;
+    if (!currentUser) {
+      return rejectWithValue('No authenticated user found');
+    }
 
-      await firestore().collection('users').doc(currentUser.uid).update({
-        phoneNumber,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      });
+    try {
+      await UserModel.update(currentUser.uid, {phoneNumber});
 
       return {phoneNumber};
     } catch (error: any) {
+      console.error('Error updating phone number (UserModel):', error);
       return rejectWithValue(error.message || 'Failed to update phone number');
     }
   },
 );
+
+export const updateFcmToken = createAsyncThunk<
+  {fcmToken: string},
+  {userId: string; token: string},
+  {rejectValue: string}
+>('auth/updateFcmToken', async ({userId, token}, {rejectWithValue}) => {
+  try {
+    console.log(`Dispatching addFcmToken for user ${userId}`);
+    await UserModel.addFcmToken(userId, token);
+    console.log(`FCM Token update successful via UserModel for user ${userId}`);
+    return {fcmToken: token};
+  } catch (error: any) {
+    console.error('Error in updateFcmToken thunk calling UserModel:', error);
+    return rejectWithValue(
+      error.message || 'Failed to update FCM token via UserModel',
+    );
+  }
+});
 
 const authSlice = createSlice({
   name: 'auth',
@@ -380,6 +444,15 @@ const authSlice = createSlice({
     },
     setLocation: (state, action: PayloadAction<Location | null>) => {
       state.location = action.payload;
+    },
+    setPendingNavigation: (
+      state,
+      action: PayloadAction<{route: string; params: any} | null>,
+    ) => {
+      state.pendingNavigation = action.payload;
+    },
+    clearPendingNavigation: state => {
+      state.pendingNavigation = null;
     },
   },
   extraReducers: builder => {
@@ -427,13 +500,8 @@ const authSlice = createSlice({
       })
 
       .addCase(updateUserPrivacySettings.fulfilled, (state, action) => {
-        if (state.userData) {
-          state.userData.showSobrietyDate = action.payload.showSobrietyDate;
-          state.userData.showPhoneNumber = action.payload.showPhoneNumber;
-          state.userData.privacySettings = {
-            ...(state.userData.privacySettings || {}),
-            ...action.payload.privacySettings,
-          };
+        if (action.payload.userData) {
+          state.userData = action.payload.userData;
         }
         state.status = 'succeeded';
         state.error = null;
@@ -443,28 +511,13 @@ const authSlice = createSlice({
         state.status = 'failed';
       })
 
-      .addCase(
-        updateUserNotificationSettings.fulfilled,
-        (
-          state,
-          action: PayloadAction<{
-            notificationSettings?: {
-              meetings?: boolean;
-              announcements?: boolean;
-              celebrations?: boolean;
-            } | null;
-          }>,
-        ) => {
-          if (state.userData) {
-            state.userData.notificationSettings = {
-              ...(state.userData.notificationSettings || {}),
-              ...action.payload.notificationSettings,
-            };
-          }
-          state.status = 'succeeded';
-          state.error = null;
-        },
-      )
+      .addCase(updateUserNotificationSettings.fulfilled, (state, action) => {
+        if (action.payload.userData) {
+          state.userData = action.payload.userData;
+        }
+        state.status = 'succeeded';
+        state.error = null;
+      })
       .addCase(updateUserNotificationSettings.rejected, (state, action) => {
         state.error = action.payload as string;
         state.status = 'failed';
@@ -537,11 +590,32 @@ const authSlice = createSlice({
         state.status = 'failed';
         state.error =
           (action.payload as string) || 'Failed to update phone number';
+      })
+
+      .addCase(updateFcmToken.fulfilled, (state, action) => {
+        if (state.userData) {
+          const currentTokens = state.userData.fcmTokens || [];
+          if (!currentTokens.includes(action.payload.fcmToken)) {
+            state.userData.fcmTokens = [
+              ...currentTokens,
+              action.payload.fcmToken,
+            ];
+          }
+        }
+      })
+      .addCase(updateFcmToken.rejected, (state, action) => {
+        console.error('FCM Token update failed (reducer):', action.payload);
       });
   },
 });
 
-export const {clearError, setUser, setLocation} = authSlice.actions;
+export const {
+  clearError,
+  setUser,
+  setLocation,
+  setPendingNavigation,
+  clearPendingNavigation,
+} = authSlice.actions;
 
 export const selectUser = (state: RootState) => state.auth.user;
 export const selectUserData = (state: RootState) => state.auth.userData;
@@ -550,5 +624,7 @@ export const selectAuthError = (state: RootState) => state.auth.error;
 export const selectIsAuthenticated = (state: RootState) =>
   state.auth.isAuthenticated;
 export const selectUserLocation = (state: RootState) => state.auth.location;
+export const selectPendingNavigation = (state: RootState) =>
+  state.auth.pendingNavigation;
 
 export default authSlice.reducer;

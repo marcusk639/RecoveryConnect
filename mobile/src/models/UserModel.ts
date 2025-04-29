@@ -17,22 +17,38 @@ export class UserModel {
    */
   static fromFirestore(doc: FirestoreDocument<UserDocument>): User {
     const data = doc.data();
+    // Default to empty objects if nested settings are undefined in Firestore
+    const notificationSettingsData = data.notificationSettings ?? {};
+    const privacySettingsData = data.privacySettings ?? {};
+
     return {
       uid: doc.id,
-      email: data.email || '',
-      displayName: data.displayName || '',
-      recoveryDate: data.recoveryDate
-        ? data.recoveryDate.toDate().toISOString()
-        : undefined,
-      createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate(),
-      lastLogin: data.lastLogin.toDate(),
-      notificationSettings: data.notificationSettings,
-      privacySettings: data.privacySettings,
-      homeGroups: data.homeGroups || [],
-      role: data.role,
-      favoriteMeetings: data.favoriteMeetings,
-      photoUrl: data.photoUrl || '',
+      email: data.email ?? '',
+      displayName: data.displayName ?? 'Anonymous',
+      recoveryDate: data.sobrietyStartDate?.toDate().toISOString(), // Use sobrietyStartDate from schema
+      createdAt: data.createdAt?.toDate() ?? new Date(),
+      updatedAt: data.updatedAt?.toDate() ?? new Date(),
+      lastLogin: data.lastLogin?.toDate() ?? new Date(),
+      notificationSettings: {
+        meetings: notificationSettingsData.meetings ?? true,
+        announcements: notificationSettingsData.announcements ?? true,
+        celebrations: notificationSettingsData.celebrations ?? true,
+        groupChatMentions: notificationSettingsData.groupChatMentions, // Keep undefined if not set
+        allowPushNotifications: notificationSettingsData.allowPushNotifications, // Keep undefined if not set
+      },
+      privacySettings: {
+        // Note: showRecoveryDate is now nested in schema, map accordingly
+        showRecoveryDate: privacySettingsData.showRecoveryDate ?? false,
+        allowDirectMessages: privacySettingsData.allowDirectMessages ?? true,
+        // Map showPhoneNumber from nested privacy settings in schema
+        showPhoneNumber: privacySettingsData.showPhoneNumber ?? false,
+      },
+      homeGroups: data.homeGroups ?? [],
+      role: data.role ?? 'user',
+      favoriteMeetings: data.favoriteMeetings ?? [],
+      photoUrl: data.photoUrl ?? null,
+      phoneNumber: data.phoneNumber ?? null,
+      fcmTokens: data.fcmTokens ?? [],
     };
   }
 
@@ -42,64 +58,66 @@ export class UserModel {
   static toFirestore(user: Partial<User>): Partial<UserDocument> {
     const firestoreData: Partial<UserDocument> = {};
 
-    // Only include properties that are defined
+    // Map basic fields
     if (user.uid !== undefined) firestoreData.uid = user.uid;
     if (user.email !== undefined) firestoreData.email = user.email;
     if (user.displayName !== undefined)
       firestoreData.displayName = user.displayName;
     if (user.photoUrl !== undefined) firestoreData.photoUrl = user.photoUrl;
-
-    // Handle dates safely - check if they exist and are valid
-    if (user.recoveryDate) {
-      try {
-        firestoreData.recoveryDate = Firestore.Timestamp.fromDate(
-          new Date(user.recoveryDate),
-        );
-      } catch (error) {
-        console.warn('Invalid recovery date format:', user.recoveryDate);
-      }
-    }
-
-    if (user.createdAt) {
-      try {
-        firestoreData.createdAt = Firestore.Timestamp.fromDate(
-          new Date(user.createdAt),
-        );
-      } catch (error) {
-        console.warn('Invalid createdAt date format:', user.createdAt);
-      }
-    }
-
-    if (user.updatedAt) {
-      try {
-        firestoreData.updatedAt = Firestore.Timestamp.fromDate(
-          new Date(user.updatedAt),
-        );
-      } catch (error) {
-        console.warn('Invalid updatedAt date format:', user.updatedAt);
-      }
-    }
-
-    if (user.lastLogin) {
-      try {
-        firestoreData.lastLogin = Firestore.Timestamp.fromDate(
-          new Date(user.lastLogin),
-        );
-      } catch (error) {
-        console.warn('Invalid lastLogin date format:', user.lastLogin);
-      }
-    }
-
-    // Handle other properties
-    if (user.notificationSettings !== undefined)
-      firestoreData.notificationSettings = user.notificationSettings;
-    if (user.privacySettings !== undefined)
-      firestoreData.privacySettings = user.privacySettings;
+    if (user.phoneNumber !== undefined)
+      firestoreData.phoneNumber = user.phoneNumber;
+    if (user.fcmTokens !== undefined) firestoreData.fcmTokens = user.fcmTokens;
     if (user.homeGroups !== undefined)
       firestoreData.homeGroups = user.homeGroups;
     if (user.role !== undefined) firestoreData.role = user.role;
     if (user.favoriteMeetings !== undefined)
       firestoreData.favoriteMeetings = user.favoriteMeetings;
+
+    // Map dates (use sobrietyStartDate for Firestore)
+    if (user.recoveryDate) {
+      try {
+        firestoreData.sobrietyStartDate = Firestore.Timestamp.fromDate(
+          new Date(user.recoveryDate),
+        );
+      } catch (e) {
+        console.warn('Invalid recovery date');
+      }
+    }
+    if (user.createdAt) {
+      try {
+        firestoreData.createdAt = Firestore.Timestamp.fromDate(
+          new Date(user.createdAt),
+        );
+      } catch (e) {
+        console.warn('Invalid createdAt date');
+      }
+    }
+    if (user.updatedAt) {
+      try {
+        firestoreData.updatedAt = Firestore.Timestamp.fromDate(
+          new Date(user.updatedAt),
+        );
+      } catch (e) {
+        console.warn('Invalid updatedAt date');
+      }
+    }
+    if (user.lastLogin) {
+      try {
+        firestoreData.lastLogin = Firestore.Timestamp.fromDate(
+          new Date(user.lastLogin),
+        );
+      } catch (e) {
+        console.warn('Invalid lastLogin date');
+      }
+    }
+
+    // Map nested settings (only include if provided in partial User)
+    if (user.notificationSettings !== undefined) {
+      firestoreData.notificationSettings = user.notificationSettings; // Pass the whole object or handle partial updates if needed
+    }
+    if (user.privacySettings !== undefined) {
+      firestoreData.privacySettings = user.privacySettings; // Pass the whole object
+    }
 
     return firestoreData;
   }
@@ -162,21 +180,29 @@ export class UserModel {
         uid: currentUser.uid,
         email: currentUser.email || '',
         displayName: currentUser.displayName || 'Anonymous',
-        photoUrl: currentUser.photoURL || '',
+        photoUrl: currentUser.photoURL || null,
+        phoneNumber: currentUser.phoneNumber || null, // Add default phone
+        fcmTokens: [], // Add default fcmTokens
         createdAt: now,
         updatedAt: now,
         lastLogin: now,
         notificationSettings: {
+          // Initialize all notification settings
           meetings: true,
           announcements: true,
           celebrations: true,
+          groupChatMentions: true, // Default new settings
+          allowPushNotifications: true,
         },
         privacySettings: {
+          // Initialize all privacy settings
           showRecoveryDate: false,
           allowDirectMessages: true,
+          showPhoneNumber: false, // Default showPhoneNumber
         },
         homeGroups: [],
         role: 'user',
+        favoriteMeetings: [],
       };
 
       const newUser = {...defaultUser, ...userData};
@@ -205,86 +231,69 @@ export class UserModel {
         throw new Error('User not found');
       }
 
-      const updatedFields = {
-        ...userData,
-        updatedAt: new Date(),
-      };
+      const existingData = userDoc.data() as UserDocument;
 
-      await userRef.update(UserModel.toFirestore(updatedFields as User));
+      // Prepare the update, merging nested settings carefully
+      const updatePayload: Partial<UserDocument> = {};
 
+      // Map basic fields directly from userData
+      if (userData.uid !== undefined) updatePayload.uid = userData.uid;
+      if (userData.email !== undefined) updatePayload.email = userData.email;
+      if (userData.displayName !== undefined)
+        updatePayload.displayName = userData.displayName;
+      if (userData.photoUrl !== undefined)
+        updatePayload.photoUrl = userData.photoUrl;
+      if (userData.phoneNumber !== undefined)
+        updatePayload.phoneNumber = userData.phoneNumber;
+      if (userData.fcmTokens !== undefined)
+        updatePayload.fcmTokens = userData.fcmTokens;
+      if (userData.homeGroups !== undefined)
+        updatePayload.homeGroups = userData.homeGroups;
+      if (userData.role !== undefined) updatePayload.role = userData.role;
+      if (userData.favoriteMeetings !== undefined)
+        updatePayload.favoriteMeetings = userData.favoriteMeetings;
+
+      // Map dates
+      if (userData.recoveryDate !== undefined) {
+        // Handles null or string
+        try {
+          updatePayload.sobrietyStartDate = userData.recoveryDate
+            ? Firestore.Timestamp.fromDate(new Date(userData.recoveryDate))
+            : null;
+        } catch (e) {}
+      }
+      // Always update updatedAt
+      updatePayload.updatedAt = Firestore.Timestamp.fromDate(new Date());
+      // Don't update createdAt or lastLogin here usually
+
+      // Merge nested notification settings
+      if (userData.notificationSettings) {
+        updatePayload.notificationSettings = {
+          ...(existingData.notificationSettings ?? {}), // Start with existing or empty
+          ...userData.notificationSettings, // Overwrite with new values
+        };
+      }
+
+      // Merge nested privacy settings
+      if (userData.privacySettings) {
+        updatePayload.privacySettings = {
+          ...(existingData.privacySettings ?? {}), // Start with existing or empty
+          ...userData.privacySettings, // Overwrite with new values
+        };
+      }
+
+      // Perform the update with the merged payload
+      await userRef.update(updatePayload);
+
+      // Get the updated document
       const updatedDoc = await userRef.get();
+      if (!updatedDoc.exists) throw new Error('User not found after update');
       return UserModel.fromFirestore({
         id: updatedDoc.id,
         data: () => updatedDoc.data() as UserDocument,
       });
     } catch (error) {
       console.error('Error updating user:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update notification settings
-   */
-  static async updateNotificationSettings(
-    uid: string,
-    settings: Partial<NotificationSettings>,
-  ): Promise<NotificationSettings> {
-    try {
-      const userRef = firestore.collection('users').doc(uid);
-      const userDoc = await userRef.get();
-
-      if (!userDoc.exists) {
-        throw new Error('User not found');
-      }
-
-      const userData = userDoc.data() as UserDocument;
-      const updatedSettings = {
-        ...userData.notificationSettings,
-        ...settings,
-      };
-
-      await userRef.update({
-        notificationSettings: updatedSettings,
-        updatedAt: Firestore.FieldValue.serverTimestamp(),
-      });
-
-      return updatedSettings;
-    } catch (error) {
-      console.error('Error updating notification settings:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update privacy settings
-   */
-  static async updatePrivacySettings(
-    uid: string,
-    settings: Partial<PrivacySettings>,
-  ): Promise<PrivacySettings> {
-    try {
-      const userRef = firestore.collection('users').doc(uid);
-      const userDoc = await userRef.get();
-
-      if (!userDoc.exists) {
-        throw new Error('User not found');
-      }
-
-      const userData = userDoc.data() as UserDocument;
-      const updatedSettings = {
-        ...userData.privacySettings,
-        ...settings,
-      };
-
-      await userRef.update({
-        privacySettings: updatedSettings,
-        updatedAt: Firestore.FieldValue.serverTimestamp(),
-      });
-
-      return updatedSettings;
-    } catch (error) {
-      console.error('Error updating privacy settings:', error);
       throw error;
     }
   }
@@ -437,6 +446,29 @@ export class UserModel {
     } catch (error) {
       console.error('Error updating user photo URL:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Add an FCM token to the user's token list.
+   * Ensures the token is only added if it doesn't already exist.
+   */
+  static async addFcmToken(uid: string, token: string): Promise<void> {
+    try {
+      const userRef = firestore.collection('users').doc(uid);
+
+      // Update using arrayUnion to avoid duplicates
+      await userRef.update({
+        fcmTokens: Firestore.FieldValue.arrayUnion(token),
+        updatedAt: Firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`FCM token added/updated for user ${uid}`);
+    } catch (error) {
+      // Log error but don't necessarily throw, as failing to save a token
+      // might not be a critical app failure, though it impacts notifications.
+      console.error(`Error adding FCM token for user ${uid}:`, error);
+      // Optionally re-throw if you want the thunk to reject:
+      // throw new Error('Failed to update FCM token in Firestore.');
     }
   }
 }

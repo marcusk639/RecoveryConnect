@@ -2,37 +2,42 @@ import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import {
   COLLECTION_PATHS,
-  ChatMessageDocument,
   GroupChatDocument,
   FirestoreDocument,
 } from '../types/schema';
 import {GroupModel} from './GroupModel';
+import {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
 
+// Define Chat Attachment type
+export interface ChatAttachment {
+  type: 'image' | 'file' | 'voice';
+  url: string;
+  name?: string;
+  size?: number;
+  duration?: number;
+  thumbnailUrl?: string;
+}
+
+// Define Chat Message structure (App Representation)
 export interface ChatMessage {
   id: string;
   groupId: string;
   senderId: string;
   senderName: string;
   senderPhotoURL?: string;
-  text: string;
-  sentAt: Date | undefined;
-  readBy: {[userId: string]: boolean};
-  attachments?: {
-    type: 'image' | 'file' | 'voice';
-    url: string;
-    name?: string;
-    size?: number;
-    duration?: number;
-  }[];
-  reactions?: {
-    [reactionType: string]: string[];
-  };
+  text?: string;
+  attachments?: ChatAttachment[];
+  sentAt: number; // Use number (timestamp) consistently
+  reactions?: Record<string, string[]>;
+  readBy?: Record<string, boolean>;
   replyTo?: {
+    // Keep only necessary fields for display
     messageId: string;
-    text: string;
-    senderId: string;
     senderName: string;
-  };
+    text: string; // Snippet of the original message
+  } | null;
+  isSystemMessage?: boolean;
+  mentionedUserIds?: string[];
 }
 
 export interface GroupChat {
@@ -56,9 +61,7 @@ export class ChatModel {
   /**
    * Convert a Firestore chat message document to a ChatMessage object
    */
-  static messageFromFirestore(
-    doc: FirestoreDocument<ChatMessageDocument>,
-  ): ChatMessage {
+  static messageFromFirestore(doc: FirestoreDocument<any>): ChatMessage {
     const data = doc.data();
     return {
       id: doc.id,
@@ -67,11 +70,13 @@ export class ChatModel {
       senderName: data.senderName,
       senderPhotoURL: data.senderPhotoURL,
       text: data.text,
-      sentAt: data.sentAt ? data.sentAt.toDate() : undefined,
+      sentAt: data.sentAt ? data.sentAt.toDate().getTime() : undefined,
       readBy: data.readBy || {},
       attachments: data.attachments,
       reactions: data.reactions,
       replyTo: data.replyTo,
+      isSystemMessage: data.isSystemMessage,
+      mentionedUserIds: data.mentionedUserIds,
     };
   }
 
@@ -158,113 +163,74 @@ export class ChatModel {
   static async sendMessage(
     groupId: string,
     text: string,
-    replyToMessageId: string | null = null,
+    attachments?: ChatAttachment[],
+    replyTo?: {messageId: string; senderName: string; text: string} | null,
     isSystemMessage: boolean = false,
-    attachments?: {
-      type: 'image' | 'file' | 'voice';
-      url: string;
-      name?: string;
-      size?: number;
-      duration?: number;
-    }[],
+    mentionedUserIds: string[] = [],
   ): Promise<ChatMessage> {
-    try {
-      const currentUser = auth().currentUser;
-      if (!currentUser && !isSystemMessage) {
-        throw new Error('No authenticated user');
-      }
-
-      // Use server timestamp for consistency
-      const now = new Date();
-      const serverTimestamp = firestore.FieldValue.serverTimestamp();
-
-      const messagesRef = firestore().collection(
-        COLLECTION_PATHS.CHAT_MESSAGES(groupId),
-      );
-
-      // Get chat reference
-      const chatRef = firestore()
-        .collection(COLLECTION_PATHS.GROUP_CHATS)
-        .doc(groupId);
-      const chatDoc = await chatRef.get();
-
-      if (!chatDoc.exists) {
-        await this.initializeGroupChat(groupId);
-      }
-
-      // Prepare replyTo data if needed
-      let replyTo = undefined;
-      if (replyToMessageId) {
-        const replyMsgDoc = await messagesRef.doc(replyToMessageId).get();
-        if (replyMsgDoc.exists) {
-          const replyData = replyMsgDoc.data() as ChatMessageDocument;
-          replyTo = {
-            messageId: replyToMessageId,
-            text: replyData.text,
-            senderId: replyData.senderId,
-            senderName: replyData.senderName,
-          };
-        }
-      }
-
-      // Sender details
-      const senderId = isSystemMessage ? 'system' : currentUser!.uid;
-      const senderName = isSystemMessage
-        ? 'System'
-        : currentUser!.displayName || 'User';
-      const senderPhotoURL = isSystemMessage
-        ? undefined
-        : currentUser!.photoURL || undefined;
-
-      // Create the initial readBy object - sender has read it
-      const readBy: {[userId: string]: boolean} = {};
-      if (!isSystemMessage) {
-        readBy[currentUser!.uid] = true;
-      }
-
-      // Create new message with proper timestamp type
-      const messageData: Omit<ChatMessageDocument, 'id'> = {
-        groupId,
-        senderId,
-        senderName,
-        senderPhotoURL,
-        text,
-        sentAt: firestore.Timestamp.now(),
-        readBy,
-        replyTo,
-        attachments,
-      };
-
-      const messageRef = await messagesRef.add(messageData);
-
-      // Update the last message in the chat
-      await chatRef.update({
-        lastMessage: {
-          text,
-          senderId,
-          senderName,
-          sentAt: firestore.Timestamp.now(),
-        },
-        updatedAt: serverTimestamp,
-      });
-
-      // Return the newly created message
-      return {
-        id: messageRef.id,
-        groupId,
-        senderId,
-        senderName,
-        senderPhotoURL,
-        text,
-        sentAt: now,
-        readBy,
-        replyTo,
-        attachments,
-      };
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw error;
+    const currentUser = auth().currentUser;
+    if (!currentUser && !isSystemMessage) {
+      throw new Error('User not authenticated for non-system message');
     }
+    const now = new Date();
+    const messageRef = firestore()
+      .collection('groups')
+      .doc(groupId)
+      .collection('messages')
+      .doc();
+    const senderId = isSystemMessage ? 'system' : currentUser!.uid;
+    const senderName = isSystemMessage
+      ? 'System'
+      : currentUser!.displayName || 'Anonymous';
+    const senderPhotoURL = isSystemMessage
+      ? undefined
+      : currentUser!.photoURL || undefined;
+
+    // Create the data object directly for Firestore
+    const messageData = {
+      groupId,
+      senderId,
+      senderName,
+      senderPhotoURL: senderPhotoURL || undefined,
+      text,
+      sentAt: firestore.Timestamp.fromDate(now),
+      attachments:
+        attachments && attachments.length > 0 ? attachments : undefined,
+      reactions: {},
+      readBy: isSystemMessage ? {} : {[senderId]: true},
+      replyTo: replyTo || undefined,
+      isSystemMessage,
+      mentionedUserIds:
+        mentionedUserIds && mentionedUserIds.length > 0
+          ? mentionedUserIds
+          : undefined,
+    };
+
+    // Remove undefined fields before sending (Good practice, though often optional)
+    Object.keys(messageData).forEach(
+      key =>
+        (messageData as any)[key] === undefined &&
+        delete (messageData as any)[key],
+    );
+
+    await messageRef.set(messageData);
+
+    // Return the ChatMessage (App representation)
+    return {
+      id: messageRef.id,
+      groupId: messageData.groupId,
+      senderId: messageData.senderId,
+      senderName: messageData.senderName,
+      senderPhotoURL: messageData.senderPhotoURL,
+      text: messageData.text,
+      sentAt: now.getTime(),
+      readBy: messageData.readBy,
+      replyTo: messageData.replyTo,
+      attachments: messageData.attachments ?? [],
+      isSystemMessage: messageData.isSystemMessage,
+      mentionedUserIds: messageData.mentionedUserIds ?? [],
+      reactions: messageData.reactions,
+    };
   }
 
   /**
@@ -299,7 +265,7 @@ export class ChatModel {
         .map(doc =>
           this.messageFromFirestore({
             id: doc.id,
-            data: () => doc.data() as ChatMessageDocument,
+            data: () => doc.data() as any,
           }),
         )
         .reverse();
@@ -328,7 +294,7 @@ export class ChatModel {
         throw new Error('Reference message not found');
       }
 
-      const beforeData = beforeMessageDoc.data() as ChatMessageDocument;
+      const beforeData = beforeMessageDoc.data() as any;
       const beforeSentAt = beforeData.sentAt;
 
       // Get messages before that timestamp
@@ -346,7 +312,7 @@ export class ChatModel {
         .map(doc =>
           this.messageFromFirestore({
             id: doc.id,
-            data: () => doc.data() as ChatMessageDocument,
+            data: () => doc.data() as any,
           }),
         )
         .reverse();
@@ -465,7 +431,7 @@ export class ChatModel {
             .map(doc =>
               this.messageFromFirestore({
                 id: doc.id,
-                data: () => doc.data() as ChatMessageDocument,
+                data: () => doc.data() as any,
               }),
             )
             .reverse(); // Oldest first
@@ -505,7 +471,7 @@ export class ChatModel {
         throw new Error('Message not found');
       }
 
-      const messageData = messageDoc.data() as ChatMessageDocument;
+      const messageData = messageDoc.data() as any;
       const isAdmin = await GroupModel.isGroupAdmin(groupId, currentUser.uid);
       const isMessageSender = messageData.senderId === currentUser.uid;
 
@@ -538,8 +504,7 @@ export class ChatModel {
             .get();
 
           if (!newLastMessageSnapshot.empty) {
-            const newLastMessage =
-              newLastMessageSnapshot.docs[0].data() as ChatMessageDocument;
+            const newLastMessage = newLastMessageSnapshot.docs[0].data() as any;
             await chatRef.update({
               lastMessage: {
                 text: newLastMessage.text,
@@ -565,5 +530,37 @@ export class ChatModel {
       console.error('Error deleting message:', error);
       throw error;
     }
+  }
+
+  // Convert Firestore Document to ChatMessage (App Representation)
+  static fromFirestore(
+    doc: FirebaseFirestoreTypes.DocumentSnapshot,
+  ): ChatMessage {
+    const data = doc.data() as any; // Use 'any' for Firestore data for simplicity now
+    if (!data) {
+      throw new Error('Document data missing!');
+    }
+    // Construct ChatMessage, providing defaults for potentially missing fields
+    return {
+      id: doc.id,
+      groupId: data.groupId ?? '',
+      senderId: data.senderId ?? 'system',
+      senderName: data.senderName ?? 'Unknown',
+      senderPhotoURL: data.senderPhotoURL,
+      text: data.text,
+      sentAt: data.sentAt?.toDate?.().getTime?.() ?? Date.now(), // Safest chaining
+      readBy: data.readBy ?? {},
+      attachments: data.attachments ?? [],
+      reactions: data.reactions ?? {},
+      replyTo: data.replyTo
+        ? {
+            messageId: data.replyTo.messageId,
+            senderName: data.replyTo.senderName,
+            text: data.replyTo.text,
+          }
+        : null,
+      isSystemMessage: data.isSystemMessage ?? false,
+      mentionedUserIds: data.mentionedUserIds ?? [],
+    };
   }
 }
