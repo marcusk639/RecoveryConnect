@@ -410,164 +410,155 @@ const MeetingsScreen: React.FC = () => {
       animationType="slide"
       transparent={true}
       onRequestClose={() => setShowFilterModal(false)}>
-      <Pressable
-        style={styles.modalOverlay}
-        onPressOut={() => setShowFilterModal(false)}>
-        <Pressable
-          onPress={() => {
-            /* Do nothing, consume press */
-          }}>
-          <View style={styles.filterModalContainer}>
-            <View style={styles.pullIndicator} />
-            <View style={styles.locationModalHeader}>
-              <Text style={styles.locationModalTitle}>Filters</Text>
+      <Pressable style={styles.modalOverlay}>
+        <View style={styles.filterModalContainer}>
+          <View style={styles.pullIndicator} />
+          <View style={styles.locationModalHeader}>
+            <Text style={styles.locationModalTitle}>Filters</Text>
+            <TouchableOpacity
+              onPress={() => setShowFilterModal(false)}
+              style={styles.closeButton}>
+              <Icon name="close" size={24} color="#757575" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView>
+            {/* Format Filters */}
+            <Text style={styles.filterSectionTitle}>Format</Text>
+            <View style={styles.typeFilterContainer}>
               <TouchableOpacity
-                onPress={() => setShowFilterModal(false)}
-                style={styles.closeButton}>
-                <Icon name="close" size={24} color="#757575" />
+                style={[
+                  styles.typeFilterButton,
+                  showInPerson && styles.typeFilterActive,
+                  !showOnline && !showInPerson && styles.typeFilterInactive,
+                ]}
+                onPress={() => setShowInPerson(!showInPerson)}>
+                <Text
+                  style={[
+                    styles.typeFilterText,
+                    showInPerson && styles.typeFilterActiveText,
+                  ]}>
+                  In-Person
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.typeFilterButton,
+                  showOnline && styles.typeFilterActive,
+                  !showOnline && !showInPerson && styles.typeFilterInactive,
+                ]}
+                onPress={() => setShowOnline(!showOnline)}>
+                <Text
+                  style={[
+                    styles.typeFilterText,
+                    showOnline && styles.typeFilterActiveText,
+                  ]}>
+                  Online
+                </Text>
               </TouchableOpacity>
             </View>
+            {!showOnline && !showInPerson && (
+              <Text style={styles.filterWarningText}>
+                Warning: No meeting formats selected.
+              </Text>
+            )}
 
-            <ScrollView>
-              {/* Format Filters */}
-              <Text style={styles.filterSectionTitle}>Format</Text>
-              <View style={styles.typeFilterContainer}>
+            {/* Program Type Filters */}
+            <Text style={styles.filterSectionTitle}>Program Type</Text>
+            <View style={styles.chipContainer}>
+              {meetingTypes.map(type => (
                 <TouchableOpacity
+                  key={type}
                   style={[
-                    styles.typeFilterButton,
-                    showInPerson && styles.typeFilterActive,
-                    !showOnline && !showInPerson && styles.typeFilterInactive,
+                    styles.chipButton,
+                    selectedTypeFilter === type && styles.chipButtonActive,
                   ]}
-                  onPress={() => setShowInPerson(!showInPerson)}>
+                  onPress={() =>
+                    setSelectedTypeFilter(
+                      selectedTypeFilter === type ? 'All' : type,
+                    )
+                  }>
                   <Text
                     style={[
-                      styles.typeFilterText,
-                      showInPerson && styles.typeFilterActiveText,
+                      styles.chipText,
+                      selectedTypeFilter === type && styles.chipTextActive,
                     ]}>
-                    In-Person
+                    {type}
                   </Text>
                 </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Day of Week Filter */}
+            <Text style={styles.filterSectionTitle}>Day of Week</Text>
+            <View style={styles.chipContainer}>
+              {daysOfWeek.map(day => (
                 <TouchableOpacity
+                  key={day}
                   style={[
-                    styles.typeFilterButton,
-                    showOnline && styles.typeFilterActive,
-                    !showOnline && !showInPerson && styles.typeFilterInactive,
+                    styles.chipButton,
+                    selectedDayFilter ===
+                      (day === 'All' ? null : day.toLowerCase()) &&
+                      styles.chipButtonActive,
                   ]}
-                  onPress={() => setShowOnline(!showOnline)}>
+                  onPress={() =>
+                    setSelectedDayFilter(
+                      day === 'All' ? null : day.toLowerCase(),
+                    )
+                  }>
                   <Text
                     style={[
-                      styles.typeFilterText,
-                      showOnline && styles.typeFilterActiveText,
-                    ]}>
-                    Online
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {!showOnline && !showInPerson && (
-                <Text style={styles.filterWarningText}>
-                  Warning: No meeting formats selected.
-                </Text>
-              )}
-
-              {/* Program Type Filters */}
-              <Text style={styles.filterSectionTitle}>Program Type</Text>
-              <View style={styles.chipContainer}>
-                {meetingTypes.map(type => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.chipButton,
-                      selectedTypeFilter === type && styles.chipButtonActive,
-                    ]}
-                    onPress={() =>
-                      setSelectedTypeFilter(
-                        selectedTypeFilter === type ? 'All' : type,
-                      )
-                    }>
-                    <Text
-                      style={[
-                        styles.chipText,
-                        selectedTypeFilter === type && styles.chipTextActive,
-                      ]}>
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Day of Week Filter */}
-              <Text style={styles.filterSectionTitle}>Day of Week</Text>
-              <View style={styles.chipContainer}>
-                {daysOfWeek.map(day => (
-                  <TouchableOpacity
-                    key={day}
-                    style={[
-                      styles.chipButton,
+                      styles.chipText,
                       selectedDayFilter ===
                         (day === 'All' ? null : day.toLowerCase()) &&
-                        styles.chipButtonActive,
-                    ]}
-                    onPress={() =>
-                      setSelectedDayFilter(
-                        day === 'All' ? null : day.toLowerCase(),
-                      )
-                    }>
-                    <Text
-                      style={[
-                        styles.chipText,
-                        selectedDayFilter ===
-                          (day === 'All' ? null : day.toLowerCase()) &&
-                          styles.chipTextActive,
-                      ]}>
-                      {day}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                        styles.chipTextActive,
+                    ]}>
+                    {day}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-              {/* Time of Day Filter (Simplified) */}
-              {/* More complex time range sliders could be added */}
-              <Text style={styles.filterSectionTitle}>Time of Day</Text>
-              <View style={styles.chipContainer}>
-                {timeOfDayOptions.map(timeOption => (
-                  <TouchableOpacity
-                    key={timeOption}
+            {/* Time of Day Filter (Simplified) */}
+            {/* More complex time range sliders could be added */}
+            <Text style={styles.filterSectionTitle}>Time of Day</Text>
+            <View style={styles.chipContainer}>
+              {timeOfDayOptions.map(timeOption => (
+                <TouchableOpacity
+                  key={timeOption}
+                  style={[
+                    styles.chipButton,
+                    selectedTimeFilter ===
+                      (timeOption === 'All'
+                        ? null
+                        : timeOption.toLowerCase()) && styles.chipButtonActive,
+                  ]}
+                  onPress={() =>
+                    setSelectedTimeFilter(
+                      timeOption === 'All' ? null : timeOption.toLowerCase(),
+                    )
+                  }>
+                  <Text
                     style={[
-                      styles.chipButton,
+                      styles.chipText,
                       selectedTimeFilter ===
                         (timeOption === 'All'
                           ? null
-                          : timeOption.toLowerCase()) &&
-                        styles.chipButtonActive,
-                    ]}
-                    onPress={() =>
-                      setSelectedTimeFilter(
-                        timeOption === 'All' ? null : timeOption.toLowerCase(),
-                      )
-                    }>
-                    <Text
-                      style={[
-                        styles.chipText,
-                        selectedTimeFilter ===
-                          (timeOption === 'All'
-                            ? null
-                            : timeOption.toLowerCase()) &&
-                          styles.chipTextActive,
-                      ]}>
-                      {timeOption}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+                          : timeOption.toLowerCase()) && styles.chipTextActive,
+                    ]}>
+                    {timeOption}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
 
-            <TouchableOpacity
-              style={styles.applyFilterButton}
-              onPress={onFilterModalClose}>
-              <Text style={styles.applyFilterButtonText}>Apply Filters</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
+          <TouchableOpacity
+            style={styles.applyFilterButton}
+            onPress={onFilterModalClose}>
+            <Text style={styles.applyFilterButtonText}>Apply Filters</Text>
+          </TouchableOpacity>
+        </View>
       </Pressable>
     </Modal>
   );
