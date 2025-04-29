@@ -8,6 +8,7 @@ import auth from '@react-native-firebase/auth';
 import {RootState} from '../index';
 import {HomeGroup, Meeting} from '../../types';
 import {GroupModel} from '../../models/GroupModel';
+import firestore from '@react-native-firebase/firestore';
 
 // Define types
 interface GroupsState {
@@ -220,6 +221,49 @@ export const searchGroupsByLocation = createAsyncThunk(
   },
 );
 
+// Add the requestGroupAdminAccess thunk
+export const requestGroupAdminAccess = createAsyncThunk(
+  'groups/requestGroupAdminAccess',
+  async (
+    {
+      groupId,
+      userId,
+      message,
+    }: {
+      groupId: string;
+      userId: string;
+      message?: string;
+    },
+    {rejectWithValue},
+  ) => {
+    try {
+      // Get the current group
+      const groupRef = firestore().collection('groups').doc(groupId);
+      const groupDoc = await groupRef.get();
+
+      if (!groupDoc.exists) {
+        return rejectWithValue('Group not found');
+      }
+
+      // Update the group with the new admin request
+      await groupRef.update({
+        pendingAdminRequests: firestore.FieldValue.arrayUnion({
+          uid: userId,
+          requestedAt: firestore.FieldValue.serverTimestamp(),
+          message: message || '',
+        }),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Fetch the updated group
+      const updatedGroup = await GroupModel.getById(groupId);
+      return updatedGroup;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to request admin access');
+    }
+  },
+);
+
 // Create the slice
 const groupsSlice = createSlice({
   name: 'groups',
@@ -394,6 +438,27 @@ const groupsSlice = createSlice({
         state.status = 'failed';
         state.error =
           (action.payload as string) || 'Failed to search nearby groups';
+      })
+
+      // Request group admin access
+      .addCase(requestGroupAdminAccess.pending, state => {
+        state.status = 'loading';
+      })
+      .addCase(requestGroupAdminAccess.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+
+        // Update the group in the items dictionary
+        if (action.payload && action.payload.id) {
+          state.items[action.payload.id] = action.payload;
+          state.lastFetched[action.payload.id] = Date.now();
+        }
+
+        state.error = null;
+      })
+      .addCase(requestGroupAdminAccess.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error =
+          (action.payload as string) || 'Failed to request admin access';
       });
   },
 });

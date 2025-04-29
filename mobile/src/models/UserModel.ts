@@ -7,7 +7,7 @@ import {
 import {UserDocument} from '../types/schema';
 import {firestore, auth} from '../services/firebase/config';
 import Firestore from '@react-native-firebase/firestore';
-
+import Auth from '@react-native-firebase/auth';
 /**
  * User model for managing user data
  */
@@ -102,6 +102,27 @@ export class UserModel {
       firestoreData.favoriteMeetings = user.favoriteMeetings;
 
     return firestoreData;
+  }
+
+  /**
+   * Check if a user is a super admin
+   * @returns Promise that resolves to true if the user is a super admin
+   */
+  static async isSuperAdmin(): Promise<boolean> {
+    const currentUser = Auth().currentUser;
+
+    if (!currentUser) {
+      return false;
+    }
+
+    try {
+      // Get user claims from custom auth function or document
+      const idTokenResult = await currentUser.getIdTokenResult(true);
+      return !!idTokenResult.claims.superAdmin;
+    } catch (error) {
+      console.error('Error checking super admin status:', error);
+      return false;
+    }
   }
 
   /**

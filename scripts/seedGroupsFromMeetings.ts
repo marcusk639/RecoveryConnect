@@ -90,7 +90,14 @@ export interface Group {
   updatedAt: Timestamp;
   foundedDate?: Timestamp;
   memberCount: number;
-  admins: string[];
+  admins: string[]; // For backward compatibility
+  adminUids: string[]; // New field explicitly for admin user IDs
+  isClaimed: boolean; // Flag to indicate if group has been claimed
+  pendingAdminRequests: {
+    uid: string;
+    requestedAt: Timestamp;
+    message?: string;
+  }[]; // Array to store admin requests
   placeName?: string;
   type: "AA";
   treasurers: string[];
@@ -446,7 +453,10 @@ function createGroupDataFromMeeting(meeting: Meeting): {
     createdAt: now,
     updatedAt: now,
     memberCount: 0,
-    admins: [],
+    admins: [], // Keep for backward compatibility
+    adminUids: [], // Initialize empty admin array
+    isClaimed: false, // Initialize as unclaimed
+    pendingAdminRequests: [], // Initialize empty requests array
     type: "AA",
     treasurers: [],
     placeName: meeting.locationName,

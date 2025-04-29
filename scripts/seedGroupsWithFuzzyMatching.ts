@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import * as geofire from "geofire-common";
 import * as path from "path";
 import crypto from "crypto";
+import { Timestamp } from "firebase-admin/firestore";
 
 // --- Configuration ---
 const SERVICE_ACCOUNT_PATH = "./recovery-connect.json";
@@ -18,19 +19,20 @@ const VERY_CLOSE_DISTANCE_M = 20; // Distance in meters to consider "very close"
 const CLOSE_DISTANCE_M = 100; // Distance in meters to consider "close"
 
 // --- Interfaces ---
-export class Meeting {
-  name = "";
-  time = "";
-  street = "";
+export interface Meeting {
+  name: string;
+  time: string;
+  street: string;
   city?: string;
   state?: string;
   zip?: string;
   formattedAddress?: string;
-  types?: string[];
+  address?: string;
+  locationName?: string;
+  location?: string;
+  country?: string;
   lat?: number;
   lng?: number;
-  country?: string;
-  locationName?: string;
   type?: "AA" | "NA" | "IOP" | "Religious" | "Celebrate Recovery" | "CUSTOM";
   Location?: string[];
   day?: string;
@@ -38,32 +40,58 @@ export class Meeting {
   link?: string;
   onlineNotes?: string;
   format?: string;
+  types?: string[];
   id?: string;
-  address?: string;
-  location?: string;
   verified?: boolean;
   addedBy?: string;
   createdAt?: Date;
   updatedAt?: Date;
   groupId?: string;
+  notes?: string;
 }
 
-interface Group {
-  id?: string;
+export interface Group {
+  id: string;
   name: string;
-  type?: string;
-  lat?: number;
-  lng?: number;
-  geohash?: string;
+  description: string;
+  location: string;
   address?: string;
   city?: string;
   state?: string;
   zip?: string;
-  online?: boolean;
-  link?: string;
-  meetingCount: number;
-  createdAt: admin.firestore.Timestamp;
-  updatedAt: admin.firestore.Timestamp;
+  lat?: number;
+  geohash?: string;
+  lng?: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  foundedDate?: Timestamp;
+  memberCount: number;
+  admins: string[]; // For backward compatibility
+  isClaimed: boolean; // Flag to indicate if group has been claimed
+  pendingAdminRequests: {
+    uid: string;
+    requestedAt: Timestamp;
+    message?: string;
+  }[]; // Array to store admin requests
+  placeName?: string;
+  type: "AA";
+  treasurers: string[];
+  treasury: {
+    balance: number;
+    prudentReserve: number;
+    monthlyIncome: number;
+    monthlyExpenses: number;
+    transactions: [];
+    summary: {
+      balance: number;
+      prudentReserve: number;
+      monthlyIncome: number;
+      monthlyExpenses: number;
+      lastUpdated: Date;
+    };
+  };
+  // Add field for meeting count
+  meetingCount?: number;
 }
 
 // --- Helper Functions ---
@@ -296,22 +324,46 @@ function createGroupDataFromMeeting(meeting: Meeting): Group | null {
   groupName = cleanName || groupName; // Use cleaned name if valid, otherwise original
 
   const now = admin.firestore.Timestamp.now();
-  const groupData: Partial<Group> = {
+
+  // Initialize the group data with all required fields
+  const groupData: Group = {
+    id: "", // This will be set by Firestore
     name: groupName,
-    type: meeting.type,
-    address: meeting.address,
+    // Set type properly - default to AA if undefined or not matching expected type
+    type: meeting.type === "AA" ? "AA" : "AA",
+    description: `${groupName} is a recovery group. This description was auto-generated.`,
+    location: meeting.location || meeting.formattedAddress || "",
+    address: meeting.address || meeting.street || "",
     city: meeting.city,
     state: meeting.state,
     zip: meeting.zip,
-    online: meeting.online ?? false,
-    link: meeting.online ? meeting.link : undefined,
-    meetingCount: 1,
+    memberCount: 0,
+    meetingCount: 1, // Initialize with 1 meeting
     createdAt: now,
     updatedAt: now,
+    admins: [], // Initialize with empty array
+    isClaimed: false, // Mark as unclaimed by default
+    pendingAdminRequests: [], // Initialize with empty array
+    treasurers: [],
+    treasury: {
+      balance: 0,
+      prudentReserve: 0,
+      monthlyIncome: 0,
+      monthlyExpenses: 0,
+      transactions: [],
+      summary: {
+        balance: 0,
+        prudentReserve: 0,
+        monthlyIncome: 0,
+        monthlyExpenses: 0,
+        lastUpdated: now.toDate(),
+      },
+    },
   };
 
+  // Add coordinates for in-person meetings
   if (
-    !groupData.online &&
+    !meeting.online &&
     meeting.lat !== undefined &&
     meeting.lng !== undefined
   ) {
@@ -330,7 +382,7 @@ function createGroupDataFromMeeting(meeting: Meeting): Group | null {
         e
       );
     }
-  } else if (groupData.online && !groupData.link) {
+  } else if (meeting.online && !meeting.link) {
     console.warn(
       `Cannot create online group from meeting ${
         meeting.id || meeting.name
@@ -339,14 +391,7 @@ function createGroupDataFromMeeting(meeting: Meeting): Group | null {
     return null;
   }
 
-  // Remove undefined fields
-  Object.keys(groupData).forEach(
-    (key) =>
-      groupData[key as keyof Group] === undefined &&
-      delete groupData[key as keyof Group]
-  );
-
-  return groupData as Group;
+  return groupData;
 }
 
 /**

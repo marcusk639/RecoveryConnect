@@ -66,11 +66,10 @@ export interface Treasury {
 }
 
 export interface HomeGroup {
-  id?: string;
+  id: string;
   name: string;
   description: string;
-  meetings?: Meeting[]; // Optional meetings array
-  location?: string;
+  location: string;
   address?: string;
   city?: string;
   state?: string;
@@ -81,13 +80,19 @@ export interface HomeGroup {
   updatedAt: Date;
   foundedDate?: string;
   memberCount: number;
-  admins: string[];
-  isAdmin?: boolean; // For UI state, not stored
-  placeName?: string;
-  type: MeetingType;
+  admins: string[]; // Keep for backward compatibility
+  isClaimed: boolean; // Flag to indicate if group has been claimed
+  pendingAdminRequests?: {
+    // Make optional to handle existing records
+    uid: string;
+    requestedAt: Date;
+    message?: string;
+  }[];
   treasurers: string[];
+  placeName?: string;
+  type: string;
+  meetings: Meeting[];
   treasury: Treasury;
-  distanceInKm?: number; // Added for search results with distance calculations
 }
 
 export interface GroupMember {

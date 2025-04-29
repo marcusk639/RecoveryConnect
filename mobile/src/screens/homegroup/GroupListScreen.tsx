@@ -113,7 +113,7 @@ const GroupsListScreen: React.FC = () => {
       onPress={() => navigateToGroupDetails(item)}>
       <View style={styles.homeGroupHeader}>
         <Text style={styles.homeGroupName}>{item.name}</Text>
-        {item.isAdmin && (
+        {item.admins.includes(auth().currentUser?.uid || '') && (
           <View style={styles.adminBadge}>
             <Text style={styles.adminBadgeText}>Admin</Text>
           </View>

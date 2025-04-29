@@ -436,7 +436,7 @@ function formatMeetingForFirestore(meeting: any): Meeting {
     name: meeting.name || "Unnamed Meeting",
     day: meeting.day || "",
     time: meeting.time || "",
-    location: meeting.location_name || "",
+    locationName: meeting.location_name || "",
     address: meeting.address || "",
     city: meeting.city || "",
     state: meeting.state || "",
@@ -504,3 +504,51 @@ function findRelevantMeetings(meetings: any[], groupData: any) {
     return hasNameOverlap(meeting, groupData.name);
   });
 }
+
+export const setUserAsSuperAdmin = functions.https.onCall(
+  async (request, context) => {
+    // Check if request is made by an authenticated admin
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Unauthorized");
+    }
+
+    // Verify the caller has permission to set super admin (existing super admin)
+    const callerUid = request.auth.uid;
+    const callerSnapshot = await admin.auth().getUser(callerUid);
+    const callerCustomClaims = callerSnapshot.customClaims || {};
+
+    if (!callerCustomClaims.superAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Only super admins can create other super admins"
+      );
+    }
+
+    // Get the user ID to promote
+    const userId = request.auth.uid;
+    if (!userId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "User ID is required"
+      );
+    }
+
+    try {
+      // Set custom user claim
+      await admin.auth().setCustomUserClaims(userId, { superAdmin: true });
+
+      // Optionally update Firestore document as well
+      await admin.firestore().collection("users").doc(userId).update({
+        role: "superAdmin",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Force token refresh
+      await admin.auth().revokeRefreshTokens(userId);
+
+      return { success: true, message: "User promoted to super admin" };
+    } catch (error) {
+      throw new functions.https.HttpsError("internal", error.message);
+    }
+  }
+);

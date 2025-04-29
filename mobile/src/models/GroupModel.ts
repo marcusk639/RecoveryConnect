@@ -1,17 +1,12 @@
 import {HomeGroup, GroupMember, Meeting} from '../types';
-import {
-  FirestoreDocument,
-  GroupDocument,
-  GroupMemberDocument,
-} from '../types/schema';
+import {FirestoreDocument, GroupDocument} from '../types/schema';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
-import {calculateDistance} from '../utils/locationUtils';
-import {Transaction} from '../types/domain';
 import {MemberModel} from './MemberModel';
 import {MeetingModel} from './MeetingModel';
 import {cloneDeep, zip} from 'lodash';
 import {mapAsync} from '../utils/async';
+import {UserModel} from './UserModel';
 
 /**
  * Group model for managing group data
@@ -43,6 +38,14 @@ export class GroupModel {
         : undefined,
       memberCount: data.memberCount || 0,
       admins: data.admins || [],
+      isClaimed: data.isClaimed || false,
+      pendingAdminRequests: data.pendingAdminRequests
+        ? data.pendingAdminRequests.map(request => ({
+            uid: request.uid,
+            requestedAt: request.requestedAt.toDate(),
+            message: request.message,
+          }))
+        : [],
       treasury: data.treasury || {
         balance: 0,
         prudentReserve: 0,
@@ -76,9 +79,25 @@ export class GroupModel {
         ? firestore.Timestamp.fromDate(new Date(group.foundedDate))
         : undefined;
     }
+    if (group.meetings !== undefined) {
+      delete group.meetings;
+    }
     if (group.memberCount !== undefined)
       firestoreData.memberCount = group.memberCount;
     if (group.admins !== undefined) firestoreData.admins = group.admins;
+    if (group.isClaimed !== undefined)
+      firestoreData.isClaimed = group.isClaimed;
+
+    if (group.pendingAdminRequests !== undefined) {
+      firestoreData.pendingAdminRequests = group.pendingAdminRequests.map(
+        request => ({
+          uid: request.uid,
+          requestedAt: firestore.Timestamp.fromDate(request.requestedAt),
+          message: request.message,
+        }),
+      );
+    }
+
     if (group.createdAt !== undefined) {
       firestoreData.createdAt = firestore.Timestamp.fromDate(group.createdAt);
     }
@@ -91,7 +110,20 @@ export class GroupModel {
     }
 
     if (group.treasury !== undefined) {
-      firestoreData.treasury = group.treasury;
+      firestoreData.treasury = {
+        balance: group.treasury.balance || 0,
+        prudentReserve: group.treasury.prudentReserve || 0,
+        monthlyIncome: group.treasury.monthlyIncome || 0,
+        monthlyExpenses: group.treasury.monthlyExpenses || 0,
+        transactions: group.treasury.transactions || [],
+        summary: group.treasury.summary || {
+          balance: 0,
+          prudentReserve: 0,
+          monthlyIncome: 0,
+          monthlyExpenses: 0,
+          lastUpdated: new Date(),
+        },
+      };
     }
 
     // Location information
@@ -129,62 +161,6 @@ export class GroupModel {
   }
 
   /**
-   * Get all groups
-   */
-  static async getAllGroups(): Promise<HomeGroup[]> {
-    try {
-      const groupsSnapshot = await firestore().collection('groups').get();
-
-      const groups = groupsSnapshot.docs.map(doc => {
-        const data = doc.data() as GroupDocument;
-        // Ensure required fields have defaults
-        return {
-          id: doc.id,
-          type: data.type || 'AA', // Default type
-          name: data.name,
-          description: data.description,
-          location: data.location || '',
-          address: data.address,
-          city: data.city,
-          state: data.state,
-          zip: data.zip,
-          lat: data.lat,
-          lng: data.lng,
-          // Provide default empty array for treasurers if undefined
-          treasurers: data.treasurers || [],
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-          foundedDate: data.foundedDate?.toDate().toISOString(),
-          memberCount: data.memberCount || 0,
-          admins: data.admins || [],
-          // Provide default treasury structure if undefined
-          treasury: data.treasury || {
-            balance: 0,
-            prudentReserve: 0,
-            monthlyIncome: 0,
-            monthlyExpenses: 0,
-            transactions: [],
-            summary: {
-              balance: 0,
-              prudentReserve: 0,
-              monthlyIncome: 0,
-              monthlyExpenses: 0,
-              lastUpdated: new Date(),
-            },
-          },
-          placeName: data.placeName,
-          meetings: [], // Initialize with empty array
-        } as HomeGroup; // Assert type after providing defaults
-      });
-
-      return groups;
-    } catch (error) {
-      console.error('Error getting all groups:', error);
-      throw error; // Rethrow or return empty array based on desired error handling
-    }
-  }
-
-  /**
    * Create a new group
    */
   static async create(groupData: Partial<HomeGroup>): Promise<HomeGroup> {
@@ -205,6 +181,7 @@ export class GroupModel {
         updatedAt: now,
         memberCount: 1,
         admins: [currentUser.uid],
+        isClaimed: true, // Initialize this field
         treasurers: [currentUser.uid],
         treasury: {
           balance: 0,
@@ -225,14 +202,21 @@ export class GroupModel {
       };
 
       const newGroup = {...defaultGroup, ...groupData};
-      delete newGroup.id; // Remove ID as Firestore will generate one
+      const newGroupForFirestore = {...newGroup};
+      // Remove ID field from the Firestore data
+      if ('id' in newGroupForFirestore) {
+        delete (newGroupForFirestore as {id?: string}).id;
+      }
 
       let meetings = cloneDeep(newGroup.meetings);
-      delete newGroup.meetings; // Remove meetings as they're stored separately
+      // Remove meetings from the Firestore data
+      if ('meetings' in newGroupForFirestore) {
+        delete (newGroupForFirestore as {meetings?: Meeting[]}).meetings;
+      }
 
       const docRef = await firestore()
         .collection('groups')
-        .add(GroupModel.toFirestore(newGroup));
+        .add(GroupModel.toFirestore(newGroupForFirestore));
 
       // Add groupId to each meeting
       meetings = meetings?.map(meeting => ({
@@ -258,7 +242,7 @@ export class GroupModel {
           data: () => createdGroup.data() as GroupDocument,
         }),
         id: docRef.id,
-        meetings: [], // Initialize with empty array
+        meetings: meetings || [],
       };
     } catch (error) {
       console.error('Error creating group:', error);
@@ -431,18 +415,20 @@ export class GroupModel {
 
       // Get all members
       const membersSnapshot = await firestore()
-        .collection('groups')
-        .doc(groupId)
         .collection('members')
+        .where('groupId', '==', groupId)
         .get();
 
-      const memberIds = membersSnapshot.docs.map(doc => doc.id);
+      const userIds = membersSnapshot.docs.map(doc => {
+        const memberData = doc.data() as GroupMember;
+        return memberData.userId;
+      });
 
       // Batch write to remove group from all members' homeGroups
       const batch = firestore().batch();
 
-      for (const memberId of memberIds) {
-        const userRef = firestore().collection('users').doc(memberId);
+      for (const userId of userIds) {
+        const userRef = firestore().collection('users').doc(userId);
         batch.update(userRef, {
           homeGroups: firestore.FieldValue.arrayRemove(groupId),
           updatedAt: firestore.FieldValue.serverTimestamp(),
@@ -864,6 +850,241 @@ export class GroupModel {
     } catch (error) {
       console.error('Error searching groups by location:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get the current user's ID
+   * @returns The current user's UID or null if not authenticated
+   */
+  static getCurrentUserId(): string | null {
+    const currentUser = auth().currentUser;
+    return currentUser ? currentUser.uid : null;
+  }
+
+  /**
+   * Request admin access for a group
+   * @param groupId The ID of the group
+   * @param message Optional message explaining the connection to the group
+   * @returns Promise that resolves when the request is submitted
+   */
+  static async requestAdminAccess(
+    groupId: string,
+    message?: string,
+  ): Promise<void> {
+    const currentUser = auth().currentUser;
+
+    if (!currentUser) {
+      throw new Error('You must be logged in to request admin access');
+    }
+
+    const userId = currentUser.uid;
+    const groupRef = firestore().collection('groups').doc(groupId);
+
+    // Get the current group data
+    const groupDoc = await groupRef.get();
+
+    if (!groupDoc.exists) {
+      throw new Error('Group not found');
+    }
+
+    const groupData = groupDoc.data();
+
+    // Check if group is already claimed
+    if (groupData?.isClaimed) {
+      throw new Error(
+        'This group already has admins. Please contact them directly.',
+      );
+    }
+
+    // Check if user already has a pending request
+    const pendingRequests = groupData?.pendingAdminRequests || [];
+    const existingRequest = pendingRequests.find(
+      (req: any) => req.uid === userId,
+    );
+
+    if (existingRequest) {
+      throw new Error('You already have a pending request for this group');
+    }
+
+    // Add the request
+    const newRequest = {
+      uid: userId,
+      requestedAt: firestore.Timestamp.now(),
+      message: message || '',
+    };
+
+    return groupRef.update({
+      pendingAdminRequests: firestore.FieldValue.arrayUnion(newRequest),
+    });
+  }
+
+  /**
+   * Get all groups with pending admin requests
+   * For super admin use
+   * @returns Promise that resolves to an array of groups with pending requests
+   */
+  static async getGroupsWithPendingRequests(): Promise<HomeGroup[]> {
+    const isSuperAdmin = await UserModel.isSuperAdmin();
+
+    if (!isSuperAdmin) {
+      throw new Error('Only super admins can view pending requests');
+    }
+
+    const snapshot = await firestore()
+      .collection('groups')
+      .where('pendingAdminRequests', '!=', [])
+      .get();
+
+    return snapshot.docs.map(doc =>
+      this.fromFirestore({
+        id: doc.id,
+        data: () => doc.data() as GroupDocument,
+      }),
+    );
+  }
+
+  /**
+   * Approve an admin request
+   * @param groupId The ID of the group
+   * @param requestUid The UID of the user whose request is being approved
+   * @returns Promise that resolves when the request is approved
+   */
+  static async approveAdminRequest(
+    groupId: string,
+    requestUid: string,
+  ): Promise<void> {
+    const isSuperAdmin = await UserModel.isSuperAdmin();
+
+    if (!isSuperAdmin) {
+      throw new Error('Only super admins can approve requests');
+    }
+
+    const groupRef = firestore().collection('groups').doc(groupId);
+    const groupDoc = await groupRef.get();
+
+    if (!groupDoc.exists) {
+      throw new Error('Group not found');
+    }
+
+    const groupData = groupDoc.data();
+    const pendingRequests = groupData?.pendingAdminRequests || [];
+    const requestIndex = pendingRequests.findIndex(
+      (req: any) => req.uid === requestUid,
+    );
+
+    if (requestIndex === -1) {
+      throw new Error('Request not found');
+    }
+
+    // Remove the request from pending
+    const updatedRequests = [...pendingRequests];
+    updatedRequests.splice(requestIndex, 1);
+
+    // Add the user as an admin
+    return firestore().runTransaction(async transaction => {
+      transaction.update(groupRef, {
+        pendingAdminRequests: updatedRequests,
+        adminUids: firestore.FieldValue.arrayUnion(requestUid),
+        isClaimed: true,
+      });
+    });
+  }
+
+  /**
+   * Deny an admin request
+   * @param groupId The ID of the group
+   * @param requestUid The UID of the user whose request is being denied
+   * @returns Promise that resolves when the request is denied
+   */
+  static async denyAdminRequest(
+    groupId: string,
+    requestUid: string,
+  ): Promise<void> {
+    const isSuperAdmin = await UserModel.isSuperAdmin();
+
+    if (!isSuperAdmin) {
+      throw new Error('Only super admins can deny requests');
+    }
+
+    const groupRef = firestore().collection('groups').doc(groupId);
+    const groupDoc = await groupRef.get();
+
+    if (!groupDoc.exists) {
+      throw new Error('Group not found');
+    }
+
+    const groupData = groupDoc.data();
+    const pendingRequests = groupData?.pendingAdminRequests || [];
+    const requestIndex = pendingRequests.findIndex(
+      (req: any) => req.uid === requestUid,
+    );
+
+    if (requestIndex === -1) {
+      throw new Error('Request not found');
+    }
+
+    // Remove the request from pending
+    const updatedRequests = [...pendingRequests];
+    updatedRequests.splice(requestIndex, 1);
+
+    return groupRef.update({
+      pendingAdminRequests: updatedRequests,
+    });
+  }
+
+  /**
+   * Direct admin assignment (super admin only)
+   */
+  static async assignAdmin(groupId: string, userId: string): Promise<void> {
+    try {
+      // Check if current user is a super admin
+      const isSuperAdmin = await UserModel.isSuperAdmin();
+      if (!isSuperAdmin) {
+        throw new Error('Only super admins can directly assign admins');
+      }
+
+      const groupRef = firestore().collection('groups').doc(groupId);
+      const groupDoc = await groupRef.get();
+
+      if (!groupDoc.exists) {
+        throw new Error('Group not found');
+      }
+
+      // Update the group
+      await groupRef.update({
+        adminUids: firestore.FieldValue.arrayUnion(userId),
+        admins: firestore.FieldValue.arrayUnion(userId),
+        isClaimed: true,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log('Admin assigned directly');
+    } catch (error) {
+      console.error('Error assigning admin:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a group is claimed (has admins)
+   */
+  static async isGroupClaimed(groupId: string): Promise<boolean> {
+    try {
+      const groupDoc = await firestore()
+        .collection('groups')
+        .doc(groupId)
+        .get();
+
+      if (!groupDoc.exists) {
+        throw new Error('Group not found');
+      }
+
+      const groupData = groupDoc.data() as GroupDocument;
+      return groupData.isClaimed || false;
+    } catch (error) {
+      console.error('Error checking if group is claimed:', error);
+      return false;
     }
   }
 }
