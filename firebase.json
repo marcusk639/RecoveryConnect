@@ -2,5 +2,28 @@
   "functions": {
     "predeploy": [],
     "runtime": "nodejs20"
+  },
+  "hosting": {
+    "public": "web/build",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      ".firebase/**",
+      "**/.*",
+      "**/node_modules/**",
+      "functions/**",
+      "web/node_modules/**",
+      "web/src/**",
+      "web/public/**",
+      "web/README.md",
+      "web/package.json",
+      "web/package-lock.json"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
   }
 }
