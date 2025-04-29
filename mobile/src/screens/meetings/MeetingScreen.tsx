@@ -15,6 +15,7 @@ import {
   Platform,
   Linking,
   PermissionsAndroid,
+  Pressable,
 } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import {useNavigation} from '@react-navigation/native';
@@ -33,6 +34,7 @@ import {
 } from '../../store/slices/meetingsSlice';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import LocationPicker from '../../components/groups/LocationPicker';
+import moment from 'moment';
 
 // Types for meetings data
 import {Meeting, MeetingType, Location, DaysAndTimes} from '../../types';
@@ -70,16 +72,12 @@ const MeetingsScreen: React.FC = () => {
   >('All');
   const [showOnline, setShowOnline] = useState(true);
   const [showInPerson, setShowInPerson] = useState(true);
-
-  const days: (keyof DaysAndTimes)[] = [
-    'sunday',
-    'monday',
-    'tuesday',
-    'wednesday',
-    'thursday',
-    'friday',
-    'saturday',
-  ] as const;
+  const [selectedDayFilter, setSelectedDayFilter] = useState<string | null>(
+    null,
+  );
+  const [selectedTimeFilter, setSelectedTimeFilter] = useState<string | null>(
+    null,
+  );
 
   const meetingTypes: (MeetingType | 'All')[] = [
     'All',
@@ -88,27 +86,71 @@ const MeetingsScreen: React.FC = () => {
     'Celebrate Recovery',
     'Custom',
   ];
+  // Define days and time options
+  const daysOfWeek = [
+    'All',
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+  const timeOfDayOptions = ['All', 'Morning', 'Afternoon', 'Evening']; // Define time ranges if needed
 
   const meetings = useMemo(() => {
-    const formatFiltered = filteredMeetings.filter(meeting => {
-      if (showOnline && showInPerson) {
-        return true;
-      }
-      if (showOnline && meeting.online) {
-        return true;
-      }
-      if (showInPerson && !meeting.online) {
-        return true;
-      }
-      return false;
+    let dayFiltered = filteredMeetings;
+
+    // Client-side day filtering
+    if (selectedDayFilter) {
+      dayFiltered = dayFiltered.filter(
+        meeting => meeting.day?.toLowerCase() === selectedDayFilter,
+      );
+    }
+
+    // Client-side time filtering (basic)
+    let timeFiltered = dayFiltered;
+    if (selectedTimeFilter) {
+      const filterTime = selectedTimeFilter.toLowerCase();
+      timeFiltered = timeFiltered.filter(meeting => {
+        if (!meeting.time) return false;
+        try {
+          const hour = parseInt(meeting.time.split(':')[0], 10);
+          if (isNaN(hour)) return false;
+
+          if (filterTime === 'morning' && hour >= 5 && hour < 12) return true;
+          if (filterTime === 'afternoon' && hour >= 12 && hour < 18)
+            return true;
+          if (filterTime === 'evening' && (hour >= 18 || hour < 5)) return true; // Includes late night/early AM
+          return false;
+        } catch {
+          return false; // Invalid time format
+        }
+      });
+    }
+
+    // Format filtering (Online/In-Person)
+    const formatFiltered = timeFiltered.filter(meeting => {
+      if (!showOnline && meeting.online) return false;
+      if (!showInPerson && !meeting.online) return false;
+      return true;
     });
 
+    // Name Query Filtering
     if (!nameQuery) return formatFiltered;
     const lowerNameQuery = nameQuery.toLowerCase();
     return formatFiltered.filter(meeting => {
       return meeting.name.toLowerCase().includes(lowerNameQuery);
     });
-  }, [filteredMeetings, nameQuery, showOnline, showInPerson]);
+  }, [
+    filteredMeetings,
+    nameQuery,
+    showOnline,
+    showInPerson,
+    selectedDayFilter,
+    selectedTimeFilter,
+  ]);
 
   const activeLocation = usingCustomLocation
     ? customLocation
@@ -212,11 +254,8 @@ const MeetingsScreen: React.FC = () => {
     customLocation?.lng,
     dispatch,
     selectedTypeFilter,
+    selectedDayFilter,
   ]);
-
-  useEffect(() => {
-    applyFilters();
-  }, [nameQuery, selectedTypeFilter, showOnline, showInPerson]);
 
   useEffect(() => {
     if (error) {
@@ -225,22 +264,14 @@ const MeetingsScreen: React.FC = () => {
   }, [error]);
 
   const applyFilters = () => {
-    dispatch(
-      filterMeetings({
-        searchQuery: nameQuery,
-        showOnline: showOnline,
-        showInPerson: showInPerson,
-        meetingType:
-          selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-      }),
-    );
+    fetchMeetingsWithCriteria(activeLocation);
   };
 
   const fetchMeetingsWithCriteria = (locationToUse: Location | null) => {
     const filters: any = {
       type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+      day: selectedDayFilter,
     };
-
     dispatch(fetchMeetings({location: locationToUse || undefined, filters}));
   };
 
@@ -259,10 +290,14 @@ const MeetingsScreen: React.FC = () => {
     setSelectedTypeFilter('All');
     setShowOnline(true);
     setShowInPerson(true);
+    setSelectedDayFilter(null);
+    setSelectedTimeFilter(null);
     setUsingCustomLocation(false);
     setCustomLocation(null);
     setCustomLocationAddress(null);
-    fetchMeetingsWithCriteria(currentUserLocation);
+    dispatch(
+      fetchMeetings({location: currentUserLocation || undefined, filters: {}}),
+    );
   };
 
   const showMeetingDetails = (meeting: Meeting) => {
@@ -272,22 +307,33 @@ const MeetingsScreen: React.FC = () => {
 
   const onFilterModalClose = () => {
     setShowFilterModal(false);
-    setShowLocationPicker(false);
-    fetchMeetingsWithCriteria(
-      usingCustomLocation ? customLocation : currentUserLocation,
-    );
+    const locationToFetch = usingCustomLocation
+      ? customLocation
+      : currentUserLocation;
+    if (locationToFetch) {
+      fetchMeetingsWithCriteria(locationToFetch);
+    }
   };
 
   const handleToggleFavorite = (meetingId: string) => {
     dispatch(toggleFavoriteMeeting(meetingId));
   };
 
-  const formatDayAndTime = (meeting: Meeting): string => {
-    if (meeting.day && meeting.time) {
-      const day = meeting.day.charAt(0).toUpperCase() + meeting.day.slice(1);
-      return `${day}s at ${meeting.time}`;
+  // Helper to format time string (HH:MM) to AM/PM
+  const formatMeetingTime = (timeString?: string): string => {
+    if (!timeString || !moment(timeString, 'HH:mm').isValid()) {
+      return 'Time TBD';
     }
-    return 'Time not specified';
+    return moment(timeString, 'HH:mm').format('h:mm A');
+  };
+
+  const formatDayAndTime = (meeting: Meeting): string => {
+    if (meeting.day) {
+      const day = meeting.day.charAt(0).toUpperCase() + meeting.day.slice(1);
+      const formattedTime = formatMeetingTime(meeting.time); // Use the new formatter
+      return `${day} at ${formattedTime}`;
+    }
+    return 'Schedule TBD'; // Fallback if day is missing
   };
 
   const formatAddress = (meeting: Meeting): string => {
@@ -364,10 +410,7 @@ const MeetingsScreen: React.FC = () => {
       animationType="slide"
       transparent={true}
       onRequestClose={() => setShowFilterModal(false)}>
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPressOut={() => setShowFilterModal(false)}>
+      <Pressable style={styles.modalOverlay}>
         <View style={styles.filterModalContainer}>
           <View style={styles.pullIndicator} />
           <View style={styles.locationModalHeader}>
@@ -379,81 +422,144 @@ const MeetingsScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.filterSectionTitle}>Format</Text>
-          <View style={styles.typeFilterContainer}>
-            <TouchableOpacity
-              style={[
-                styles.typeFilterButton,
-                showInPerson && styles.typeFilterActive,
-                !showOnline && !showInPerson && styles.typeFilterInactive,
-              ]}
-              onPress={() => setShowInPerson(!showInPerson)}>
-              <Text
-                style={[
-                  styles.typeFilterText,
-                  showInPerson && styles.typeFilterActiveText,
-                ]}>
-                In-Person
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.typeFilterButton,
-                showOnline && styles.typeFilterActive,
-                !showOnline && !showInPerson && styles.typeFilterInactive,
-              ]}
-              onPress={() => setShowOnline(!showOnline)}>
-              <Text
-                style={[
-                  styles.typeFilterText,
-                  showOnline && styles.typeFilterActiveText,
-                ]}>
-                Online
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {!showOnline && !showInPerson && (
-            <Text style={styles.filterWarningText}>
-              Warning: No meeting formats selected.
-            </Text>
-          )}
-
-          <Text style={styles.filterSectionTitle}>Program Type</Text>
-          <FlatList
-            data={meetingTypes}
-            keyExtractor={item => item}
-            renderItem={({item: type}) => (
+          <ScrollView>
+            {/* Format Filters */}
+            <Text style={styles.filterSectionTitle}>Format</Text>
+            <View style={styles.typeFilterContainer}>
               <TouchableOpacity
                 style={[
-                  styles.modalItemButton,
-                  selectedTypeFilter === type && styles.modalItemButtonActive,
+                  styles.typeFilterButton,
+                  showInPerson && styles.typeFilterActive,
+                  !showOnline && !showInPerson && styles.typeFilterInactive,
                 ]}
-                onPress={() => {
-                  const newType = selectedTypeFilter === type ? 'All' : type;
-                  setSelectedTypeFilter(newType);
-                }}>
+                onPress={() => setShowInPerson(!showInPerson)}>
                 <Text
                   style={[
-                    styles.modalItemText,
-                    selectedTypeFilter === type && styles.modalItemTextActive,
+                    styles.typeFilterText,
+                    showInPerson && styles.typeFilterActiveText,
                   ]}>
-                  {type}
+                  In-Person
                 </Text>
-                {selectedTypeFilter === type && (
-                  <Icon name="check" size={20} color="#FFFFFF" />
-                )}
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.typeFilterButton,
+                  showOnline && styles.typeFilterActive,
+                  !showOnline && !showInPerson && styles.typeFilterInactive,
+                ]}
+                onPress={() => setShowOnline(!showOnline)}>
+                <Text
+                  style={[
+                    styles.typeFilterText,
+                    showOnline && styles.typeFilterActiveText,
+                  ]}>
+                  Online
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {!showOnline && !showInPerson && (
+              <Text style={styles.filterWarningText}>
+                Warning: No meeting formats selected.
+              </Text>
             )}
-          />
+
+            {/* Program Type Filters */}
+            <Text style={styles.filterSectionTitle}>Program Type</Text>
+            <View style={styles.chipContainer}>
+              {meetingTypes.map(type => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.chipButton,
+                    selectedTypeFilter === type && styles.chipButtonActive,
+                  ]}
+                  onPress={() =>
+                    setSelectedTypeFilter(
+                      selectedTypeFilter === type ? 'All' : type,
+                    )
+                  }>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedTypeFilter === type && styles.chipTextActive,
+                    ]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Day of Week Filter */}
+            <Text style={styles.filterSectionTitle}>Day of Week</Text>
+            <View style={styles.chipContainer}>
+              {daysOfWeek.map(day => (
+                <TouchableOpacity
+                  key={day}
+                  style={[
+                    styles.chipButton,
+                    selectedDayFilter ===
+                      (day === 'All' ? null : day.toLowerCase()) &&
+                      styles.chipButtonActive,
+                  ]}
+                  onPress={() =>
+                    setSelectedDayFilter(
+                      day === 'All' ? null : day.toLowerCase(),
+                    )
+                  }>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedDayFilter ===
+                        (day === 'All' ? null : day.toLowerCase()) &&
+                        styles.chipTextActive,
+                    ]}>
+                    {day}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Time of Day Filter (Simplified) */}
+            {/* More complex time range sliders could be added */}
+            <Text style={styles.filterSectionTitle}>Time of Day</Text>
+            <View style={styles.chipContainer}>
+              {timeOfDayOptions.map(timeOption => (
+                <TouchableOpacity
+                  key={timeOption}
+                  style={[
+                    styles.chipButton,
+                    selectedTimeFilter ===
+                      (timeOption === 'All'
+                        ? null
+                        : timeOption.toLowerCase()) && styles.chipButtonActive,
+                  ]}
+                  onPress={() =>
+                    setSelectedTimeFilter(
+                      timeOption === 'All' ? null : timeOption.toLowerCase(),
+                    )
+                  }>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedTimeFilter ===
+                        (timeOption === 'All'
+                          ? null
+                          : timeOption.toLowerCase()) && styles.chipTextActive,
+                    ]}>
+                    {timeOption}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
 
           <TouchableOpacity
             style={styles.applyFilterButton}
             onPress={onFilterModalClose}>
-            <Text style={styles.applyFilterButtonText}>Done</Text>
+            <Text style={styles.applyFilterButtonText}>Apply Filters</Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </Pressable>
     </Modal>
   );
 
@@ -484,6 +590,7 @@ const MeetingsScreen: React.FC = () => {
               setCustomLocation(newLocation);
               setCustomLocationAddress(locationData.address);
               setUsingCustomLocation(true);
+              setShowLocationPicker(false);
             }}
             initialAddress={customLocationAddress || ''}
             label="Search for meetings near..."
@@ -491,9 +598,14 @@ const MeetingsScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.useMyLocationButton}
             onPress={() => {
+              setUsingCustomLocation(false);
+              setCustomLocation(null);
+              setCustomLocationAddress(null);
               setShowLocationPicker(false);
             }}>
-            <Text style={styles.useMyLocationText}>Done</Text>
+            <Text style={styles.useMyLocationText}>
+              Use My Current Location
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -1078,46 +1190,66 @@ const styles = StyleSheet.create({
   typeFilterInactive: {
     borderColor: '#E57373',
   },
-  modalItemButton: {
+  chipContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginBottom: 8,
+    flexWrap: 'wrap',
+    marginBottom: 16,
+    gap: 8, // Add gap between chips
   },
-  modalItemButtonActive: {
-    backgroundColor: '#2196F3',
+  chipButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
-  modalItemText: {
-    fontSize: 16,
-    color: '#424242',
-  },
-  modalItemTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  locationModalContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  locationModalContent: {
-    flex: 1,
-    padding: 16,
-  },
-  useMyLocationButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+  chipButtonActive: {
     backgroundColor: '#E3F2FD',
-    alignItems: 'center',
-    marginTop: 16,
+    borderColor: '#2196F3',
   },
-  useMyLocationText: {
-    color: '#1976D2',
+  chipText: {
+    fontSize: 14,
+    color: '#616161',
+  },
+  chipTextActive: {
+    color: '#1E88E5',
+    fontWeight: '600',
+  },
+  filterModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    maxHeight: '80%',
+    width: '100%',
+  },
+  pullIndicator: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2.5,
+    marginBottom: 16,
+  },
+  applyFilterButton: {
+    marginTop: 16,
+    backgroundColor: '#2196F3',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  applyFilterButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  filterWarningText: {
+    fontSize: 12,
+    color: '#D32F2F',
+    textAlign: 'center',
+    marginTop: -8,
+    marginBottom: 8,
   },
   detailsModalContent: {
     backgroundColor: '#FFFFFF',
@@ -1211,43 +1343,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
   },
-  filterWarningText: {
-    fontSize: 12,
-    color: '#D32F2F',
-    textAlign: 'center',
-    marginTop: -8,
-    marginBottom: 8,
-  },
-  applyFilterButton: {
-    marginTop: 16,
-    backgroundColor: '#2196F3',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  applyFilterButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  filterModalContainer: {
+  locationModalContainer: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+  },
+  locationModalContent: {
+    flex: 1,
     padding: 16,
-    paddingBottom: 34,
-    maxHeight: '70%',
   },
-  pullIndicator: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2.5,
-    marginBottom: 16,
-    alignSelf: 'center',
+  useMyLocationButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#E3F2FD',
+    alignItems: 'center',
+    marginTop: 16,
   },
-  applyButtonText: {
-    color: '#FFFFFF',
+  useMyLocationText: {
+    color: '#1976D2',
     fontSize: 16,
     fontWeight: '600',
   },

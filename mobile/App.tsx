@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useCallback} from 'react';
 import {
   NavigationContainer,
   LinkingOptions,
@@ -51,7 +51,8 @@ const linking: LinkingOptions<LinkingParams> = {
   },
 };
 
-const App = () => {
+// NEW: Create a component for the main app content
+const AppContent: React.FC = () => {
   const navigationRef = useRef<NavigationContainerRef<LinkingParams>>(null);
   const dispatch = useAppDispatch();
 
@@ -66,8 +67,9 @@ const App = () => {
     return enabled;
   }
 
+  // --- Authentication, Notification, and Deep Link Logic (Moved Here) ---
   useEffect(() => {
-    // --- Authentication Check ---
+    // Auth Listener
     const unsubscribeAuth = auth().onAuthStateChanged(
       async (user: FirebaseAuthTypes.User | null) => {
         console.log('Auth state changed, user:', user?.uid);
@@ -75,7 +77,7 @@ const App = () => {
         if (user) {
           await dispatch(fetchUserData(user.uid)); // Fetch user data
 
-          // --- Notification Permission & Token Handling ---
+          // Setup Notifications AFTER user is confirmed
           const permissionEnabled = await requestUserPermission();
           if (permissionEnabled) {
             console.log('Notification permission enabled.');
@@ -106,7 +108,7 @@ const App = () => {
       },
     );
 
-    // --- Foreground Message Handler ---
+    // Foreground Message Listener
     const unsubscribeForeground = messaging().onMessage(async remoteMessage => {
       console.log('FCM Message Received in Foreground:', remoteMessage);
       Alert.alert(
@@ -115,14 +117,14 @@ const App = () => {
       );
     });
 
-    // --- Background/Quit Notification Open Handler ---
+    // Background Notification Open Handler
     messaging().onNotificationOpenedApp(remoteMessage => {
       console.log(
         'Notification caused app to open from background:',
         remoteMessage,
       );
       const groupId = remoteMessage?.data?.groupId as string | undefined;
-      if (groupId) {
+      if (groupId && navigationRef.current) {
         setTimeout(() => {
           navigationRef.current?.navigate('Main', {
             screen: 'Home',
@@ -135,7 +137,7 @@ const App = () => {
       }
     });
 
-    // Check if app was opened from a quit state notification
+    // Quit State Notification Open Handler
     messaging()
       .getInitialNotification()
       .then(remoteMessage => {
@@ -147,14 +149,16 @@ const App = () => {
           const groupId = remoteMessage?.data?.groupId as string | undefined;
           if (groupId) {
             setTimeout(() => {
-              navigationRef.current?.navigate('Main', {
-                screen: 'Home',
-                params: {
-                  screen: 'GroupOverview',
-                  params: {groupId: groupId, groupName: 'Group'},
-                },
-              });
-            }, 1000);
+              if (navigationRef.current) {
+                navigationRef.current.navigate('Main', {
+                  screen: 'Home',
+                  params: {
+                    screen: 'GroupOverview',
+                    params: {groupId: groupId, groupName: 'Group'},
+                  },
+                });
+              }
+            }, 1500);
           }
         }
       });
@@ -162,109 +166,115 @@ const App = () => {
     // Clean up listeners on unmount
     return () => {
       unsubscribeAuth();
-      // unsubscribeForeground(); // Ensure this is cleaned up if defined
+      unsubscribeForeground();
     };
   }, [dispatch]);
 
   // --- Deep Link Handling Logic ---
-  const handleDeepLink = async (url: string | null) => {
-    if (!url) return;
-    console.log('Handling deep link:', url);
-    try {
-      const parsedUrl = new URL(url);
-      const path = parsedUrl.pathname;
-      const code = parsedUrl.searchParams.get('code');
+  const handleDeepLink = useCallback(
+    async (url: string | null) => {
+      if (!url) return;
+      console.log('Handling deep link:', url);
+      try {
+        const parsedUrl = new URL(url);
+        const path = parsedUrl.pathname;
+        const code = parsedUrl.searchParams.get('code');
 
-      if (path === '/join' && code) {
-        console.log('Extracted invite code:', code);
-        const state = store.getState();
-        if (!state.auth.isAuthenticated || !state.auth.user) {
-          Alert.alert(
-            'Please Sign In',
-            'You need to be signed in to join a group.',
-            [
-              {
-                text: 'OK',
-                onPress: () => navigationRef.current?.navigate('Auth' as any),
-              },
-            ], // Use 'as any' for now if Auth isn't in LinkingParams
-          );
-          return;
-        }
-        try {
-          console.log(`Calling joinGroupByInviteCode with code: ${code}`);
-          const joinGroupFunction = functions().httpsCallable(
-            'joinGroupByInviteCode',
-          );
-          const result = await joinGroupFunction({code});
-          const {success, groupId, message} = result.data as {
-            success: boolean;
-            groupId: string;
-            message: string;
-          };
-
-          if (success && groupId) {
-            console.log(`Successfully joined group ${groupId}`);
-            if (navigationRef.current) {
-              // Use the standard nested navigation pattern
-              navigationRef.current.navigate('Main', {
-                screen: 'Home', // Target the navigator within Main
-                params: {
-                  // Params for the Home navigator
-                  screen: 'GroupOverview', // Target screen within Home
-                  params: {groupId: groupId, groupName: 'Group'}, // Params for GroupOverview
-                },
-              });
-            }
-          } else {
-            console.error('Failed to join group:', message);
+        if (path === '/join' && code) {
+          console.log('Extracted invite code:', code);
+          const state = store.getState();
+          if (!state.auth.isAuthenticated || !state.auth.user) {
             Alert.alert(
-              'Join Failed',
-              message || 'Could not join the group using this code.',
+              'Please Sign In',
+              'You need to be signed in to join a group.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => navigationRef.current?.navigate('Auth' as any),
+                },
+              ], // Use 'as any' for now if Auth isn't in LinkingParams
+            );
+            return;
+          }
+          try {
+            console.log(`Calling joinGroupByInviteCode with code: ${code}`);
+            const joinGroupFunction = functions().httpsCallable(
+              'joinGroupByInviteCode',
+            );
+            const result = await joinGroupFunction({code});
+            const {success, groupId, message} = result.data as {
+              success: boolean;
+              groupId: string;
+              message: string;
+            };
+
+            if (success && groupId) {
+              console.log(`Successfully joined group ${groupId}`);
+              if (navigationRef.current) {
+                // Use the standard nested navigation pattern
+                navigationRef.current.navigate('Main', {
+                  screen: 'Home', // Target the navigator within Main
+                  params: {
+                    // Params for the Home navigator
+                    screen: 'GroupOverview', // Target screen within Home
+                    params: {groupId: groupId, groupName: 'Group'}, // Params for GroupOverview
+                  },
+                });
+              }
+            } else {
+              console.error('Failed to join group:', message);
+              Alert.alert(
+                'Join Failed',
+                message || 'Could not join the group using this code.',
+              );
+            }
+          } catch (error: any) {
+            console.error('Error calling joinGroupByInviteCode:', error);
+            Alert.alert(
+              'Error',
+              error.message ||
+                'An error occurred while trying to join the group.',
             );
           }
-        } catch (error: any) {
-          console.error('Error calling joinGroupByInviteCode:', error);
-          Alert.alert(
-            'Error',
-            error.message ||
-              'An error occurred while trying to join the group.',
-          );
+        } else {
+          console.log('Deep link was not a group join link or missing code.');
         }
-      } else {
-        console.log('Deep link was not a group join link or missing code.');
+      } catch (e) {
+        console.error('Error parsing deep link URL:', url, e);
       }
-    } catch (e) {
-      console.error('Error parsing deep link URL:', url, e);
-    }
-  };
+    },
+    [dispatch],
+  );
 
-  // Handle initial URL on app open
+  // Initial URL Handling
   useEffect(() => {
-    const getUrlAsync = async () => {
-      const initialUrl = await Linking.getInitialURL();
-      handleDeepLink(initialUrl);
-    };
-    getUrlAsync();
-  }, []);
+    Linking.getInitialURL().then(url => handleDeepLink(url));
+  }, [handleDeepLink]);
 
-  // Handle URL changes while app is open
+  // Subsequent URL Handling
   useEffect(() => {
     const subscription = Linking.addEventListener('url', ({url}) => {
       handleDeepLink(url);
     });
     return () => subscription.remove();
-  }, []);
-  // --- End Deep Link Handling ---
+  }, [handleDeepLink]);
 
+  // Render the Navigation Container inside AppContent
+  return (
+    <NavigationContainer
+      ref={navigationRef}
+      linking={linking}
+      fallback={<Text>Loading...</Text>}>
+      <AppNavigator />
+    </NavigationContainer>
+  );
+};
+
+// Root App component ONLY renders the Provider
+const App = () => {
   return (
     <Provider store={store}>
-      <NavigationContainer
-        ref={navigationRef}
-        linking={linking}
-        fallback={<Text>Loading...</Text>}>
-        <AppNavigator />
-      </NavigationContainer>
+      <AppContent />
     </Provider>
   );
 };

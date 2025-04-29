@@ -23,6 +23,8 @@ import {
   CelebrateRecoveryMeetings,
 } from "../entities/CelebrateRecoveryMeeting";
 import moment from "moment";
+import * as admin from "firebase-admin";
+import { Query } from "firebase-admin/firestore";
 
 // expects time in military format (800, 1600, 2300, etc)
 const getMeetingTime = (time: number) => {
@@ -50,7 +52,7 @@ export const getMeetingEntity = (meeting: any, type: MeetingType) => {
       meetingEntity.zip = aaMeeting.postal_code;
       meetingEntity.state = aaMeeting.state;
       meetingEntity.locationName = aaMeeting.location_name;
-      meetingEntity.types = aaMeeting.types.split(",");
+      meetingEntity.types = aaMeeting.types;
       meetingEntity.lat = parseFloat(aaMeeting.latitude);
       meetingEntity.lng = parseFloat(aaMeeting.longitude);
       meetingEntity.type = "AA";
@@ -63,13 +65,12 @@ export const getMeetingEntity = (meeting: any, type: MeetingType) => {
       const naMeeting = meeting as NAMeeting;
       meetingEntity.type = "NA";
       meetingEntity.name = naMeeting.com_name;
+      meetingEntity.street = naMeeting.address;
+      meetingEntity.city = naMeeting.city;
+      meetingEntity.state = naMeeting.state;
+      meetingEntity.zip = naMeeting.zip;
+      meetingEntity.address = `${naMeeting.com_name}, ${naMeeting.address}, ${naMeeting.city}, ${naMeeting.state} ${naMeeting.zip}`;
       meetingEntity.day = daysOfWeek[naMeeting.mtg_day - 1];
-      meetingEntity.Location = [
-        naMeeting.com_name,
-        naMeeting.address,
-        `${naMeeting.city}, ${naMeeting.state} ${naMeeting.zip}`,
-        naMeeting.directions,
-      ];
       meetingEntity.time = getMeetingTime(naMeeting.mtg_time);
       meetingEntity.lat = naMeeting.latitude;
       meetingEntity.lng = naMeeting.longitude;
@@ -87,6 +88,7 @@ export const getMeetingEntity = (meeting: any, type: MeetingType) => {
       const stateZipCountry = addressParts[2].split(" ").slice(1); // ignore the first element since it is an empty string
       meetingEntity.state = stateZipCountry[0];
       meetingEntity.zip = stateZipCountry[1];
+      meetingEntity.country = stateZipCountry[2];
       const [day, time] = crMeeting.custom2[0]._.split(" ");
       if (day && time) {
         meetingEntity.day = day.toLowerCase().trim();
@@ -170,15 +172,28 @@ export const filterCustomMeetings = (
   });
 };
 
-export const getCustomMeetings = async (
-  location: Location,
-  criteria?: MeetingSearchCriteria
-) => {
+export async function getCustomMeetings(
+  location: { lat: number; lng: number },
+  criteria?: MeetingSearchCriteria,
+  dayFilter?: string | null
+): Promise<Meeting[]> {
   logger.info("Retrieving custom meetings");
   try {
     const start = Date.now();
-    const meetingQuery = await getMeetings();
-    let meetings = meetingQuery.docs.map((doc) => doc.data() as Meeting);
+    let query: Query = admin
+      .firestore()
+      .collection("meetings")
+      .where("type", "==", "Custom");
+
+    // Apply day filter if provided
+    if (dayFilter) {
+      query = query.where("day", "==", dayFilter);
+    }
+
+    const meetingQuery = await query.limit(100).get();
+    let meetings = meetingQuery.docs.map(
+      (doc) => ({ id: doc.id, ...doc.data() } as Meeting)
+    );
     meetings = getMeetingsWithinDistance(location, meetings);
     if (criteria) {
       return filterCustomMeetings(meetings, criteria);
@@ -189,7 +204,7 @@ export const getCustomMeetings = async (
     logger.info("Error retrieving custom meetings", error);
   }
   return [];
-};
+}
 
 export const filterMeetingsByCriteria = (
   meetings: Meeting[],
@@ -262,18 +277,31 @@ const parseXml = (xml: string): Promise<CelebrateRecoveryMeetings> => {
  * @param location
  * @param meetingName
  */
-export const getAlcoholicsAnonymousMeetings = async (
-  location: Location,
-  criteria?: MeetingSearchCriteria
-) => {
-  const start = Date.now();
-  const meetingsResponse = await getAAMeetings(location.lat, location.lng);
-  const meetings = meetingsResponse.meetings
-    .map((meeting) => getMeetingEntity(meeting, "AA"))
-    .filter((meeting) => meeting);
-  logger.info("AA meetings in", (Date.now() - start) / 1000, "seconds");
-  return filterMeetingsByCriteria(meetings, criteria, "AA");
-};
+export async function getAlcoholicsAnonymousMeetings(
+  location: { lat: number; lng: number },
+  criteria?: MeetingSearchCriteria,
+  dayFilter?: string | null
+): Promise<Meeting[]> {
+  let query: Query = admin
+    .firestore()
+    .collection("meetings")
+    .where("type", "==", "AA");
+
+  // Apply day filter if provided
+  if (dayFilter) {
+    query = query.where("day", "==", dayFilter);
+  }
+
+  // TODO: Apply location/criteria filtering logic here
+  // ... (add .where clauses for criteria, .orderBy for distance if needed) ...
+
+  const snapshot = await query.limit(100).get(); // Apply limit
+  const meetings = snapshot.docs.map(
+    (doc) => ({ id: doc.id, ...doc.data() } as Meeting)
+  );
+  // TODO: Add distance calculation and sorting if location filtering is used
+  return meetings;
+}
 
 export const getAll12StepMeetings = async (
   location: Location,
@@ -283,10 +311,10 @@ export const getAll12StepMeetings = async (
   logger.info("Retrieving all 12 step meetings...");
   const start = Date.now();
   const meetingPromises = [
-    getAlcoholicsAnonymousMeetings(location, criteria),
+    getAlcoholicsAnonymousMeetings(location, criteria, day),
     getNarcoticsAnoymousMeetings(location, criteria, day),
     getCelebrateMeetings(location, criteria),
-    getCustomMeetings(location, criteria),
+    getCustomMeetings(location, criteria, day),
   ];
   const meetings = await Promise.all(meetingPromises);
   logger.info(

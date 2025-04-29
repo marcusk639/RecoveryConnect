@@ -4,23 +4,9 @@ import auth from '@react-native-firebase/auth';
 import {GroupModel} from '../../models/GroupModel';
 import {UserModel} from '../../models/UserModel';
 import {MemberModel} from '../../models/MemberModel';
+import {GroupMember} from '../../types';
 
 // Define types
-export interface GroupMember {
-  id: string;
-  groupId: string;
-  name: string;
-  email?: string;
-  photoURL?: string;
-  isAdmin?: boolean;
-  position?: string;
-  sobrietyDate?: string;
-  joinedAt: Date;
-  phoneNumber?: string;
-  showPhoneNumber?: boolean;
-  showSobrietyDate?: boolean;
-}
-
 export interface GroupMilestone {
   memberId: string;
   memberName: string;
@@ -151,18 +137,10 @@ export const addMemberToGroup = createAsyncThunk(
         return rejectWithValue('User not found');
       }
 
-      // Return member data
-      const member: GroupMember = {
-        id: userId,
-        groupId,
-        name: user.displayName || 'Anonymous',
-        email: user.email,
-        photoURL: user.photoUrl,
-        isAdmin,
-        position: position || undefined,
-        sobrietyDate: user.recoveryDate,
-        joinedAt: new Date(),
-      };
+      const member = await MemberModel.getMemberByUserId(userId);
+      if (!member) {
+        return rejectWithValue('Member not found');
+      }
 
       return member;
     } catch (error: any) {

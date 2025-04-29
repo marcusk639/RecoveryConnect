@@ -22,6 +22,14 @@ export type GroupStackParamList = {
   GroupChat: {groupId: string; groupName: string};
   GroupChatMediaPicker: {groupId: string};
   GroupChatInfo: {groupId: string; groupName: string};
+  GroupServicePositions: {groupId: string; groupName: string};
+  AssignChairperson: {
+    groupId: string;
+    groupName: string;
+    instanceId: string;
+    currentChairpersonId?: string | null;
+    scheduledAt: number;
+  };
 };
 
 // Profile Stack Navigation Params (assuming it exists)

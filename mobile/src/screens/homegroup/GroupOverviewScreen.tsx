@@ -17,7 +17,7 @@ import auth from '@react-native-firebase/auth';
 
 // Import types and Redux
 import {GroupStackParamList} from '../../types/navigation';
-import {HomeGroup, Meeting} from '../../types';
+import {HomeGroup, Meeting, MeetingInstance} from '../../types';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
   fetchGroupById,
@@ -38,11 +38,12 @@ import {
   GroupMilestone,
 } from '../../store/slices/membersSlice';
 import {
-  fetchGroupMeetings,
-  selectGroupMeetings,
+  fetchUpcomingMeetingInstances,
+  selectUpcomingMeetingInstances,
   selectMeetingsStatus,
 } from '../../store/slices/meetingsSlice';
 import {upperFirst} from 'lodash';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 type GroupOverviewScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -68,8 +69,8 @@ const GroupOverviewScreen: React.FC = () => {
   const members = useAppSelector(state =>
     selectMembersByGroupId(state, groupId),
   );
-  const upcomingMeetings = useAppSelector(state =>
-    selectGroupMeetings(state, groupId),
+  const upcomingMeetingInstances = useAppSelector(state =>
+    selectUpcomingMeetingInstances(state, groupId),
   );
   const meetingsStatus = useAppSelector(selectMeetingsStatus);
   const celebrations = useAppSelector(state =>
@@ -98,7 +99,7 @@ const GroupOverviewScreen: React.FC = () => {
         dispatch(fetchGroupById(groupId)).unwrap(),
         dispatch(fetchAnnouncementsForGroup(groupId)).unwrap(),
         dispatch(fetchGroupMembers(groupId)).unwrap(),
-        dispatch(fetchGroupMeetings(groupId)).unwrap(),
+        dispatch(fetchUpcomingMeetingInstances(groupId)).unwrap(),
         dispatch(fetchGroupMilestones({groupId})).unwrap(),
       ]);
     } catch (error: any) {
@@ -260,6 +261,27 @@ const GroupOverviewScreen: React.FC = () => {
     }
   };
 
+  // Format date and time from the MeetingInstance
+  const formatInstanceDateTime = (
+    date?: Date,
+  ): {date: string; time: string} => {
+    if (!date) return {date: 'TBD', time: 'TBD'};
+    const dateOptions: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+    };
+    const timeOptions: Intl.DateTimeFormatOptions = {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    };
+    return {
+      date: date.toLocaleDateString('en-US', dateOptions),
+      time: date.toLocaleTimeString('en-US', timeOptions),
+    };
+  };
+
   // Show loading indicator while initial data is loading
   if (loading && !group) {
     return (
@@ -408,6 +430,17 @@ const GroupOverviewScreen: React.FC = () => {
           </View>
           <Text style={styles.navTileText}>Literature</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTile}
+          onPress={() =>
+            navigation.navigate('GroupServicePositions', {groupId, groupName})
+          }>
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>🧑‍🤝‍🧑</Text>
+          </View>
+          <Text style={styles.navTileText}>Service Positions</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Admin Actions */}
@@ -441,34 +474,95 @@ const GroupOverviewScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Upcoming Meetings Section */}
+      {/* Upcoming Meetings Section - Updated for Instances */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming Meetings</Text>
+          <TouchableOpacity onPress={navigateToGroupSchedule}>
+            <Text style={styles.seeAllText}>View Full Schedule</Text>
+          </TouchableOpacity>
         </View>
 
-        {upcomingMeetings.length > 0 ? (
-          upcomingMeetings.map(meeting => (
-            <View key={meeting.id} style={styles.meetingItem}>
-              <View style={styles.meetingTimeContainer}>
-                <Text style={styles.meetingDay}>
-                  {meeting.day ? upperFirst(meeting.day) : 'Unknown day'}
-                </Text>
-                <Text style={styles.meetingTime}>
-                  {meeting.time ? meeting.time : 'Unknown time'}
-                </Text>
+        {/* Use upcomingMeetingInstances array */}
+        {upcomingMeetingInstances.length > 0 ? (
+          // Display only the next few (e.g., 3) instances here
+          upcomingMeetingInstances.slice(0, 3).map(instance => {
+            const {date: meetingDate, time: meetingTime} =
+              formatInstanceDateTime(instance.scheduledAt);
+            return (
+              <View
+                key={instance.instanceId}
+                style={[
+                  styles.meetingItem,
+                  instance.isCancelled && styles.cancelledItem,
+                ]}>
+                <View style={styles.meetingTimeContainer}>
+                  {/* Show specific date */}
+                  <Text style={styles.meetingDateText}>{meetingDate}</Text>
+                  <Text style={styles.meetingTime}>{meetingTime}</Text>
+                  {instance.isCancelled && (
+                    <Text style={styles.cancelledText}>CANCELLED</Text>
+                  )}
+                </View>
+                <View style={styles.meetingContent}>
+                  <Text style={styles.meetingName}>{instance.name}</Text>
+                  {!instance.isCancelled && (
+                    <>
+                      <Text style={styles.meetingLocation}>
+                        {instance.isOnline
+                          ? 'Online Meeting'
+                          : instance.locationName ||
+                            instance.address ||
+                            'Location TBD'}
+                      </Text>
+                      <Text style={styles.meetingFormat}>
+                        {instance.format || instance.type}
+                      </Text>
+                      {/* Display instance notice if present */}
+                      {(instance.instanceNotice ||
+                        instance.temporaryNotice) && (
+                        <View style={styles.noticeContainer}>
+                          <Icon
+                            name="information-outline"
+                            size={14}
+                            color="#FFA000"
+                            style={{marginRight: 4}}
+                          />
+                          <Text style={styles.noticeText}>
+                            {instance.instanceNotice ||
+                              instance.temporaryNotice}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                  {/* Display cancellation reason if present */}
+                  {instance.isCancelled && instance.instanceNotice && (
+                    <View
+                      style={[
+                        styles.noticeContainer,
+                        styles.cancelledNoticeContainer,
+                      ]}>
+                      <Icon
+                        name="cancel"
+                        size={14}
+                        color="#D32F2F"
+                        style={{marginRight: 4}}
+                      />
+                      <Text
+                        style={[styles.noticeText, styles.cancelledNoticeText]}>
+                        {instance.instanceNotice}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
-              <View style={styles.meetingContent}>
-                <Text style={styles.meetingName}>{meeting.name}</Text>
-                <Text style={styles.meetingLocation}>{meeting.address}</Text>
-                <Text style={styles.meetingFormat}>
-                  {meeting.format || meeting.type}
-                </Text>
-              </View>
-            </View>
-          ))
+            );
+          })
         ) : (
-          <Text style={styles.emptyStateText}>No upcoming meetings</Text>
+          <Text style={styles.emptyStateText}>
+            No upcoming meetings scheduled for the next week.
+          </Text>
         )}
       </View>
 
@@ -719,6 +813,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F9F9',
     borderRadius: 8,
     marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3', // Default blue border
+  },
+  cancelledItem: {
+    borderLeftColor: '#D32F2F', // Red border for cancelled
+    backgroundColor: '#FFF0F0', // Lighter red background
   },
   meetingTimeContainer: {
     alignItems: 'center',
@@ -726,17 +826,26 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     borderRightWidth: 1,
     borderRightColor: '#E0E0E0',
-    minWidth: 80,
+    minWidth: 100, // Adjusted width
   },
-  meetingDay: {
-    fontSize: 14,
+  meetingDateText: {
+    // New style for Date
+    fontSize: 13,
     color: '#757575',
     marginBottom: 4,
+    textAlign: 'center',
   },
   meetingTime: {
     fontSize: 16,
     fontWeight: '600',
     color: '#212121',
+  },
+  cancelledText: {
+    // Style for CANCELLED text
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#D32F2F',
+    marginTop: 4,
   },
   meetingContent: {
     flex: 1,
@@ -756,6 +865,28 @@ const styles = StyleSheet.create({
   meetingFormat: {
     fontSize: 14,
     color: '#9E9E9E',
+    marginBottom: 6, // Added margin
+  },
+  noticeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginTop: 6, // Added margin
+    alignSelf: 'flex-start', // Prevent full width
+  },
+  noticeText: {
+    fontSize: 12,
+    color: '#FFA000',
+    flexShrink: 1, // Allow text to wrap
+  },
+  cancelledNoticeContainer: {
+    backgroundColor: '#FFEBEE',
+  },
+  cancelledNoticeText: {
+    color: '#D32F2F',
   },
   announcementItem: {
     padding: 12,

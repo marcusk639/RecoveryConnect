@@ -2,22 +2,25 @@ import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
 import {RootState} from '../index';
 import auth from '@react-native-firebase/auth';
 import {TreasuryModel} from '../../models/TreasuryModel';
-import {Transaction} from '../../types/domain/treasury';
+import {Transaction, TransactionType} from '../../types/domain/treasury';
+import {createSelector} from 'reselect';
 
-// State interface
+// Define State Type
 interface TransactionsState {
-  items: Record<string, Transaction[]>;
+  items: Record<string, Transaction>; // Store transactions by ID
+  groupTransactionIds: Record<string, string[]>; // Map groupId -> [transactionId]
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
-  lastFetched: Record<string, number>; // By groupId
+  lastFetchedGroup: Record<string, number>;
 }
 
-// Initial state
+// Initial State
 const initialState: TransactionsState = {
   items: {},
+  groupTransactionIds: {},
   status: 'idle',
   error: null,
-  lastFetched: {},
+  lastFetchedGroup: {},
 };
 
 // Constants
@@ -30,12 +33,14 @@ const isDataStale = (lastFetched: number | undefined): boolean => {
 };
 
 // Fetch transactions for a group
-export const fetchGroupTransactions = createAsyncThunk(
+export const fetchGroupTransactions = createAsyncThunk<
+  {groupId: string; transactions: Transaction[]},
+  {groupId: string; limit?: number}, // Allow optional limit
+  {state: RootState; rejectValue: string}
+>(
   'transactions/fetchForGroup',
-  async (
-    {groupId, limit = 20}: {groupId: string; limit?: number},
-    {getState, rejectWithValue},
-  ) => {
+  async ({groupId, limit = 50}, {getState, rejectWithValue}) => {
+    // TODO: Add caching logic
     try {
       const transactions = await TreasuryModel.getTransactions(groupId, limit);
       return {groupId, transactions};
@@ -43,62 +48,31 @@ export const fetchGroupTransactions = createAsyncThunk(
       return rejectWithValue(error.message || 'Failed to fetch transactions');
     }
   },
-  {
-    condition: ({groupId}, {getState}) => {
-      const state = getState() as RootState;
-
-      // If already loading, don't fetch again
-      if (state.transactions.status === 'loading') return false;
-
-      // Check if data for this group is stale
-      return isDataStale(state.transactions.lastFetched[groupId]);
-    },
-  },
 );
 
 // Add a new transaction
-export const addTransaction = createAsyncThunk(
-  'transactions/add',
-  async (
-    {
-      groupId,
-      amount,
-      type,
-      category,
-      description,
-    }: {
-      groupId: string;
-      amount: number;
-      type: 'income' | 'expense';
-      category: string;
-      description: string;
-    },
-    {rejectWithValue},
-  ) => {
-    try {
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        return rejectWithValue('User not authenticated');
-      }
-
-      const transactionData = {
-        amount,
-        type,
-        category,
-        description,
-        createdBy: currentUser.uid,
-        groupId,
-      };
-
-      const transaction = await TreasuryModel.createTransaction(
-        transactionData,
-      );
-      return {groupId, transaction};
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to add transaction');
-    }
+export const addTransaction = createAsyncThunk<
+  Transaction, // Return the created transaction
+  // Arguments expected from the form (excluding server-set fields like id, createdBy, createdAt)
+  {
+    groupId: string;
+    type: TransactionType;
+    amount: number;
+    category: string;
+    description?: string;
   },
-);
+  {rejectValue: string}
+>('transactions/addTransaction', async (transactionData, {rejectWithValue}) => {
+  try {
+    // The model handles setting createdBy and createdAt
+    const newTransaction = await TreasuryModel.createTransaction(
+      transactionData,
+    );
+    return newTransaction;
+  } catch (error: any) {
+    return rejectWithValue(error.message || 'Failed to add transaction');
+  }
+});
 
 // Delete a transaction
 export const deleteTransaction = createAsyncThunk(
@@ -127,52 +101,48 @@ const transactionsSlice = createSlice({
   },
   extraReducers: builder => {
     builder
-      // Fetch transactions for group
+      // Fetch Transactions
       .addCase(fetchGroupTransactions.pending, state => {
         state.status = 'loading';
       })
       .addCase(fetchGroupTransactions.fulfilled, (state, action) => {
         state.status = 'succeeded';
-
         const {groupId, transactions} = action.payload;
-
-        // Store transactions by group ID
-        state.items[groupId] = transactions;
-
-        // Update last fetched timestamp for this group
-        state.lastFetched[groupId] = Date.now();
-
+        const transactionIds: string[] = [];
+        transactions.forEach(tx => {
+          state.items[tx.id] = tx;
+          transactionIds.push(tx.id);
+        });
+        // Replace or merge? For now, replace the list for the group.
+        state.groupTransactionIds[groupId] = transactionIds;
+        state.lastFetchedGroup[groupId] = Date.now();
         state.error = null;
       })
       .addCase(fetchGroupTransactions.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to fetch transactions';
+        state.error = action.payload as string;
       })
-
-      // Add transaction
+      // Add Transaction
       .addCase(addTransaction.pending, state => {
         state.status = 'loading';
       })
       .addCase(addTransaction.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        const {groupId, transaction} = action.payload;
-
-        // Add to transactions array
-        if (!state.items[groupId]) {
-          state.items[groupId] = [];
+        const newTransaction = action.payload;
+        state.items[newTransaction.id] = newTransaction;
+        // Add to the beginning of the group's transaction list
+        if (!state.groupTransactionIds[newTransaction.groupId]) {
+          state.groupTransactionIds[newTransaction.groupId] = [];
         }
-
-        // Add at the beginning (most recent first)
-        state.items[groupId] = [transaction, ...state.items[groupId]];
-
+        state.groupTransactionIds[newTransaction.groupId].unshift(
+          newTransaction.id,
+        );
         state.error = null;
       })
       .addCase(addTransaction.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = (action.payload as string) || 'Failed to add transaction';
+        state.error = action.payload as string;
       })
-
       // Delete transaction
       .addCase(deleteTransaction.pending, state => {
         state.status = 'loading';
@@ -182,10 +152,15 @@ const transactionsSlice = createSlice({
         const {groupId, transactionId} = action.payload;
 
         // Remove from transactions array
-        if (state.items[groupId]) {
-          state.items[groupId] = state.items[groupId].filter(
-            transaction => transaction.id !== transactionId,
-          );
+        if (state.items[transactionId]) {
+          delete state.items[transactionId];
+        }
+
+        // Remove from group transaction IDs
+        if (state.groupTransactionIds[groupId]) {
+          state.groupTransactionIds[groupId] = state.groupTransactionIds[
+            groupId
+          ].filter(id => id !== transactionId);
         }
 
         state.error = null;
@@ -202,13 +177,20 @@ const transactionsSlice = createSlice({
 export const {clearTransactionsError} = transactionsSlice.actions;
 
 // Selectors
-export const selectGroupTransactions = (state: RootState, groupId: string) => {
-  return state.transactions.items[groupId] || [];
-};
+export const selectAllTransactions = (state: RootState) =>
+  state.transactions.items;
+export const selectGroupTransactionIds = (state: RootState, groupId: string) =>
+  state.transactions.groupTransactionIds[groupId] || [];
+
+export const selectGroupTransactions = createSelector(
+  [selectAllTransactions, selectGroupTransactionIds],
+  (allItems, groupIds) => {
+    return groupIds.map(id => allItems[id]).filter(Boolean);
+  },
+);
 
 export const selectTransactionsStatus = (state: RootState) =>
   state.transactions.status;
-
 export const selectTransactionsError = (state: RootState) =>
   state.transactions.error;
 

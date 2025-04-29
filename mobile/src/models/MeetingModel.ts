@@ -1,8 +1,17 @@
-import {Meeting, Location, MeetingSearchInput} from '../types';
-import {FirestoreDocument, MeetingDocument} from '../types/schema';
+import {Meeting, Location, MeetingSearchInput, MeetingInstance} from '../types';
+import {
+  FirestoreDocument,
+  MeetingDocument,
+  MeetingInstanceDocument,
+  COLLECTION_PATHS,
+} from '../types/schema';
 import {firestore, auth, functions} from '../services/firebase/config';
 import {generateMeetingHash} from '../utils/hashUtils';
-import Firestore from '@react-native-firebase/firestore';
+import Firestore, {
+  FirebaseFirestoreTypes,
+} from '@react-native-firebase/firestore';
+import moment from 'moment';
+import {GroupModel} from './GroupModel';
 
 /**
  * Meeting model for managing meeting data
@@ -16,7 +25,7 @@ export class MeetingModel {
     return {
       id: doc.id,
       name: data.name,
-      type: data.type as any, // Cast to MeetingType
+      type: data.type as any,
       day: data.day,
       time: data.time,
       street: data.street || '',
@@ -28,12 +37,17 @@ export class MeetingModel {
       zip: data.zip,
       lat: data.lat,
       lng: data.lng,
-      locationName: data.location,
+      locationName: data.locationName,
       online: data.isOnline,
       link: data.onlineLink,
       onlineNotes: data.onlineNotes,
       verified: data.verified,
       addedBy: data.addedBy,
+      format: data.format,
+      temporaryNotice: data.temporaryNotice ?? null,
+      isCancelledTemporarily: data.isCancelledTemporarily ?? false,
+      createdAt: data.createdAt?.toDate(),
+      updatedAt: data.updatedAt?.toDate(),
     };
   }
 
@@ -55,34 +69,39 @@ export class MeetingModel {
     if (meeting.lat !== undefined) firestoreData.lat = meeting.lat;
     if (meeting.lng !== undefined) firestoreData.lng = meeting.lng;
     if (meeting.locationName !== undefined)
-      firestoreData.location = meeting.locationName;
+      firestoreData.locationName = meeting.locationName;
+    if (meeting.location !== undefined)
+      firestoreData.location = meeting.location;
     if (meeting.online !== undefined) firestoreData.isOnline = meeting.online;
-    if (meeting.link !== undefined) firestoreData.onlineLink = meeting.link;
+    if (meeting.link !== undefined)
+      firestoreData.onlineLink = meeting.link ?? '';
     if (meeting.onlineNotes !== undefined)
-      firestoreData.onlineNotes = meeting.onlineNotes;
+      firestoreData.onlineNotes = meeting.onlineNotes ?? '';
     if (meeting.verified !== undefined)
-      if (meeting.addedBy !== undefined)
-        firestoreData.addedBy = meeting.addedBy;
+      firestoreData.verified = meeting.verified;
+    if (meeting.addedBy !== undefined) firestoreData.addedBy = meeting.addedBy;
     if (meeting.groupId !== undefined) firestoreData.groupId = meeting.groupId;
+    if (meeting.format !== undefined) firestoreData.format = meeting.format;
+    if (meeting.temporaryNotice !== undefined)
+      firestoreData.temporaryNotice = meeting.temporaryNotice;
+    if (meeting.isCancelledTemporarily !== undefined)
+      firestoreData.isCancelledTemporarily = meeting.isCancelledTemporarily;
+
     if (meeting.createdAt) {
       try {
         firestoreData.createdAt = Firestore.Timestamp.fromDate(
           new Date(meeting.createdAt),
         );
-      } catch (error) {
-        console.warn('Invalid createdAt date format:', meeting.createdAt);
-      }
+      } catch (e) {}
     }
-
     if (meeting.updatedAt) {
       try {
         firestoreData.updatedAt = Firestore.Timestamp.fromDate(
           new Date(meeting.updatedAt),
         );
-      } catch (error) {
-        console.warn('Invalid updatedAt date format:', meeting.updatedAt);
-      }
+      } catch (e) {}
     }
+
     return firestoreData;
   }
 
@@ -174,7 +193,7 @@ export class MeetingModel {
   }
 
   /**
-   * Update a meeting
+   * Update a meeting (ensure updatedAt is always set)
    */
   static async update(
     meetingId: string,
@@ -188,12 +207,12 @@ export class MeetingModel {
         throw new Error('Meeting not found');
       }
 
-      const updatedFields = {
-        ...meetingData,
-        updatedAt: new Date(),
+      const updatePayload = {
+        ...MeetingModel.toFirestore(meetingData),
+        updatedAt: Firestore.Timestamp.now(),
       };
 
-      await meetingRef.update(MeetingModel.toFirestore(updatedFields));
+      await meetingRef.update(updatePayload);
 
       const updatedDoc = await meetingRef.get();
       return MeetingModel.fromFirestore({
@@ -306,5 +325,126 @@ export class MeetingModel {
         data: () => doc.data() as MeetingDocument,
       }),
     );
+  }
+
+  /**
+   * Get upcoming meeting instances for a group within the next week.
+   */
+  static async getUpcomingInstancesByGroupId(
+    groupId: string,
+    limit: number = 50,
+  ): Promise<MeetingInstance[]> {
+    try {
+      const now = Firestore.Timestamp.now();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 7);
+      const endTimestamp = Firestore.Timestamp.fromDate(endDate);
+
+      const instancesSnapshot = await firestore
+        .collection(COLLECTION_PATHS.MEETING_INSTANCES)
+        .where('groupId', '==', groupId)
+        .where('scheduledAt', '>=', now)
+        .where('scheduledAt', '<=', endTimestamp)
+        .orderBy('scheduledAt', 'asc')
+        .limit(limit)
+        .get();
+
+      const instances = instancesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          instanceId: doc.id,
+          meetingId: data.meetingId,
+          groupId: data.groupId,
+          scheduledAt: (
+            data.scheduledAt as FirebaseFirestoreTypes.Timestamp
+          ).toDate(),
+          name: data.name,
+          type: data.type,
+          format: data.format === null ? undefined : data.format,
+          location: data.location,
+          address: data.address,
+          city: data.city,
+          state: data.state,
+          zip: data.zip,
+          lat: data.lat,
+          lng: data.lng,
+          locationName: data.locationName,
+          isOnline: data.isOnline,
+          link: data.link ?? null,
+          onlineNotes: data.onlineNotes ?? null,
+          isCancelled: data.isCancelled ?? false,
+          instanceNotice: data.instanceNotice ?? null,
+          templateUpdatedAt: (
+            data.templateUpdatedAt as FirebaseFirestoreTypes.Timestamp
+          ).toDate(),
+          day: moment(
+            (data.scheduledAt as FirebaseFirestoreTypes.Timestamp).toDate(),
+          )
+            .format('dddd')
+            .toLowerCase(),
+          time: moment(
+            (data.scheduledAt as FirebaseFirestoreTypes.Timestamp).toDate(),
+          ).format('HH:mm'),
+          verified: data.verified ?? false,
+          country: data.country ?? null,
+          street: data.street ?? null,
+          addedBy: data.addedBy ?? null,
+        } as MeetingInstance;
+      });
+
+      return instances;
+    } catch (error) {
+      console.error('Error fetching meeting instances from model:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update the chairperson for a specific meeting instance.
+   * Requires admin privileges.
+   */
+  static async updateInstanceChairperson(
+    instanceId: string,
+    chairpersonId: string | null,
+    chairpersonName: string | null,
+  ): Promise<void> {
+    try {
+      const instanceRef = Firestore()
+        .collection(COLLECTION_PATHS.MEETING_INSTANCES)
+        .doc(instanceId);
+
+      const instanceDoc = await instanceRef.get();
+      if (!instanceDoc.exists) {
+        throw new Error('Meeting instance not found.');
+      }
+      const instanceData = instanceDoc.data() as MeetingInstanceDocument;
+      const groupId = instanceData.groupId;
+
+      const currentUser = auth.currentUser;
+      if (
+        !currentUser ||
+        !(await GroupModel.isGroupAdmin(groupId, currentUser.uid))
+      ) {
+        throw new Error(
+          'Permission denied: Only group admins can assign chairpersons.',
+        );
+      }
+
+      await instanceRef.update({
+        chairpersonId: chairpersonId,
+        chairpersonName: chairpersonName,
+      });
+      console.log(
+        `Updated chairperson for instance ${instanceId} to ${
+          chairpersonName || 'none'
+        }`,
+      );
+    } catch (error) {
+      console.error(
+        `Error updating chairperson for instance ${instanceId}:`,
+        error,
+      );
+      throw new Error('Failed to update meeting chairperson.');
+    }
   }
 }
