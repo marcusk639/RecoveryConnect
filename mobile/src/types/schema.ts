@@ -56,14 +56,17 @@ export interface UserDocument {
   showPhoneNumber?: boolean;
   sobrietyStartDate?: Timestamp | null; // Use this as the definitive start date
   showSobrietyDate?: boolean; // Controls visibility of duration/date
-  notificationSettings: {
-    meetings: boolean; // default: true
-    announcements: boolean; // default: true
-    celebrations: boolean; // default: true
+  notificationSettings?: {
+    meetings?: boolean;
+    announcements?: boolean;
+    celebrations?: boolean;
+    groupChatMentions?: boolean;
+    allowPushNotifications?: boolean;
   };
-  privacySettings: {
-    allowDirectMessages: boolean; // default: true
-    showRecoveryDate: boolean; // default: false
+  privacySettings?: {
+    allowDirectMessages?: boolean;
+    showRecoveryDate?: boolean;
+    showPhoneNumber?: boolean;
   };
   homeGroups?: string[]; // Array of group IDs user is member of
   adminGroups?: string[]; // Array of group IDs user is admin of

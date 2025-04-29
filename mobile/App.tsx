@@ -5,11 +5,19 @@ import {
   NavigationContainerRef,
 } from '@react-navigation/native';
 import {Provider} from 'react-redux';
-import store from './src/store';
-import {checkAuthState} from './src/store/slices/authSlice';
+import store, {useAppDispatch} from './src/store';
+import {
+  checkAuthState,
+  selectIsAuthenticated,
+  setUser,
+  fetchUserData,
+  updateFcmToken,
+} from './src/store/slices/authSlice';
 import AppNavigator from './src/navigation/AppNavigator';
-import {Linking, Alert, Text} from 'react-native';
+import {Linking, Alert, Text, Platform} from 'react-native';
 import functions from '@react-native-firebase/functions';
+import messaging from '@react-native-firebase/messaging';
+import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {RootStackParamList} from './src/types/navigation';
 
 // Define the structure of expected deep link params - Simplified
@@ -45,10 +53,118 @@ const linking: LinkingOptions<LinkingParams> = {
 
 const App = () => {
   const navigationRef = useRef<NavigationContainerRef<LinkingParams>>(null);
+  const dispatch = useAppDispatch();
+
+  // --- Notification Setup ---
+  async function requestUserPermission() {
+    const authStatus = await messaging().requestPermission();
+    const enabled =
+      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+    console.log('Authorization status:', authStatus);
+    return enabled;
+  }
 
   useEffect(() => {
-    store.dispatch(checkAuthState());
-  }, []);
+    // --- Authentication Check ---
+    const unsubscribeAuth = auth().onAuthStateChanged(
+      async (user: FirebaseAuthTypes.User | null) => {
+        console.log('Auth state changed, user:', user?.uid);
+        dispatch(setUser(user)); // Update user in Redux store
+        if (user) {
+          await dispatch(fetchUserData(user.uid)); // Fetch user data
+
+          // --- Notification Permission & Token Handling ---
+          const permissionEnabled = await requestUserPermission();
+          if (permissionEnabled) {
+            console.log('Notification permission enabled.');
+            messaging()
+              .getToken()
+              .then(token => {
+                if (token) {
+                  console.log('FCM Token obtained:', token);
+                  dispatch(updateFcmToken({userId: user.uid, token}));
+                }
+              })
+              .catch(error => {
+                console.error('Error getting FCM token:', error);
+              });
+
+            // Listen for token refresh
+            messaging().onTokenRefresh(token => {
+              console.log('FCM Token refreshed:', token);
+              dispatch(updateFcmToken({userId: user.uid, token}));
+            });
+          } else {
+            console.log('Notification permission denied.');
+          }
+        } else {
+          // User signed out - potentially clear FCM token if needed, though
+          // the backend should handle invalid tokens during send.
+        }
+      },
+    );
+
+    // --- Foreground Message Handler ---
+    const unsubscribeForeground = messaging().onMessage(async remoteMessage => {
+      console.log('FCM Message Received in Foreground:', remoteMessage);
+      Alert.alert(
+        remoteMessage.notification?.title ?? 'New Notification',
+        remoteMessage.notification?.body ?? '',
+      );
+    });
+
+    // --- Background/Quit Notification Open Handler ---
+    messaging().onNotificationOpenedApp(remoteMessage => {
+      console.log(
+        'Notification caused app to open from background:',
+        remoteMessage,
+      );
+      const groupId = remoteMessage?.data?.groupId as string | undefined;
+      if (groupId) {
+        setTimeout(() => {
+          navigationRef.current?.navigate('Main', {
+            screen: 'Home',
+            params: {
+              screen: 'GroupOverview',
+              params: {groupId: groupId, groupName: 'Group'},
+            },
+          });
+        }, 500);
+      }
+    });
+
+    // Check if app was opened from a quit state notification
+    messaging()
+      .getInitialNotification()
+      .then(remoteMessage => {
+        if (remoteMessage) {
+          console.log(
+            'Notification caused app to open from quit state:',
+            remoteMessage,
+          );
+          const groupId = remoteMessage?.data?.groupId as string | undefined;
+          if (groupId) {
+            setTimeout(() => {
+              navigationRef.current?.navigate('Main', {
+                screen: 'Home',
+                params: {
+                  screen: 'GroupOverview',
+                  params: {groupId: groupId, groupName: 'Group'},
+                },
+              });
+            }, 1000);
+          }
+        }
+      });
+
+    // Clean up listeners on unmount
+    return () => {
+      unsubscribeAuth();
+      // unsubscribeForeground(); // Ensure this is cleaned up if defined
+    };
+  }, [dispatch]);
 
   // --- Deep Link Handling Logic ---
   const handleDeepLink = async (url: string | null) => {

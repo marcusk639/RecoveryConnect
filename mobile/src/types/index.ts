@@ -19,18 +19,23 @@ export interface User {
   homeGroups: string[];
   role: 'user' | 'admin';
   favoriteMeetings?: string[];
-  photoUrl?: string;
+  photoUrl?: string | null;
+  phoneNumber?: string | null;
+  fcmTokens?: string[];
 }
 
 export interface NotificationSettings {
   meetings: boolean;
   announcements: boolean;
   celebrations: boolean;
+  groupChatMentions?: boolean;
+  allowPushNotifications?: boolean;
 }
 
 export interface PrivacySettings {
   showRecoveryDate: boolean;
   allowDirectMessages: boolean;
+  showPhoneNumber?: boolean;
 }
 
 export interface RegisterData {

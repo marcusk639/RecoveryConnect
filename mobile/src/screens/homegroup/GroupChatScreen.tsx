@@ -26,7 +26,7 @@ import {GroupStackParamList} from '../../types/navigation';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import FastImage from 'react-native-fast-image';
-import {ChatModel, ChatMessage} from '../../models/ChatModel';
+import {ChatModel, ChatMessage, ChatAttachment} from '../../models/ChatModel';
 import {GroupModel} from '../../models/GroupModel';
 import {showMessage} from 'react-native-flash-message';
 import {useAppDispatch, useAppSelector} from '../../store';
@@ -43,6 +43,7 @@ import {
   selectChatStatus,
   selectChatError,
 } from '../../store/slices/chatSlice';
+import {selectMembersByGroupId} from '../../store/slices/membersSlice';
 
 type GroupChatScreenRouteProp = RouteProp<GroupStackParamList, 'GroupChat'>;
 type GroupChatScreenNavigationProp = StackNavigationProp<GroupStackParamList>;
@@ -71,6 +72,9 @@ const GroupChatScreen: React.FC = () => {
   );
   const status = useAppSelector(selectChatStatus);
   const error = useAppSelector(selectChatError);
+  const members = useAppSelector(state =>
+    selectMembersByGroupId(state, groupId),
+  );
 
   // Local states
   const [messageText, setMessageText] = useState('');
@@ -86,6 +90,9 @@ const GroupChatScreen: React.FC = () => {
   const inputHeight = useRef(new Animated.Value(50)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Define currentUser at component scope
+  const currentUser = auth().currentUser;
+
   // Effect to initialize chat and load initial messages
   useEffect(() => {
     const initChat = async () => {
@@ -94,7 +101,6 @@ const GroupChatScreen: React.FC = () => {
         await dispatch(fetchRecentMessages(groupId)).unwrap();
 
         // Check if current user is admin
-        const currentUser = auth().currentUser;
         if (currentUser) {
           const isAdminUser = await GroupModel.isGroupAdmin(
             groupId,
@@ -149,7 +155,6 @@ const GroupChatScreen: React.FC = () => {
   // Mark new messages from others as read
   const markNewMessagesAsRead = useCallback(
     async (messagesToMark: ChatMessage[]) => {
-      const currentUser = auth().currentUser;
       if (!currentUser) return;
 
       const unreadMessages = messagesToMark.filter(
@@ -171,28 +176,46 @@ const GroupChatScreen: React.FC = () => {
 
   // Handle sending a message
   const handleSendMessage = async () => {
-    if (!messageText.trim()) return;
+    const currentMessage = messageText.trim();
+    if (!currentMessage) return;
 
-    const currentUser = auth().currentUser;
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to send messages');
       return;
     }
+
+    // --- Mention Processing ---
+    const mentionedUserIds: string[] = [];
+    const mentionRegex = /@([a-zA-Z0-9_\s.]+)/g;
+    let match;
+    const messageToSend = currentMessage;
+    if (!messageToSend) return;
+
+    const memberMap = new Map(members.map(m => [m.name.toLowerCase(), m.id]));
+
+    while ((match = mentionRegex.exec(messageToSend)) !== null) {
+      const mentionedName = match[1].trim().toLowerCase();
+      const mentionedUserId = memberMap.get(mentionedName);
+      if (mentionedUserId && !mentionedUserIds.includes(mentionedUserId)) {
+        mentionedUserIds.push(mentionedUserId);
+      }
+    }
+    // --- End Mention Processing ---
 
     try {
       const replyToId = replyingTo ? replyingTo.id : null;
       await dispatch(
         sendMessage({
           groupId,
-          text: messageText.trim(),
+          text: messageToSend,
           replyToMessageId: replyToId,
+          mentionedUserIds: mentionedUserIds,
         }),
       ).unwrap();
 
       setMessageText('');
       setReplyingTo(null);
 
-      // Scroll to bottom after sending
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({animated: true});
       }, 100);
@@ -372,6 +395,61 @@ const GroupChatScreen: React.FC = () => {
         )
       : 0;
 
+    // Function to parse text and render mentions/links
+    const renderParsedText = (text: string) => {
+      if (!text) return null;
+
+      // Simpler Regex: Match @ followed by non-space characters for username
+      const mentionPattern = /@(\S+)/g;
+      // Basic URL regex
+      const urlPattern = /(https?:\/\/[^\s]+)/g;
+      const pattern = new RegExp(
+        `(${mentionPattern.source})|(${urlPattern.source})`,
+        'g',
+      );
+
+      const parts = text
+        .split(pattern)
+        .filter(part => part !== undefined && part !== ''); // Filter empty parts
+
+      return parts.map((part, index) => {
+        // Check if it's a mention - use simpler match
+        const mentionMatch = part.match(/^@(\S+)$/);
+        if (mentionMatch) {
+          const mentionedName = mentionMatch[1]; // The username part
+          const isMentioningCurrentUser = members.some(
+            m =>
+              m.name.toLowerCase() === mentionedName.toLowerCase() && // Compare names directly
+              m.id === currentUser?.uid,
+          );
+          return (
+            <Text
+              key={`mention-${index}`}
+              style={
+                isMentioningCurrentUser
+                  ? styles.mentionHighlight
+                  : styles.mentionText
+              }>
+              {part}
+            </Text>
+          );
+        }
+        // Check if it's a URL
+        if (part.match(urlPattern)) {
+          return (
+            <Text
+              key={`url-${index}`}
+              style={styles.linkText}
+              onPress={() => Linking.openURL(part)}>
+              {part}
+            </Text>
+          );
+        }
+        // Regular text
+        return <Text key={`text-${index}`}>{part}</Text>;
+      });
+    };
+
     // Function to render attachments
     const renderAttachments = () => {
       if (!item.attachments || item.attachments.length === 0) return null;
@@ -549,7 +627,7 @@ const GroupChatScreen: React.FC = () => {
                 styles.messageText,
                 isSystem && styles.systemMessageText,
               ]}>
-              {item.text}
+              {renderParsedText(item.text)}
             </Text>
           )}
 
@@ -1279,6 +1357,21 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '500',
+  },
+  mentionText: {
+    fontWeight: 'bold',
+    color: '#1E88E5', // Blue color for mentions
+  },
+  mentionHighlight: {
+    fontWeight: 'bold',
+    backgroundColor: '#FFF9C4', // Yellow highlight for self-mention
+    color: '#1E88E5',
+    borderRadius: 4, // Optional: add some rounding
+    paddingHorizontal: 2, // Optional: add padding
+  },
+  linkText: {
+    color: '#0D47A1',
+    textDecorationLine: 'underline',
   },
 });
 

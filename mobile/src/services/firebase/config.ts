@@ -1,21 +1,5 @@
 // import {initializeApp} from '@react-native-firebase/app';
-// import {getAuth} from '@react-native-firebase/auth';
-// import {getFirestore} from '@react-native-firebase/firestore';
-
-// // Your web app's Firebase configuration
-// // Replace with your actual Firebase config
-// const firebaseConfig = {
-//   apiKey: 'AIzaSyBbLyVKe0sgdIg3rJLhVqxG8ur-mDKC8wE',
-//   authDomain: 'recovery-connect.firebaseapp.com',
-//   projectId: 'recovery-connect',
-//   storageBucket: 'recovery-connect.appspot.com',
-//   messagingSenderId: '421876308052',
-//   appId: '1:421876308052:ios:0000000000000000000000',
-// };
-// import firebase from '@react-native-firebase/app';
 import FirebaseAuth from '@react-native-firebase/auth';
-// import FirebaseMessaging from '@react-native-firebase/messaging';
-// import FirebaseDatabase from '@react-native-firebase/database';
 import FirebaseFunctions from '@react-native-firebase/functions';
 const functions = FirebaseFunctions();
 // import FirebaseDynamicLinks from '@react-native-firebase/dynamic-links';

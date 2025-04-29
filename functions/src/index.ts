@@ -17,6 +17,10 @@ import * as functionsV1 from "firebase-functions/v1";
 import { migrateGeohashes } from "./migrations/migrateGeohashes";
 import { Query } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v1/https";
+import { FieldValue } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
+// Import v2 Firestore trigger types
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
@@ -971,6 +975,176 @@ export const joinGroupByInviteCode = functions.https.onCall(
         "Failed to join group using invite code.",
         error
       );
+    }
+  }
+);
+
+// Assuming ChatMessage type includes mentionedUserIds: string[]
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  sentAt: admin.firestore.Timestamp;
+  groupId: string;
+  mentionedUserIds?: string[]; // Added for mentions
+  // ... other fields like reactions, attachments, replyTo
+}
+
+/**
+ * Triggered when a new chat message is created.
+ * Checks for mentioned users and sends them push notifications.
+ */
+export const sendMentionNotifications = functions.https.onCall(
+  async (request, context) => {
+    // Use the event object from v2 trigger
+    // Get the snapshot of the created document
+    const snap: { groupId: string; messageId: string; message: ChatMessage } =
+      request.data;
+    if (!snap) {
+      functions.logger.error("No data associated with the event");
+      return null;
+    }
+
+    const messageData = snap.message;
+    // Get context parameters from the event object
+    const { groupId, messageId } = snap;
+    const senderId = messageData.senderId;
+    const senderName = messageData.senderName || "Someone";
+    const messageText = messageData.text || "";
+
+    functions.logger.info(
+      `New message ${messageId} in group ${groupId}. Checking for mentions.`
+    );
+
+    // --- 1. Identify Mentioned Users ---
+    // (Keep the logic for identifying mentionedUserIds as is)
+    let mentionedUserIds: string[] = [];
+    if (
+      messageData.mentionedUserIds &&
+      messageData.mentionedUserIds.length > 0
+    ) {
+      mentionedUserIds = messageData.mentionedUserIds;
+      functions.logger.info(
+        `Found mentioned user IDs from message data: ${mentionedUserIds.join(
+          ", "
+        )}`
+      );
+    } else {
+      // Fallback logic using regex remains the same...
+      const mentionRegex = /@([a-zA-Z0-9_\.]+)/g;
+      let match;
+      const mentionedNames: string[] = [];
+      while ((match = mentionRegex.exec(messageText)) !== null) {
+        mentionedNames.push(match[1]);
+      }
+      if (mentionedNames.length > 0) {
+        functions.logger.warn(
+          "Mention lookup by name not fully implemented. Store mentionedUserIds with message."
+        );
+      }
+    }
+    const recipients = mentionedUserIds.filter((uid) => uid !== senderId);
+    if (recipients.length === 0) {
+      functions.logger.info(
+        "No valid recipients found for mention notification."
+      );
+      return null;
+    }
+    functions.logger.info(
+      `Recipients for notification: ${recipients.join(", ")}`
+    );
+
+    // --- 2. Get FCM Tokens for Recipients ---
+    // (Keep the logic for fetching tokens and checking preferences as is)
+    const tokens: string[] = [];
+    const userPromises = recipients.map((userId) =>
+      admin.firestore().collection("users").doc(userId).get()
+    );
+    const userDocs = await Promise.all(userPromises);
+    userDocs.forEach((doc) => {
+      if (doc.exists) {
+        const userData = doc.data();
+        const groupNotificationEnabled =
+          userData?.notificationSettings?.groupChatMentions !== false;
+        const globalEnabled =
+          userData?.notificationSettings?.allowPushNotifications !== false;
+        if (
+          groupNotificationEnabled &&
+          globalEnabled &&
+          userData?.fcmTokens &&
+          Array.isArray(userData.fcmTokens)
+        ) {
+          tokens.push(...userData.fcmTokens);
+        }
+      }
+    });
+    if (tokens.length === 0) {
+      functions.logger.info("No valid FCM tokens found for recipients.");
+      return null;
+    }
+
+    // --- 3. Construct and Send Notification Payload ---
+    // (Keep the logic for constructing the payload as is)
+    const groupSnap = await admin
+      .firestore()
+      .collection("groups")
+      .doc(groupId)
+      .get();
+    const groupName = groupSnap.data()?.name || "a group";
+    const truncatedMessage =
+      messageText.length > 100
+        ? messageText.substring(0, 97) + "..."
+        : messageText;
+    const payload = {
+      notification: {
+        title: `New Mention in ${groupName}`,
+        body: `${senderName}: ${truncatedMessage}`,
+        // Optional: Add sound, badge count etc.
+        // sound: "default",
+        // badge: "1"
+      },
+      data: {
+        // Custom data for handling click action in the app
+        type: "chat_mention",
+        groupId: groupId,
+        messageId: messageId, // Can be used to highlight the message
+        senderName: senderName,
+        // Add any other data needed to navigate correctly
+      },
+      // Optional: APNS specific config (like thread-id)
+      // apns: {
+      //     payload: {
+      //         aps: {
+      //             'thread-id': groupId
+      //         }
+      //     }
+      // },
+      // Optional: Android specific config (like channel ID)
+      // android: {
+      //     notification: {
+      //         channel_id: "group_chat_mentions" // Ensure this channel is created on the client
+      //     }
+      // }
+    };
+
+    // (Keep the logic for sending the notification via getMessaging().sendToDevice() as is)
+    try {
+      const response = await getMessaging().sendEachForMulticast({
+        tokens,
+        notification: {
+          title: `New Mention in ${groupName}`,
+          body: `${senderName}: ${truncatedMessage}`,
+        },
+      });
+      // ... (logging and error handling for response) ...
+      return { success: true, sentCount: response.successCount };
+    } catch (error) {
+      functions.logger.error("Error sending push notification:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 );
