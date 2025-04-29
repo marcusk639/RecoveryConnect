@@ -20,7 +20,7 @@ type LinkingParams = RootStackParamList & {
 };
 
 const linking: LinkingOptions<LinkingParams> = {
-  prefixes: ['recoveryconnect://', 'https://recoveryconnect.app'],
+  prefixes: ['homegroups-app://', 'https://homegroups-app.com'],
   config: {
     screens: {
       // Define only the explicit mapping needed for the custom handler
@@ -89,7 +89,6 @@ const App = () => {
 
           if (success && groupId) {
             console.log(`Successfully joined group ${groupId}`);
-            Alert.alert('Success', message);
             if (navigationRef.current) {
               // Use the standard nested navigation pattern
               navigationRef.current.navigate('Main', {
