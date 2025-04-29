@@ -555,10 +555,10 @@ export const setUserAsSuperAdmin = functions.https.onCall(
 );
 
 /**
- * Generates a unique invite code and link for a group.
+ * Generates a unique invite code and web link for a group.
  * - Checks if caller is an admin of the group.
  * - Creates an invite document in Firestore.
- * - Returns the code and a deep link.
+ * - Returns the code and a standard HTTPS link.
  */
 export const generateGroupInvite = functions.https.onCall(
   async (request, context) => {
@@ -572,6 +572,9 @@ export const generateGroupInvite = functions.https.onCall(
       throw new HttpsError("invalid-argument", "Group ID is required.");
     }
 
+    // --- Configuration ---
+    const webLinkBase = "https://homegroups-app.com/"; // Your main web domain
+
     try {
       const groupRef = admin.firestore().collection("groups").doc(groupId);
       const groupSnap = await groupRef.get();
@@ -581,20 +584,16 @@ export const generateGroupInvite = functions.https.onCall(
       }
 
       const groupData = groupSnap.data();
-      const admins = groupData?.admins || groupData?.adminUids || []; // Support both field names
+      const admins = groupData?.admins || groupData?.adminUids || [];
 
-      // --- Authorization Check ---
+      // --- Authorization Check --- (Keep existing logic)
       if (!admins.includes(inviterUid)) {
-        // Allow any member to invite if group has NO admins (unclaimed scenario?)
-        // Or enforce strict admin-only invites. Let's assume admin-only for now.
         if (admins.length > 0) {
           throw new HttpsError(
             "permission-denied",
             "Only group admins can generate invites."
           );
         }
-        // If admins array is empty, maybe allow any member? Add check if needed.
-        // For now, require at least one admin to invite.
         if (admins.length === 0) {
           throw new HttpsError(
             "failed-precondition",
@@ -603,12 +602,11 @@ export const generateGroupInvite = functions.https.onCall(
         }
       }
 
-      // --- Generate Unique Code ---
+      // --- Generate Unique Code --- (Keep existing logic)
       let code: string;
       let codeExists = true;
-      const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // User-friendly chars
+      const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
       const codeLength = 6;
-
       while (codeExists) {
         code = "";
         for (let i = 0; i < codeLength; i++) {
@@ -616,7 +614,6 @@ export const generateGroupInvite = functions.https.onCall(
             Math.floor(Math.random() * characters.length)
           );
         }
-        // Check if code already exists (rare, but possible)
         const existingInvite = await admin
           .firestore()
           .collection("groupInvites")
@@ -626,33 +623,28 @@ export const generateGroupInvite = functions.https.onCall(
         codeExists = !existingInvite.empty;
       }
 
-      // --- Create Invite Document ---
+      // --- Create Invite Document --- (Keep existing logic)
       const expiresAt = admin.firestore.Timestamp.fromDate(
-        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // Expires in 7 days
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       );
-
-      const inviteRef = admin.firestore().collection("groupInvites").doc(); // Auto-generate ID
+      const inviteRef = admin.firestore().collection("groupInvites").doc();
       await inviteRef.set({
         code: code,
         groupId: groupId,
-        groupName: groupData?.name || "Unknown Group", // Denormalize for email
+        groupName: groupData?.name || "Unknown Group",
         inviterUid: inviterUid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         expiresAt: expiresAt,
-        status: "pending", // Initial status
+        status: "pending",
       });
 
-      // --- Construct Deep Link ---
-      // Use your app's custom scheme or universal link base URL
-      const deepLinkBase = "recoveryconnect://"; // iOS custom scheme
-      const universalLinkBase = "https://recoveryconnect.app/"; // Your domain for Android App Links / iOS Universal Links
-      // Choose based on platform if possible, or use universal link primarily
-      const link = `${universalLinkBase}join?code=${code}`;
+      // --- Construct Standard Web Link ---
+      const link = `${webLinkBase}join?code=${code}`;
 
       console.log(
-        `Generated invite code ${code} for group ${groupId} by user ${inviterUid}`
+        `Generated invite code ${code} and link ${link} for group ${groupId} by user ${inviterUid}`
       );
-      return { code, link };
+      return { code, link }; // Return the standard web link
     } catch (error) {
       console.error("Error in generateGroupInvite:", error);
       if (error instanceof HttpsError) {
@@ -815,6 +807,168 @@ export const sendGroupInviteEmail = functions.https.onCall(
       throw new HttpsError(
         "internal",
         "Failed to send group invite email.",
+        error
+      );
+    }
+  }
+);
+
+/**
+ * Validates an invite code and adds the requesting user to the corresponding group.
+ * - Checks if user is already in the group.
+ * - Verifies the code exists, is valid (status: pending), and not expired.
+ * - Adds user to the group's members collection (or updates role if needed).
+ * - Updates the group's member count.
+ * - Marks the invite code as used.
+ */
+export const joinGroupByInviteCode = functions.https.onCall(
+  async (request, context) => {
+    const { code } = request.data;
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new HttpsError("unauthenticated", "User must be logged in.");
+    }
+    if (!code || typeof code !== "string" || code.length !== 6) {
+      throw new HttpsError("invalid-argument", "Invalid invite code format.");
+    }
+
+    const normalizedCode = code.toUpperCase(); // Ensure case-insensitivity
+
+    try {
+      // --- Find the Invite Document ---
+      const inviteQuery = admin
+        .firestore()
+        .collection("groupInvites")
+        .where("code", "==", normalizedCode)
+        .limit(1);
+
+      const inviteSnap = await inviteQuery.get();
+
+      if (inviteSnap.empty) {
+        throw new HttpsError(
+          "not-found",
+          `Invite code "${normalizedCode}" not found.`
+        );
+      }
+
+      const inviteDoc = inviteSnap.docs[0];
+      const inviteData = inviteDoc.data();
+      const { groupId, status, expiresAt } = inviteData;
+
+      // --- Validate Invite Status and Expiry ---
+      if (status !== "pending") {
+        throw new HttpsError(
+          "failed-precondition",
+          `This invite code has already been ${status}.`
+        );
+      }
+      if (expiresAt.toDate() < new Date()) {
+        // Update status to expired - prevents reuse
+        await inviteDoc.ref.update({ status: "expired" });
+        throw new HttpsError(
+          "failed-precondition",
+          "This invite code has expired."
+        );
+      }
+
+      // --- Check if User is Already a Member ---
+      // Assuming MemberModel exists and has a method like isGroupMember or similar
+      // If not, query the members subcollection directly.
+      // const isAlreadyMember = await MemberModel.isGroupMember(groupId, userId);
+      const memberRef = admin
+        .firestore()
+        .collection("members")
+        .doc(`${groupId}_${userId}`);
+      const memberSnap = await memberRef.get();
+
+      if (memberSnap.exists) {
+        // User is already in the group. Optionally mark invite as used anyway?
+        console.log(
+          `User ${userId} already member of group ${groupId}. Marking invite ${normalizedCode} as used.`
+        );
+        await inviteDoc.ref.update({
+          status: "used",
+          usedByUid: userId,
+          usedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        // Return group info so app can navigate
+        return {
+          success: true,
+          groupId: groupId,
+          message: "Already a member of this group.",
+        };
+      }
+
+      // --- Add User to Group ---
+      const groupRef = admin.firestore().collection("groups").doc(groupId);
+      const userRef = admin.firestore().collection("users").doc(userId);
+
+      // Fetch user data to add to member doc
+      const userSnap = await userRef.get();
+      if (!userSnap.exists) {
+        throw new HttpsError("not-found", "Invited user profile not found.");
+      }
+      const userData = userSnap.data();
+
+      const batch = admin.firestore().batch();
+
+      // 1. Create Member Document (assuming a top-level members collection)
+      // Adjust fields based on your MemberModel/schema
+      const newMemberRef = admin
+        .firestore()
+        .collection("members")
+        .doc(`${groupId}_${userId}`);
+      batch.set(newMemberRef, {
+        userId: userId,
+        groupId: groupId,
+        displayName: userData?.displayName || "Unknown User",
+        email: userData?.email || null,
+        photoURL: userData?.photoURL || null,
+        isAdmin: false, // Invites don't grant admin by default
+        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Add other default member fields from your schema
+        sobrietyDate: userData?.sobrietyStartDate || null,
+        showSobrietyDate: userData?.showSobrietyDate ?? true,
+        showPhoneNumber: userData?.showPhoneNumber ?? true,
+      });
+
+      // 2. Update Group Member Count
+      batch.update(groupRef, {
+        memberCount: admin.firestore.FieldValue.increment(1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 3. Update Invite Status
+      batch.update(inviteDoc.ref, {
+        status: "used",
+        usedByUid: userId,
+        usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 4. Add group to user's list of homegroups (Optional but good practice)
+      batch.update(userRef, {
+        homeGroups: admin.firestore.FieldValue.arrayUnion(groupId),
+      });
+
+      await batch.commit();
+
+      console.log(
+        `User ${userId} successfully joined group ${groupId} using invite ${normalizedCode}`
+      );
+      return {
+        success: true,
+        groupId: groupId,
+        message: "Successfully joined group.",
+      };
+    } catch (error) {
+      console.error("Error in joinGroupByInviteCode:", error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError(
+        "internal",
+        "Failed to join group using invite code.",
         error
       );
     }

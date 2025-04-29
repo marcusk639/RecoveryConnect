@@ -42,6 +42,7 @@ interface AuthState {
   isAuthenticated: boolean;
   lastFetched: number | null;
   location: Location | null;
+  pendingNavigation: {route: string; params: any} | null;
 }
 
 const initialState: AuthState = {
@@ -52,6 +53,7 @@ const initialState: AuthState = {
   isAuthenticated: false,
   lastFetched: null,
   location: null,
+  pendingNavigation: null,
 };
 
 const mapUserDocumentToUserData = (

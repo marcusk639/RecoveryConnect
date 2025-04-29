@@ -1,4 +1,5 @@
 // src/types/navigation/index.ts
+import {NavigatorScreenParams} from '@react-navigation/native';
 import {Meeting} from '../index';
 
 // Group Stack Navigation Params
@@ -23,12 +24,20 @@ export type GroupStackParamList = {
   GroupChatInfo: {groupId: string; groupName: string};
 };
 
+// Profile Stack Navigation Params (assuming it exists)
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+  ProfileManagement: undefined;
+  SobrietyTracker: undefined;
+  // ... other screens in ProfileStack
+};
+
 // Main Tab Navigation Params
 export type MainTabParamList = {
-  Home: undefined;
+  Home: NavigatorScreenParams<GroupStackParamList>; // <-- Specify params for Home stack
   Meetings: undefined;
   Treasury: undefined;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList>; // <-- Specify params for Profile stack
   GroupSearch: undefined;
   AdminPanel: undefined;
 };
@@ -46,5 +55,5 @@ export type AuthStackParamList = {
 export type RootStackParamList = {
   Splash: undefined;
   Auth: undefined;
-  Main: undefined;
+  Main: NavigatorScreenParams<MainTabParamList>;
 };
