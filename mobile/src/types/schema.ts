@@ -169,7 +169,7 @@ export interface MeetingDocument {
   name: string;
   type: string; // AA, NA, etc.
   day: string;
-  country: string;
+  country?: string;
   time: string;
   street?: string;
   address?: string;
@@ -178,15 +178,20 @@ export interface MeetingDocument {
   zip?: string;
   lat?: number;
   lng?: number;
-  location: string;
+  location?: string;
   isOnline: boolean;
   onlineLink?: string;
   onlineNotes?: string;
   verified: boolean;
-  addedBy: string;
+  addedBy?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   groupId: string;
+  format?: string;
+  locationName?: string;
+  geohash?: string;
+  temporaryNotice?: string | null;
+  isCancelledTemporarily?: boolean;
 }
 
 /**

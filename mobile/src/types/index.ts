@@ -205,6 +205,8 @@ export interface Meeting {
   locationName?: string;
   groupId?: string; // Optional reference to associated group
   isFavorite?: boolean; // For UI state, not stored
+  temporaryNotice?: string | null; // e.g., "Speaker meeting", "Cancelled this week"
+  isCancelledTemporarily?: boolean; // Specific flag for cancellation
 }
 
 export interface Location {

@@ -16,7 +16,7 @@ export class MeetingModel {
     return {
       id: doc.id,
       name: data.name,
-      type: data.type as any, // Cast to MeetingType
+      type: data.type as any,
       day: data.day,
       time: data.time,
       street: data.street || '',
@@ -28,12 +28,17 @@ export class MeetingModel {
       zip: data.zip,
       lat: data.lat,
       lng: data.lng,
-      locationName: data.location,
+      locationName: data.locationName,
       online: data.isOnline,
       link: data.onlineLink,
       onlineNotes: data.onlineNotes,
       verified: data.verified,
       addedBy: data.addedBy,
+      format: data.format,
+      temporaryNotice: data.temporaryNotice ?? null,
+      isCancelledTemporarily: data.isCancelledTemporarily ?? false,
+      createdAt: data.createdAt?.toDate(),
+      updatedAt: data.updatedAt?.toDate(),
     };
   }
 
@@ -55,34 +60,38 @@ export class MeetingModel {
     if (meeting.lat !== undefined) firestoreData.lat = meeting.lat;
     if (meeting.lng !== undefined) firestoreData.lng = meeting.lng;
     if (meeting.locationName !== undefined)
-      firestoreData.location = meeting.locationName;
+      firestoreData.locationName = meeting.locationName;
+    if (meeting.location !== undefined)
+      firestoreData.location = meeting.location;
     if (meeting.online !== undefined) firestoreData.isOnline = meeting.online;
     if (meeting.link !== undefined) firestoreData.onlineLink = meeting.link;
     if (meeting.onlineNotes !== undefined)
       firestoreData.onlineNotes = meeting.onlineNotes;
     if (meeting.verified !== undefined)
-      if (meeting.addedBy !== undefined)
-        firestoreData.addedBy = meeting.addedBy;
+      firestoreData.verified = meeting.verified;
+    if (meeting.addedBy !== undefined) firestoreData.addedBy = meeting.addedBy;
     if (meeting.groupId !== undefined) firestoreData.groupId = meeting.groupId;
+    if (meeting.format !== undefined) firestoreData.format = meeting.format;
+    if (meeting.temporaryNotice !== undefined)
+      firestoreData.temporaryNotice = meeting.temporaryNotice;
+    if (meeting.isCancelledTemporarily !== undefined)
+      firestoreData.isCancelledTemporarily = meeting.isCancelledTemporarily;
+
     if (meeting.createdAt) {
       try {
         firestoreData.createdAt = Firestore.Timestamp.fromDate(
           new Date(meeting.createdAt),
         );
-      } catch (error) {
-        console.warn('Invalid createdAt date format:', meeting.createdAt);
-      }
+      } catch (e) {}
     }
-
     if (meeting.updatedAt) {
       try {
         firestoreData.updatedAt = Firestore.Timestamp.fromDate(
           new Date(meeting.updatedAt),
         );
-      } catch (error) {
-        console.warn('Invalid updatedAt date format:', meeting.updatedAt);
-      }
+      } catch (e) {}
     }
+
     return firestoreData;
   }
 
@@ -174,7 +183,7 @@ export class MeetingModel {
   }
 
   /**
-   * Update a meeting
+   * Update a meeting (ensure updatedAt is always set)
    */
   static async update(
     meetingId: string,
@@ -188,12 +197,12 @@ export class MeetingModel {
         throw new Error('Meeting not found');
       }
 
-      const updatedFields = {
-        ...meetingData,
-        updatedAt: new Date(),
+      const updatePayload = {
+        ...MeetingModel.toFirestore(meetingData),
+        updatedAt: Firestore.Timestamp.now(),
       };
 
-      await meetingRef.update(MeetingModel.toFirestore(updatedFields));
+      await meetingRef.update(updatePayload);
 
       const updatedDoc = await meetingRef.get();
       return MeetingModel.fromFirestore({

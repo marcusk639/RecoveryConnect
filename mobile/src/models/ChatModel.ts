@@ -148,7 +148,13 @@ export class ChatModel {
       });
 
       // Create welcome message
-      await this.sendMessage(groupId, 'Welcome to the group chat!', null, true);
+      await this.sendMessage(
+        groupId,
+        'Welcome to the group chat!',
+        undefined,
+        null,
+        true,
+      );
 
       return groupId;
     } catch (error) {
