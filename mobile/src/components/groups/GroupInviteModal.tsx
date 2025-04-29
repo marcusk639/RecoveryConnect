@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   Modal,
   View,
@@ -12,9 +12,9 @@ import {
   Share,
   Platform,
 } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
+import functions from '@react-native-firebase/functions';
 import auth from '@react-native-firebase/auth';
-import * as Clipboard from '@react-native-clipboard/clipboard';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 interface GroupInviteModalProps {
   visible: boolean;
@@ -33,129 +33,120 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
 
-  // Generate an invite code when the modal opens
-  React.useEffect(() => {
-    if (visible && !inviteCode) {
-      generateInviteCode();
+  // Reset state when modal visibility changes
+  useEffect(() => {
+    if (!visible) {
+      setEmail('');
+      setInviteCode(null);
+      setInviteLink(null);
+      setLoading(false);
+      setGeneratingLink(false);
     }
   }, [visible]);
 
-  // Generate a unique invite code
-  const generateInviteCode = async () => {
+  // Function to call the Cloud Function for generating code/link
+  const generateInvite = async () => {
+    if (generatingLink) return; // Prevent multiple calls
+    setGeneratingLink(true);
+    setLoading(true);
     try {
-      setLoading(true);
-
-      // Generate a random 6-character alphanumeric code
-      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let code = '';
-      for (let i = 0; i < 6; i++) {
-        code += characters.charAt(
-          Math.floor(Math.random() * characters.length),
-        );
-      }
-
-      // Create an invite record in Firestore
-      const inviteRef = await firestore()
-        .collection('invites')
-        .add({
-          code: code,
-          groupId: groupId,
-          groupName: groupName,
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          createdBy: auth().currentUser?.uid,
-          expiresAt: firestore.Timestamp.fromDate(
-            new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-          ),
-          used: false,
-        });
-
-      // Create the invite link (this would be a deep link in a real app)
-      const baseUrl =
-        Platform.OS === 'ios'
-          ? 'recoveryconnect://'
-          : 'https://recoveryconnect.app/';
-
-      const link = `${baseUrl}join?code=${code}`;
-
+      const generateInviteFunction = functions().httpsCallable(
+        'generateGroupInvite',
+      );
+      const result = await generateInviteFunction({groupId});
+      const {code, link} = result.data as {code: string; link: string};
       setInviteCode(code);
       setInviteLink(link);
-    } catch (error) {
-      console.error('Error generating invite code:', error);
-      Alert.alert('Error', 'Failed to generate invite code. Please try again.');
+    } catch (error: any) {
+      console.error('Error generating invite link/code:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to generate invite details. Please try again.',
+      );
+      // Optionally close modal on error or allow retry?
     } finally {
       setLoading(false);
+      setGeneratingLink(false);
     }
   };
 
-  // Send email invite
+  // Call generateInvite when the modal becomes visible and details aren't loaded yet
+  useEffect(() => {
+    if (visible && !inviteCode && !generatingLink) {
+      generateInvite();
+    }
+  }, [visible, inviteCode, generatingLink]);
+
+  // Send email invite via Cloud Function
   const sendEmailInvite = async () => {
     if (!email.trim()) {
       Alert.alert('Error', 'Please enter an email address.');
       return;
     }
-
     if (!validateEmail(email)) {
       Alert.alert('Error', 'Please enter a valid email address.');
       return;
     }
+    if (!inviteCode) {
+      Alert.alert('Error', 'Invite code not generated yet. Please wait.');
+      return;
+    }
 
+    setLoading(true);
     try {
-      setLoading(true);
-
-      // In a real app, this would call a Cloud Function to send an email
-      // For the MVP, we'll simulate this with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Create a record of the invitation
-      await firestore().collection('emailInvites').add({
-        email: email,
-        groupId: groupId,
-        groupName: groupName,
-        code: inviteCode,
-        sentAt: firestore.FieldValue.serverTimestamp(),
-        sentBy: auth().currentUser?.uid,
+      // Call the Cloud Function to send the email
+      const sendInviteEmailFunction = functions().httpsCallable(
+        'sendGroupInviteEmail',
+      );
+      await sendInviteEmailFunction({
+        groupId,
+        inviteeEmail: email.trim(),
+        inviteCode, // Pass the generated code
       });
 
       Alert.alert(
         'Invitation Sent',
-        `An invitation has been sent to ${email}.`,
+        `An invitation email has been sent to ${email.trim()}.`,
       );
-
-      // Reset email field
-      setEmail('');
-    } catch (error) {
+      setEmail(''); // Clear email field on success
+    } catch (error: any) {
       console.error('Error sending email invite:', error);
-      Alert.alert('Error', 'Failed to send invitation. Please try again.');
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to send invitation. Please try again.',
+      );
     } finally {
       setLoading(false);
     }
   };
 
   // Validate email format
-  const validateEmail = (email: string): boolean => {
+  const validateEmail = (emailToValidate: string): boolean => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+    return re.test(emailToValidate);
   };
 
-  // Share invite link
+  // Share invite link using native share functionality
   const shareInvite = async () => {
-    if (!inviteLink) return;
+    if (!inviteLink || !inviteCode) return;
 
     try {
       await Share.share({
-        message: `Join our recovery group "${groupName}" on Recovery Connect. Use this code: ${inviteCode} or click the link: ${inviteLink}`,
+        message: `Join our recovery group "${groupName}" on Recovery Connect.\n\nUse invite code: ${inviteCode}\nOr click the link: ${inviteLink}`,
+        url: inviteLink, // Include URL for platforms that support it
+        title: `Invite to ${groupName}`,
       });
     } catch (error) {
       console.error('Error sharing invite:', error);
-      Alert.alert('Error', 'Failed to share invitation. Please try again.');
+      // Alert.alert('Error', 'Failed to share invitation.'); // Optional: Alert user
     }
   };
 
   // Copy invite code to clipboard
   const copyInviteCode = () => {
     if (!inviteCode) return;
-
     Clipboard.setString(inviteCode);
     Alert.alert('Copied', 'Invite code copied to clipboard.');
   };
@@ -163,7 +154,6 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
   // Copy invite link to clipboard
   const copyInviteLink = () => {
     if (!inviteLink) return;
-
     Clipboard.setString(inviteLink);
     Alert.alert('Copied', 'Invite link copied to clipboard.');
   };
@@ -187,7 +177,7 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
             {/* Invite Code Section */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Share Invite Code</Text>
-              {loading && !inviteCode ? (
+              {generatingLink || !inviteCode ? (
                 <ActivityIndicator size="small" color="#2196F3" />
               ) : (
                 <>
@@ -200,8 +190,7 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.helpText}>
-                    Share this code with members of your recovery group. They
-                    can use it to join your group in the app.
+                    Share this code with members of your recovery group.
                   </Text>
                 </>
               )}
@@ -210,7 +199,7 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
             {/* Invite Link Section */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Share Invite Link</Text>
-              {loading && !inviteLink ? (
+              {generatingLink || !inviteLink ? (
                 <ActivityIndicator size="small" color="#2196F3" />
               ) : (
                 <>
@@ -229,8 +218,11 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
                   </View>
                   <TouchableOpacity
                     onPress={shareInvite}
-                    style={styles.shareButton}>
-                    <Text style={styles.shareButtonText}>Share Link</Text>
+                    style={styles.shareButton}
+                    disabled={generatingLink}>
+                    <Text style={styles.shareButtonText}>
+                      Share Invite Link
+                    </Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -240,8 +232,7 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Send Email Invitation</Text>
               <Text style={styles.helpText}>
-                Enter the email address of the person you want to invite. We'll
-                send them an invitation with instructions.
+                Enter the email address of the person you want to invite.
               </Text>
               <TextInput
                 style={styles.input}
@@ -251,16 +242,19 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
-                editable={!loading}
+                editable={!loading && !!inviteCode} // Only editable when not loading and code exists
               />
               <TouchableOpacity
-                style={[styles.sendButton, loading && styles.disabledButton]}
+                style={[
+                  styles.sendButton,
+                  (loading || !inviteCode) && styles.disabledButton,
+                ]}
                 onPress={sendEmailInvite}
-                disabled={loading}>
-                {loading ? (
+                disabled={loading || !inviteCode}>
+                {loading && !generatingLink ? ( // Show loading only for sending, not generating
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.sendButtonText}>Send Invitation</Text>
+                  <Text style={styles.sendButtonText}>Send Email</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -268,8 +262,8 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
             <View style={styles.privacySection}>
               <Text style={styles.privacyText}>
                 <Text style={styles.privacyTextBold}>Privacy Note:</Text> We
-                respect the anonymity traditions. Invitations only include your
-                group name and a secure invite code.
+                respect anonymity. Invitations include your group name and a
+                secure invite code/link.
               </Text>
             </View>
           </ScrollView>
@@ -282,7 +276,7 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -290,138 +284,151 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     width: '90%',
-    maxWidth: 400,
-    maxHeight: '80%',
+    maxWidth: 450,
+    maxHeight: '85%',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 6,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#212121',
+    flexShrink: 1,
+    marginRight: 10,
   },
   closeButton: {
-    padding: 4,
+    padding: 5,
   },
   closeButtonText: {
-    fontSize: 20,
+    fontSize: 22,
     color: '#757575',
+    lineHeight: 22,
   },
   modalBody: {
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 5, // Less bottom padding as sections have margin
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#212121',
-    marginBottom: 12,
+    color: '#333333',
+    marginBottom: 10,
   },
   inviteCodeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F0F0F0',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginBottom: 8,
   },
   inviteCode: {
     flex: 1,
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#212121',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', // Monospaced font
   },
   inviteLinkContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F0F0F0',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginBottom: 8,
   },
   inviteLink: {
     flex: 1,
-    fontSize: 14,
-    color: '#2196F3',
+    fontSize: 13,
+    color: '#0D47A1', // Darker blue
   },
   copyButton: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#E0E0E0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 4,
+    marginLeft: 10,
   },
   copyButtonText: {
-    color: '#2196F3',
-    fontWeight: '600',
-    fontSize: 14,
+    color: '#424242',
+    fontWeight: '500',
+    fontSize: 13,
   },
   shareButton: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 12,
+    backgroundColor: '#1E88E5', // Slightly lighter blue
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 8,
+    marginTop: 8,
   },
   shareButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 15,
   },
   helpText: {
-    fontSize: 14,
-    color: '#757575',
-    marginBottom: 16,
+    fontSize: 13,
+    color: '#616161',
+    marginBottom: 12,
+    lineHeight: 18,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#CCCCCC',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#212121',
-    marginBottom: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#333333',
+    marginBottom: 12,
+    backgroundColor: '#FAFAFA',
   },
   sendButton: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 12,
+    backgroundColor: '#4CAF50', // Green for send action
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
   },
   sendButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 15,
   },
   disabledButton: {
     backgroundColor: '#BDBDBD',
+    opacity: 0.7,
   },
   privacySection: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#FFF8E1', // Light yellow
     borderRadius: 8,
-    padding: 16,
-    marginBottom: 24,
+    padding: 14,
+    marginTop: 10, // Add some margin top
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFC107', // Amber color
   },
   privacyText: {
-    fontSize: 14,
-    color: '#424242',
-    lineHeight: 20,
+    fontSize: 13,
+    color: '#5D4037', // Brownish text
+    lineHeight: 18,
   },
   privacyTextBold: {
     fontWeight: 'bold',

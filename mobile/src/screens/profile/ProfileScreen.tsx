@@ -11,9 +11,14 @@ import {
   Modal,
   TextInput,
   Image,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+import {launchImageLibrary} from 'react-native-image-picker';
 import {MainStackParamList} from '../../types';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
@@ -27,14 +32,22 @@ import {
   fetchUserData,
   updateUserPrivacySettings,
   updateSobrietyDate,
+  updateDisplayName,
+  updateUserPhoneNumber,
+  updateUserPhoto,
+  updateUserNotificationSettings,
 } from '../../store/slices/authSlice';
 import {UserModel} from '../../models/UserModel';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import Button from '../../components/common/Button';
+import Input from '../../components/common/Input';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 // Define the navigation param list for the Profile stack
 type ProfileStackParamList = {
   ProfileMain: undefined;
   ProfileManagement: undefined;
+  SobrietyTracker: undefined;
 };
 
 type ProfileScreenNavigationProp = StackNavigationProp<
@@ -68,6 +81,28 @@ const ProfileScreen: React.FC = () => {
   const userData = useAppSelector(selectUserData);
   const authStatus = useAppSelector(selectAuthStatus);
   const authError = useAppSelector(selectAuthError);
+  const loading = authStatus === 'loading';
+
+  // Editing states
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState<boolean>(false);
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+
+  // Form values
+  const [newDisplayName, setNewDisplayName] = useState('');
+  const [useInitialOnly, setUseInitialOnly] = useState<boolean>(false);
+  const [phoneNumber, setPhoneNumber] = useState<string>('');
+  const [tempSobrietyDate, setTempSobrietyDate] = useState<Date | undefined>(
+    userData?.sobrietyStartDate
+      ? new Date(userData.sobrietyStartDate)
+      : undefined,
+  );
+  const [meetingNotifications, setMeetingNotifications] =
+    useState<boolean>(true);
+  const [announcementNotifications, setAnnouncementNotifications] =
+    useState<boolean>(true);
+  const [celebrationNotifications, setCelebrationNotifications] =
+    useState<boolean>(true);
 
   const [userProfile, setUserProfile] = useState<UserProfile>({
     displayName: '',
@@ -83,15 +118,6 @@ const ProfileScreen: React.FC = () => {
       allowDirectMessages: true,
     },
   });
-
-  const [editNameVisible, setEditNameVisible] = useState(false);
-  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [newDisplayName, setNewDisplayName] = useState('');
-  const [tempSobrietyDate, setTempSobrietyDate] = useState<Date | undefined>(
-    userData?.sobrietyStartDate
-      ? new Date(userData.sobrietyStartDate)
-      : undefined,
-  );
 
   // Load user data from Redux or fetch if needed
   useEffect(() => {
@@ -119,11 +145,30 @@ const ProfileScreen: React.FC = () => {
       });
 
       setNewDisplayName(userData.displayName || '');
+      setPhoneNumber(userData.phoneNumber || user?.phoneNumber || '');
       setTempSobrietyDate(
         userData.sobrietyStartDate
           ? new Date(userData.sobrietyStartDate)
           : undefined,
       );
+      setMeetingNotifications(
+        userData.notificationSettings?.meetings !== false,
+      );
+      setAnnouncementNotifications(
+        userData.notificationSettings?.announcements !== false,
+      );
+      setCelebrationNotifications(
+        userData.notificationSettings?.celebrations !== false,
+      );
+
+      // Determine useInitialOnly based on fetched displayName
+      if (
+        userData.displayName &&
+        userData.displayName.length === 2 &&
+        userData.displayName.endsWith('.')
+      ) {
+        setUseInitialOnly(true);
+      }
     }
   }, [user, userData, authStatus]);
 
@@ -152,31 +197,93 @@ const ProfileScreen: React.FC = () => {
     ]);
   };
 
-  const updateDisplayName = async () => {
+  // Handle image picker and upload
+  const handleChoosePhoto = async () => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 500,
+        maxHeight: 500,
+        includeBase64: false,
+      });
+
+      if (result.didCancel || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const selectedImage = result.assets[0];
+
+      if (!selectedImage.uri) {
+        throw new Error('No image URI found');
+      }
+
+      await uploadPhoto(selectedImage.uri);
+    } catch (error) {
+      console.error('Error selecting image:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
+  };
+
+  // Upload photo to Firebase Storage and update Redux store
+  const uploadPhoto = async (uri: string) => {
+    try {
+      setUploadingPhoto(true);
+      const currentUser = auth().currentUser;
+
+      if (!currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      const storageRef = storage().ref(
+        `users/${currentUser.uid}/images/profileImage`,
+      );
+
+      await storageRef.putFile(uri);
+      const downloadUrl = await storageRef.getDownloadURL();
+
+      // Dispatch action to update user photo in Redux and Firestore
+      await dispatch(updateUserPhoto(downloadUrl)).unwrap();
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const saveDisplayName = async () => {
     if (!newDisplayName.trim()) {
       Alert.alert('Error', 'Display name cannot be empty');
       return;
     }
-
     try {
-      const currentUser = auth().currentUser;
-      if (currentUser && userData) {
-        await currentUser.updateProfile({
-          displayName: newDisplayName,
-        });
-        await firestore().collection('users').doc(currentUser.uid).update({
-          displayName: newDisplayName,
-        });
-        await UserModel.update(currentUser.uid, {
-          displayName: newDisplayName,
-        });
-        dispatch(fetchUserData(currentUser.uid));
-        setEditNameVisible(false);
-        Alert.alert('Success', 'Display name updated');
-      }
-    } catch (error) {
+      await dispatch(
+        updateDisplayName({
+          displayName: newDisplayName.trim(),
+          useInitialOnly: useInitialOnly,
+        }),
+      ).unwrap();
+      setEditingSection(null);
+    } catch (error: any) {
       console.error('Error updating display name:', error);
-      Alert.alert('Error', 'Failed to update display name. Please try again.');
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to update display name. Please try again.',
+      );
+    }
+  };
+
+  const savePhoneNumber = async () => {
+    try {
+      await dispatch(updateUserPhoneNumber(phoneNumber)).unwrap();
+      setEditingSection(null);
+    } catch (error: any) {
+      console.error('Error updating phone number:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to update phone number. Please try again.',
+      );
     }
   };
 
@@ -197,7 +304,7 @@ const ProfileScreen: React.FC = () => {
     dispatch(updateSobrietyDate({date}))
       .unwrap()
       .then(() => {
-        Alert.alert('Success', 'Sobriety date updated.');
+        setEditingSection(null);
       })
       .catch(error => {
         Alert.alert('Error', error.message || 'Failed to update date.');
@@ -209,25 +316,31 @@ const ProfileScreen: React.FC = () => {
     dispatch(updateSobrietyDate({date: null}))
       .unwrap()
       .then(() => {
-        Alert.alert('Success', 'Sobriety date cleared.');
+        setEditingSection(null);
       })
       .catch(error => {
         Alert.alert('Error', error.message || 'Failed to clear date.');
       });
   };
 
-  const toggleNotificationSetting = (
-    setting: keyof UserProfile['notifications'],
-  ) => {
-    setUserProfile({
-      ...userProfile,
-      notifications: {
-        ...userProfile.notifications,
-        [setting]: !userProfile.notifications[setting],
-      },
-    });
-
-    // In a real app, this would also update Firestore
+  const saveNotificationSettings = async () => {
+    try {
+      await dispatch(
+        updateUserNotificationSettings({
+          meetings: meetingNotifications,
+          announcements: announcementNotifications,
+          celebrations: celebrationNotifications,
+        }),
+      ).unwrap();
+      setEditingSection(null);
+    } catch (error: any) {
+      console.error('Error updating notification settings:', error);
+      Alert.alert(
+        'Error',
+        error.message ||
+          'Failed to update notification settings. Please try again.',
+      );
+    }
   };
 
   const togglePrivacySetting = async (
@@ -267,7 +380,6 @@ const ProfileScreen: React.FC = () => {
     try {
       await dispatch(updateUserPrivacySettings(settingsPayload)).unwrap();
       // Optional: Add success feedback if needed
-      // Alert.alert('Success', 'Privacy setting updated.');
     } catch (error: any) {
       console.error('Error updating privacy settings:', error);
       Alert.alert(
@@ -322,203 +434,423 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  const renderEditNameModal = () => (
-    <Modal
-      visible={editNameVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setEditNameVisible(false)}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Display Name</Text>
-            <TouchableOpacity
-              onPress={() => setEditNameVisible(false)}
-              style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
-          </View>
+  const formatPhoneNumber = (phone: string): string => {
+    // Basic US phone number formatting: (555) 555-5555
+    if (!phone) return 'Not set';
 
-          <View style={styles.modalBody}>
-            <Text style={styles.modalLabel}>Display Name</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newDisplayName}
-              onChangeText={setNewDisplayName}
-              placeholder="Enter your display name"
-            />
-            <Text style={styles.modalHelper}>
-              For anonymity, we recommend using only your first name or initial.
-            </Text>
+    // Strip all non-digits
+    const cleaned = phone.replace(/\D/g, '');
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setEditNameVisible(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+    // Check for US format (10 digits)
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(
+        6,
+      )}`;
+    }
 
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={updateDisplayName}>
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
+    // International number or other format
+    return phone;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Profile Section */}
-        <View style={styles.section}>
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              {userData?.photoURL ? (
-                <Image
-                  source={{uri: userData.photoURL}}
-                  style={styles.avatarImage}
-                />
-              ) : (
-                <Text style={styles.avatarText}>
-                  {userData?.displayName
-                    ? userData.displayName.charAt(0).toUpperCase()
-                    : 'U'}
-                </Text>
-              )}
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.displayName}>
-                {userData?.displayName || 'User'}
-              </Text>
-              <Text style={styles.email}>{userData?.email || 'No email'}</Text>
-              {userData?.sobrietyStartDate && (
-                <View style={styles.sobrietyContainer}>
-                  <Text style={styles.sobrietyLabel}>Sober Time:</Text>
-                  <Text style={styles.sobrietyTime}>
-                    {calculateSobrietyTime(userData.sobrietyStartDate)}
-                  </Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardContainer}>
+        <ScrollView style={styles.scrollView}>
+          {/* Profile Header */}
+          <View style={styles.section}>
+            <View style={styles.profileHeader}>
+              {/* Avatar/Photo Section */}
+              <View style={styles.avatarSection}>
+                <View style={styles.avatarContainer}>
+                  {userData?.photoURL ? (
+                    <Image
+                      source={{uri: userData.photoURL}}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <Text style={styles.avatarText}>
+                      {userData?.displayName
+                        ? userData.displayName.charAt(0).toUpperCase()
+                        : 'U'}
+                    </Text>
+                  )}
                 </View>
-              )}
+                <TouchableOpacity
+                  style={styles.photoEditButton}
+                  onPress={handleChoosePhoto}
+                  disabled={uploadingPhoto || loading}>
+                  {uploadingPhoto ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.photoEditButtonText}>
+                      {userData?.photoURL ? 'Change Photo' : 'Add Photo'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.profileInfo}>
+                <Text style={styles.displayName}>
+                  {userData?.displayName || 'User'}
+                </Text>
+                <Text style={styles.email}>
+                  {userData?.email || 'No email'}
+                </Text>
+                {userData?.sobrietyStartDate && (
+                  <View style={styles.sobrietyContainer}>
+                    <Text style={styles.sobrietyLabel}>Sober Time:</Text>
+                    <Text style={styles.sobrietyTime}>
+                      {calculateSobrietyTime(userData.sobrietyStartDate)}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
-          <View style={styles.profileActions}>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setEditNameVisible(true)}>
-              <Text style={styles.editButtonText}>Edit Name</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={showDatePicker}>
-              <Text style={styles.editButtonText}>Edit Sobriety Date</Text>
-            </TouchableOpacity>
-            {userData?.sobrietyStartDate && (
+
+          {/* Display Name Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Display Name</Text>
               <TouchableOpacity
-                style={[styles.editButton, styles.clearButtonRed]}
-                onPress={clearSobrietyDate}>
-                <Text
-                  style={[styles.editButtonText, styles.clearButtonTextRed]}>
-                  Clear Date
+                onPress={() =>
+                  setEditingSection(editingSection === 'name' ? null : 'name')
+                }
+                style={styles.editButton}>
+                <Text style={styles.editButtonText}>
+                  {editingSection === 'name' ? 'Cancel' : 'Edit'}
                 </Text>
               </TouchableOpacity>
+            </View>
+
+            {editingSection === 'name' ? (
+              <View style={styles.editContainer}>
+                <TextInput
+                  style={styles.textInput}
+                  value={newDisplayName}
+                  onChangeText={setNewDisplayName}
+                  placeholder="Your name"
+                />
+                <View style={styles.switchContainer}>
+                  <Text style={styles.switchLabel}>Use first initial only</Text>
+                  <Switch
+                    value={useInitialOnly}
+                    onValueChange={setUseInitialOnly}
+                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                    thumbColor={useInitialOnly ? '#2196F3' : '#FFFFFF'}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  For anonymity, we recommend using only your first name or
+                  initial.
+                </Text>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={saveDisplayName}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={styles.fieldValue}>
+                {userData?.displayName || 'Not set'}
+              </Text>
             )}
           </View>
-          <View style={styles.recoveryDateContainer}>
-            <Text style={styles.recoveryDateLabel}>Sobriety Date:</Text>
-            <Text style={styles.recoveryDate}>
-              {formatSobrietyDateForDisplay(userData?.sobrietyStartDate)}
-            </Text>
-          </View>
-        </View>
 
-        {/* Privacy Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy Settings</Text>
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Show Sobriety Time/Date</Text>
-              <Text style={styles.settingDescription}>
-                Allow others to see your sobriety time/date in groups
-              </Text>
+          {/* Phone Number Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Phone Number</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  setEditingSection(editingSection === 'phone' ? null : 'phone')
+                }
+                style={styles.editButton}>
+                <Text style={styles.editButtonText}>
+                  {editingSection === 'phone' ? 'Cancel' : 'Edit'}
+                </Text>
+              </TouchableOpacity>
             </View>
-            <Switch
-              value={userData?.showSobrietyDate ?? false}
-              onValueChange={() => togglePrivacySetting('showSobrietyDate')}
-              trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-              thumbColor={userData?.showSobrietyDate ? '#2196F3' : '#FFFFFF'}
-            />
-          </View>
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Show Phone Number</Text>
-              <Text style={styles.settingDescription}>
-                Allow group members to see your phone number
-              </Text>
-            </View>
-            <Switch
-              value={userData?.showPhoneNumber ?? false}
-              onValueChange={() => togglePrivacySetting('showPhoneNumber')}
-              trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-              thumbColor={userData?.showPhoneNumber ? '#2196F3' : '#FFFFFF'}
-            />
-          </View>
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Allow Direct Messages</Text>
-              <Text style={styles.settingDescription}>
-                Allow members to send you direct messages
-              </Text>
-            </View>
-            <Switch
-              value={userData?.privacySettings?.allowDirectMessages ?? true}
-              onValueChange={() => togglePrivacySetting('allowDirectMessages')}
-              trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-              thumbColor={
-                userData?.privacySettings?.allowDirectMessages ?? true
-                  ? '#2196F3'
-                  : '#FFFFFF'
-              }
-            />
-          </View>
-        </View>
 
-        {/* Account Actions - Simplified for clarity */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <TouchableOpacity
-            style={styles.accountAction}
-            onPress={() => {
-              navigation.navigate('ProfileManagement');
-            }}>
-            <Text style={styles.accountActionText}>Manage Profile Details</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.accountAction, styles.signOutAction]}
-            onPress={confirmSignOut}>
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
+            {editingSection === 'phone' ? (
+              <View style={styles.editContainer}>
+                <TextInput
+                  style={styles.textInput}
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  placeholder="Your phone number"
+                  keyboardType="phone-pad"
+                />
+                <Text style={styles.helperText}>
+                  This will be used for calls and text messages if you choose to
+                  share it.
+                </Text>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={savePhoneNumber}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={styles.fieldValue}>
+                {userData?.phoneNumber
+                  ? formatPhoneNumber(userData.phoneNumber)
+                  : 'Not set'}
+              </Text>
+            )}
+          </View>
 
-        {/* App Info - Keep as is */}
-        <View style={styles.section}>
-          <Text style={styles.appInfo}>Recovery Connect v1.0.0</Text>
-          <View style={styles.linksContainer}>
-            <TouchableOpacity>
-              <Text style={styles.link}>Privacy Policy</Text>
+          {/* Sobriety Date Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Sobriety Date</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  setEditingSection(
+                    editingSection === 'sobriety' ? null : 'sobriety',
+                  )
+                }
+                style={styles.editButton}>
+                <Text style={styles.editButtonText}>
+                  {editingSection === 'sobriety' ? 'Cancel' : 'Edit'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {editingSection === 'sobriety' ? (
+              <View style={styles.editContainer}>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={showDatePicker}>
+                  <Text style={styles.datePickerButtonText}>
+                    {userData?.sobrietyStartDate
+                      ? formatSobrietyDateForDisplay(userData.sobrietyStartDate)
+                      : 'Select Sobriety Date'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.helperText}>
+                  This is used for calculating sobriety time and for optional
+                  celebrations.
+                </Text>
+                <View style={styles.buttonRow}>
+                  {userData?.sobrietyStartDate && (
+                    <TouchableOpacity
+                      style={[styles.button, styles.clearButton]}
+                      onPress={clearSobrietyDate}>
+                      <Text style={styles.clearButtonText}>Clear Date</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.fieldValue}>
+                  {userData?.sobrietyStartDate
+                    ? formatSobrietyDateForDisplay(userData.sobrietyStartDate)
+                    : 'Not set'}
+                </Text>
+                {userData?.sobrietyStartDate && (
+                  <Text style={styles.sobrietyTimeText}>
+                    {calculateSobrietyTime(userData.sobrietyStartDate)}
+                  </Text>
+                )}
+              </>
+            )}
+          </View>
+
+          {/* Sobriety Tracker Section */}
+          {userData?.sobrietyStartDate && (
+            <TouchableOpacity
+              style={styles.sobrietyTrackerButton}
+              onPress={() => navigation.navigate('SobrietyTracker')}>
+              <View style={styles.sobrietyTrackerContent}>
+                <View style={styles.sobrietyTrackerIconContainer}>
+                  <Icon name="medal" size={32} color="#FFD700" />
+                </View>
+                <View style={styles.sobrietyTrackerTextContainer}>
+                  <Text style={styles.sobrietyTrackerTitle}>
+                    View Your Sobriety Journey
+                  </Text>
+                  <Text style={styles.sobrietyTrackerSubtitle}>
+                    Track milestones and celebrate your progress
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={24} color="#2196F3" />
+              </View>
             </TouchableOpacity>
-            <Text style={styles.linkSeparator}>•</Text>
-            <TouchableOpacity>
-              <Text style={styles.link}>Terms of Service</Text>
+          )}
+
+          {/* Privacy Settings */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Privacy Settings</Text>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Show Sobriety Time/Date</Text>
+                <Text style={styles.settingDescription}>
+                  Allow others to see your sobriety time/date in groups
+                </Text>
+              </View>
+              <Switch
+                value={userData?.showSobrietyDate ?? false}
+                onValueChange={() => togglePrivacySetting('showSobrietyDate')}
+                trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                thumbColor={userData?.showSobrietyDate ? '#2196F3' : '#FFFFFF'}
+              />
+            </View>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Show Phone Number</Text>
+                <Text style={styles.settingDescription}>
+                  Allow group members to see your phone number
+                </Text>
+              </View>
+              <Switch
+                value={userData?.showPhoneNumber ?? false}
+                onValueChange={() => togglePrivacySetting('showPhoneNumber')}
+                trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                thumbColor={userData?.showPhoneNumber ? '#2196F3' : '#FFFFFF'}
+              />
+            </View>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Allow Direct Messages</Text>
+                <Text style={styles.settingDescription}>
+                  Allow members to send you direct messages
+                </Text>
+              </View>
+              <Switch
+                value={userData?.privacySettings?.allowDirectMessages ?? true}
+                onValueChange={() =>
+                  togglePrivacySetting('allowDirectMessages')
+                }
+                trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                thumbColor={
+                  userData?.privacySettings?.allowDirectMessages ?? true
+                    ? '#2196F3'
+                    : '#FFFFFF'
+                }
+              />
+            </View>
+          </View>
+
+          {/* Notification Settings */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Notification Settings</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  setEditingSection(
+                    editingSection === 'notifications' ? null : 'notifications',
+                  )
+                }
+                style={styles.editButton}>
+                <Text style={styles.editButtonText}>
+                  {editingSection === 'notifications' ? 'Cancel' : 'Edit'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {editingSection === 'notifications' ? (
+              <View style={styles.editContainer}>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.switchLabel}>Meeting Reminders</Text>
+                  <Switch
+                    value={meetingNotifications}
+                    onValueChange={setMeetingNotifications}
+                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                    thumbColor={meetingNotifications ? '#2196F3' : '#FFFFFF'}
+                  />
+                </View>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.switchLabel}>Group Announcements</Text>
+                  <Switch
+                    value={announcementNotifications}
+                    onValueChange={setAnnouncementNotifications}
+                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                    thumbColor={
+                      announcementNotifications ? '#2196F3' : '#FFFFFF'
+                    }
+                  />
+                </View>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.switchLabel}>Celebrations</Text>
+                  <Switch
+                    value={celebrationNotifications}
+                    onValueChange={setCelebrationNotifications}
+                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                    thumbColor={
+                      celebrationNotifications ? '#2196F3' : '#FFFFFF'
+                    }
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={saveNotificationSettings}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View>
+                <View style={styles.notificationItem}>
+                  <Text style={styles.notificationLabel}>
+                    Meeting Reminders:
+                  </Text>
+                  <Text style={styles.notificationValue}>
+                    {userData?.notificationSettings?.meetings !== false
+                      ? 'On'
+                      : 'Off'}
+                  </Text>
+                </View>
+                <View style={styles.notificationItem}>
+                  <Text style={styles.notificationLabel}>
+                    Group Announcements:
+                  </Text>
+                  <Text style={styles.notificationValue}>
+                    {userData?.notificationSettings?.announcements !== false
+                      ? 'On'
+                      : 'Off'}
+                  </Text>
+                </View>
+                <View style={styles.notificationItem}>
+                  <Text style={styles.notificationLabel}>Celebrations:</Text>
+                  <Text style={styles.notificationValue}>
+                    {userData?.notificationSettings?.celebrations !== false
+                      ? 'On'
+                      : 'Off'}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Account Actions - Simplified for clarity */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <TouchableOpacity
+              style={[styles.accountAction, styles.signOutAction]}
+              onPress={confirmSignOut}>
+              <Text style={styles.signOutText}>Sign Out</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </ScrollView>
 
-      {renderEditNameModal()}
+          {/* App Info - Keep as is */}
+          <View style={styles.section}>
+            <Text style={styles.appInfo}>Recovery Connect v1.0.0</Text>
+            <View style={styles.linksContainer}>
+              <TouchableOpacity>
+                <Text style={styles.link}>Privacy Policy</Text>
+              </TouchableOpacity>
+              <Text style={styles.linkSeparator}>•</Text>
+              <TouchableOpacity>
+                <Text style={styles.link}>Terms of Service</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
         mode="date"
@@ -536,6 +868,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
+  keyboardContainer: {
+    flex: 1,
+  },
   header: {
     padding: 16,
     backgroundColor: '#FFFFFF',
@@ -552,12 +887,22 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: '#FFFFFF',
-    marginBottom: 16,
+    marginBottom: 12,
     padding: 16,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   profileHeader: {
     flexDirection: 'row',
     marginBottom: 16,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginRight: 16,
   },
   avatarContainer: {
     width: 80,
@@ -566,7 +911,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2196F3',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginBottom: 8,
     overflow: 'hidden',
   },
   avatarImage: {
@@ -578,6 +923,17 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  photoEditButton: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  photoEditButtonText: {
+    color: '#2196F3',
+    fontSize: 12,
+    fontWeight: '600',
   },
   profileInfo: {
     flex: 1,
@@ -608,40 +964,103 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2196F3',
   },
-  profileActions: {
+  sectionHeader: {
     flexDirection: 'row',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+    paddingBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#212121',
   },
   editButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#E3F2FD',
-    borderRadius: 16,
-    marginRight: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
   },
   editButtonText: {
     color: '#2196F3',
     fontWeight: '600',
     fontSize: 14,
   },
-  recoveryDateContainer: {
+  editContainer: {
+    marginTop: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    backgroundColor: '#FAFAFA',
+  },
+  fieldValue: {
+    fontSize: 16,
+    color: '#212121',
+    marginTop: 4,
+  },
+  switchContainer: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginVertical: 12,
   },
-  recoveryDateLabel: {
-    fontSize: 14,
+  switchLabel: {
+    fontSize: 16,
+    color: '#424242',
+  },
+  helperText: {
+    fontSize: 12,
     color: '#757575',
-    marginRight: 4,
+    marginBottom: 12,
   },
-  recoveryDate: {
-    fontSize: 14,
-    color: '#212121',
+  saveButton: {
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-end',
+    marginTop: 8,
   },
-  sectionTitle: {
-    fontSize: 18,
+  saveButtonText: {
+    color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: 16,
+  },
+  datePickerButton: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FAFAFA',
+  },
+  datePickerButtonText: {
+    fontSize: 16,
     color: '#212121',
-    marginBottom: 16,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+  },
+  button: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  clearButton: {
+    backgroundColor: '#FFEBEE',
+  },
+  clearButtonText: {
+    color: '#F44336',
+    fontWeight: '600',
   },
   settingItem: {
     flexDirection: 'row',
@@ -665,14 +1084,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#757575',
   },
+  notificationItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  notificationLabel: {
+    fontSize: 15,
+    color: '#424242',
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  notificationValue: {
+    fontSize: 15,
+    color: '#2196F3',
+    fontWeight: '500',
+  },
   accountAction: {
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
-  },
-  accountActionText: {
-    fontSize: 16,
-    color: '#2196F3',
   },
   signOutAction: {
     borderBottomWidth: 0,
@@ -680,6 +1110,7 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: 16,
     color: '#F44336',
+    fontWeight: '500',
   },
   appInfo: {
     fontSize: 14,
@@ -701,95 +1132,37 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     marginHorizontal: 8,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  sobrietyTrackerButton: {
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    borderRadius: 8,
+    marginTop: 12,
   },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    width: '90%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  modalHeader: {
+  sobrietyTrackerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
   },
-  modalTitle: {
+  sobrietyTrackerIconContainer: {
+    marginRight: 16,
+  },
+  sobrietyTrackerTextContainer: {
+    flex: 1,
+  },
+  sobrietyTrackerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#212121',
+    marginBottom: 4,
   },
-  closeButton: {
-    padding: 4,
-  },
-  closeButtonText: {
-    fontSize: 18,
+  sobrietyTrackerSubtitle: {
+    fontSize: 14,
     color: '#757575',
   },
-  modalBody: {
-    padding: 16,
-  },
-  modalLabel: {
-    fontSize: 16,
+  sobrietyTimeText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#212121',
-    marginBottom: 8,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  modalHelper: {
-    fontSize: 12,
-    color: '#757575',
-    marginBottom: 24,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  cancelButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginRight: 12,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: '#757575',
-  },
-  saveButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#2196F3',
-    borderRadius: 4,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  clearButtonRed: {
-    backgroundColor: '#F44336',
-  },
-  clearButtonTextRed: {
-    color: '#FFFFFF',
+    color: '#2196F3',
   },
 });
 
