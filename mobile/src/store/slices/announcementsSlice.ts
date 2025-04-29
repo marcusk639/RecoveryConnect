@@ -1,37 +1,25 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
 import {RootState} from '../index';
-import auth from '@react-native-firebase/auth';
+import {Announcement} from '../../types';
 import {AnnouncementModel} from '../../models/AnnouncementModel';
-
-// Define types
-export interface Announcement {
-  id: string;
-  groupId: string;
-  title: string;
-  content: string;
-  isPinned: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
-  authorName: string;
-}
+import {createSelector} from 'reselect';
 
 // State interface
 interface AnnouncementsState {
   items: Record<string, Announcement>;
-  groupAnnouncements: Record<string, string[]>;
+  groupAnnouncementIds: Record<string, string[]>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
-  lastFetched: Record<string, number>; // By groupId
+  lastFetchedGroup: Record<string, number>; // Track last fetch time per group
 }
 
 // Initial state
 const initialState: AnnouncementsState = {
   items: {},
-  groupAnnouncements: {},
+  groupAnnouncementIds: {},
   status: 'idle',
   error: null,
-  lastFetched: {},
+  lastFetchedGroup: {},
 };
 
 // Constants
@@ -44,26 +32,22 @@ const isDataStale = (lastFetched: number | undefined): boolean => {
 };
 
 // Fetch announcements for a group
-export const fetchAnnouncementsForGroup = createAsyncThunk(
+export const fetchAnnouncementsForGroup = createAsyncThunk<
+  {groupId: string; announcements: Announcement[]},
+  string, // groupId
+  {state: RootState; rejectValue: string}
+>(
   'announcements/fetchForGroup',
-  async (groupId: string, {getState, rejectWithValue}) => {
+  async (groupId, {getState, rejectWithValue}) => {
+    // TODO: Implement caching logic using lastFetchedGroup[groupId]
     try {
-      const announcements = await AnnouncementModel.getByGroup(groupId);
+      const announcements = await AnnouncementModel.getAnnouncementsForGroup(
+        groupId,
+      );
       return {groupId, announcements};
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to fetch announcements');
     }
-  },
-  {
-    condition: (groupId, {getState}) => {
-      const state = getState() as RootState;
-
-      // If already loading, don't fetch again
-      if (state.announcements.status === 'loading') return false;
-
-      // Check if data for this group is stale
-      return isDataStale(state.announcements.lastFetched[groupId]);
-    },
   },
 );
 
@@ -91,46 +75,36 @@ export const fetchAnnouncementById = createAsyncThunk(
 );
 
 // Create a new announcement
-export const createAnnouncement = createAsyncThunk(
-  'announcements/create',
-  async (
-    {
-      groupId,
-      title,
-      content,
-      isPinned = false,
-    }: {
-      groupId: string;
-      title: string;
-      content: string;
-      isPinned?: boolean;
-    },
-    {rejectWithValue},
-  ) => {
-    try {
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        return rejectWithValue('User not authenticated');
-      }
-
-      const announcementData: Omit<Announcement, 'id'> = {
-        groupId,
-        title,
-        content,
-        isPinned,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy: currentUser.uid,
-        authorName: currentUser.displayName || 'Anonymous',
-      };
-
-      const announcement = await AnnouncementModel.create(announcementData);
-      return announcement;
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to create announcement');
-    }
+export const createAnnouncement = createAsyncThunk<
+  Announcement, // Return the new announcement
+  {
+    groupId: string;
+    title: string;
+    content: string;
+    isPinned?: boolean;
+    expiresAt?: Date | null;
+    userId: string;
+    memberId: string;
   },
-);
+  {rejectValue: string}
+>('announcements/create', async (data, {rejectWithValue}) => {
+  try {
+    const newAnnouncement = await AnnouncementModel.createAnnouncement(
+      data.groupId,
+      {
+        title: data.title,
+        content: data.content,
+        isPinned: data.isPinned,
+        expiresAt: data.expiresAt,
+        userId: data.userId,
+        memberId: data.memberId,
+      },
+    );
+    return newAnnouncement;
+  } catch (error: any) {
+    return rejectWithValue(error.message || 'Failed to create announcement');
+  }
+});
 
 // Update an announcement
 export const updateAnnouncement = createAsyncThunk(
@@ -173,23 +147,16 @@ export const updateAnnouncement = createAsyncThunk(
 );
 
 // Delete an announcement
-export const deleteAnnouncement = createAsyncThunk(
+export const deleteAnnouncement = createAsyncThunk<
+  {groupId: string; announcementId: string}, // Return IDs for reducer
+  {groupId: string; announcementId: string},
+  {rejectValue: string}
+>(
   'announcements/delete',
-  async (announcementId: string, {getState, rejectWithValue}) => {
+  async ({groupId, announcementId}, {rejectWithValue}) => {
     try {
-      const state = getState() as RootState;
-      const announcement = state.announcements.items[announcementId];
-
-      if (!announcement) {
-        return rejectWithValue('Announcement not found');
-      }
-
-      await AnnouncementModel.delete(announcementId);
-
-      return {
-        id: announcementId,
-        groupId: announcement.groupId,
-      };
+      await AnnouncementModel.deleteAnnouncement(groupId, announcementId);
+      return {groupId, announcementId}; // Return IDs to remove from state
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to delete announcement');
     }
@@ -207,76 +174,50 @@ const announcementsSlice = createSlice({
   },
   extraReducers: builder => {
     builder
-      // Fetch announcements for group
+      // Fetch Announcements
       .addCase(fetchAnnouncementsForGroup.pending, state => {
         state.status = 'loading';
       })
       .addCase(fetchAnnouncementsForGroup.fulfilled, (state, action) => {
         state.status = 'succeeded';
-
         const {groupId, announcements} = action.payload;
-
-        // Update items dictionary with announcements
-        announcements.forEach((announcement: Announcement) => {
+        const announcementIds: string[] = [];
+        announcements.forEach(announcement => {
           state.items[announcement.id] = announcement;
+          announcementIds.push(announcement.id);
         });
-
-        // Update group announcements array with IDs
-        state.groupAnnouncements[groupId] = announcements.map(
-          (a: Announcement) => a.id,
-        );
-
-        // Update last fetched timestamp for this group
-        state.lastFetched[groupId] = Date.now();
-
+        state.groupAnnouncementIds[groupId] = announcementIds;
+        state.lastFetchedGroup[groupId] = Date.now();
         state.error = null;
       })
       .addCase(fetchAnnouncementsForGroup.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to fetch announcements';
+        state.error = action.payload as string;
       })
-
-      // Fetch announcement by ID
-      .addCase(fetchAnnouncementById.pending, state => {
-        state.status = 'loading';
-      })
-      .addCase(fetchAnnouncementById.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        state.items[action.payload.id] = action.payload;
-        state.error = null;
-      })
-      .addCase(fetchAnnouncementById.rejected, (state, action) => {
-        state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to fetch announcement';
-      })
-
-      // Create announcement
+      // Create Announcement
       .addCase(createAnnouncement.pending, state => {
         state.status = 'loading';
       })
       .addCase(createAnnouncement.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        const announcement = action.payload;
-
-        // Add to items
-        state.items[announcement.id] = announcement;
-
-        // Add to group announcements
-        if (!state.groupAnnouncements[announcement.groupId]) {
-          state.groupAnnouncements[announcement.groupId] = [];
+        const newAnnouncement = action.payload;
+        state.items[newAnnouncement.id] = newAnnouncement;
+        // Add to the specific group's list
+        if (state.groupAnnouncementIds[newAnnouncement.groupId]) {
+          state.groupAnnouncementIds[newAnnouncement.groupId].unshift(
+            newAnnouncement.id,
+          ); // Add to beginning
+        } else {
+          state.groupAnnouncementIds[newAnnouncement.groupId] = [
+            newAnnouncement.id,
+          ];
         }
-        state.groupAnnouncements[announcement.groupId].unshift(announcement.id);
-
         state.error = null;
       })
       .addCase(createAnnouncement.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to create announcement';
+        state.error = action.payload as string;
       })
-
       // Update announcement
       .addCase(updateAnnouncement.pending, state => {
         state.status = 'loading';
@@ -291,31 +232,26 @@ const announcementsSlice = createSlice({
         state.error =
           (action.payload as string) || 'Failed to update announcement';
       })
-
-      // Delete announcement
+      // Delete Announcement
       .addCase(deleteAnnouncement.pending, state => {
         state.status = 'loading';
       })
       .addCase(deleteAnnouncement.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        const {id, groupId} = action.payload;
-
+        const {groupId, announcementId} = action.payload;
         // Remove from items
-        delete state.items[id];
-
-        // Remove from group announcements
-        if (state.groupAnnouncements[groupId]) {
-          state.groupAnnouncements[groupId] = state.groupAnnouncements[
+        delete state.items[announcementId];
+        // Remove from group mapping
+        if (state.groupAnnouncementIds[groupId]) {
+          state.groupAnnouncementIds[groupId] = state.groupAnnouncementIds[
             groupId
-          ].filter(announcementId => announcementId !== id);
+          ].filter(id => id !== announcementId);
         }
-
         state.error = null;
       })
       .addCase(deleteAnnouncement.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to delete announcement';
+        state.error = action.payload as string;
       });
   },
 });
@@ -325,24 +261,23 @@ export const {clearAnnouncementsError} = announcementsSlice.actions;
 
 // Selectors
 export const selectAllAnnouncements = (state: RootState) =>
-  Object.values(state.announcements.items);
+  state.announcements.items;
+export const selectGroupAnnouncementIds = (state: RootState, groupId: string) =>
+  state.announcements.groupAnnouncementIds[groupId] || [];
 
-export const selectAnnouncementsByGroupId = (
+export const selectAnnouncementsByGroupId = createSelector(
+  [selectAllAnnouncements, selectGroupAnnouncementIds],
+  (allItems, groupIds) => {
+    return groupIds.map(id => allItems[id]).filter(Boolean);
+  },
+);
+
+export const selectAnnouncementById = (
   state: RootState,
-  groupId: string,
-) => {
-  const announcementIds = state.announcements.groupAnnouncements[groupId] || [];
-  return announcementIds
-    .map(id => state.announcements.items[id])
-    .filter(Boolean);
-};
-
-export const selectAnnouncementById = (state: RootState, id: string) =>
-  state.announcements.items[id];
-
+  announcementId: string,
+) => state.announcements.items[announcementId];
 export const selectAnnouncementsStatus = (state: RootState) =>
   state.announcements.status;
-
 export const selectAnnouncementsError = (state: RootState) =>
   state.announcements.error;
 

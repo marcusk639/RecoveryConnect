@@ -79,6 +79,24 @@ export class MemberModel {
   }
 
   /**
+   * Get a member by userId
+   */
+  static async getMemberByUserId(userId: string): Promise<GroupMember | null> {
+    try {
+      const memberDoc = await firestore()
+        .collection('members')
+        .where('userId', '==', userId)
+        .limit(1)
+        .get();
+
+      return memberDoc.docs.map(doc => this.fromFirestore(doc))[0] || null;
+    } catch (error) {
+      console.error('Error getting member by userId:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Add a member to a group
    */
   static async addMember(

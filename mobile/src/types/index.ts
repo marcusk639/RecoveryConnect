@@ -138,6 +138,8 @@ export interface Announcement {
   authorName: string;
   expiresAt?: Date;
   groupId: string;
+  userId: string;
+  memberId: string;
 }
 
 /**
@@ -195,8 +197,8 @@ export interface Meeting {
   lng?: number;
   location?: string;
   online?: boolean;
-  link?: string;
-  onlineNotes?: string;
+  link?: string | null;
+  onlineNotes?: string | null;
   verified?: boolean;
   addedBy?: string;
   createdAt?: Date;
@@ -498,4 +500,41 @@ export interface Theme {
   fonts: ThemeFonts;
   fontSizes: ThemeFontSizes;
   roundness: number;
+}
+
+/**
+ * Service Position Type
+ */
+export interface ServicePosition {
+  id: string; // Firestore document ID
+  groupId: string;
+  name: string; // e.g., "Secretary", "Treasurer", "GSR", "Coffee Maker"
+  description?: string;
+  commitmentLength?: number; // Optional length in months
+  currentHolderId?: string | null; // User ID of the current holder
+  currentHolderName?: string | null; // Denormalized name for display
+  termStartDate?: Date | null;
+  termEndDate?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Meeting Instance Type (Add Chairperson)
+ */
+export interface MeetingInstance extends Meeting {
+  instanceId: string;
+  meetingId: string;
+  groupId: string;
+  scheduledAt: Date;
+  link?: string | null | undefined;
+  onlineNotes?: string | null | undefined;
+  locationName?: string;
+  isOnline?: boolean;
+  isCancelled: boolean;
+  instanceNotice?: string | null;
+  templateUpdatedAt: Date;
+  // Add Chairperson fields
+  chairpersonId?: string | null;
+  chairpersonName?: string | null; // Denormalized for easier display
 }

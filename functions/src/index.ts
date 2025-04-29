@@ -7,6 +7,8 @@ import {
 } from "./utils/meetings";
 import {
   Meeting,
+  MeetingDocument,
+  MeetingInstanceDocument,
   MeetingSearchCriteria,
   MeetingType,
 } from "./entities/Meeting";
@@ -17,11 +19,14 @@ import * as functionsV1 from "firebase-functions/v1";
 import { migrateGeohashes } from "./migrations/migrateGeohashes";
 import { Query } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v1/https";
-import { FieldValue } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
-// Import v2 Firestore trigger types
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import moment from "moment-timezone";
 
+// Use admin SDK Timestamp type consistently
+import { Timestamp as AdminTimestamp } from "firebase-admin/firestore"; // Alias Admin timestamp
+// Import implementation file as suggested by linter
+import { FirebaseFirestoreTypes } from "../../mobile/node_modules/@react-native-firebase/firestore/lib/index";
+type ClientTimestamp = FirebaseFirestoreTypes.Timestamp;
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -62,6 +67,9 @@ export const findMeetings = functions.https.onCall(async (request) => {
     const meetingPromises: Promise<Meeting[]>[] = [];
     const start = Date.now();
 
+    // Extract day filter
+    const dayFilter = meetingInput.filters?.day?.toLowerCase(); // Get day from filters
+
     if (
       meetingInput.filters &&
       meetingInput.filters.type &&
@@ -70,7 +78,8 @@ export const findMeetings = functions.https.onCall(async (request) => {
       if (meetingInput.filters.type === "AA") {
         const aaMeetings = getAlcoholicsAnonymousMeetings(
           meetingInput.filters.location,
-          meetingInput.criteria
+          meetingInput.criteria,
+          dayFilter
         );
         meetingPromises.push(aaMeetings);
       }
@@ -78,14 +87,15 @@ export const findMeetings = functions.https.onCall(async (request) => {
         const naMeetings = getNarcoticsAnoymousMeetings(
           meetingInput.filters.location,
           meetingInput.criteria,
-          meetingInput.filters.day
+          dayFilter // Pass day filter (already accepted)
         );
         meetingPromises.push(naMeetings);
       }
       if (meetingInput.filters.type === "Custom") {
         const customMeetings = getCustomMeetings(
           meetingInput.filters.location,
-          meetingInput.criteria
+          meetingInput.criteria,
+          dayFilter
         );
         meetingPromises.push(customMeetings);
       }
@@ -93,7 +103,7 @@ export const findMeetings = functions.https.onCall(async (request) => {
       const all12StepMeetings = getAll12StepMeetings(
         meetingInput.filters.location,
         meetingInput.criteria,
-        meetingInput.filters.day
+        dayFilter // Pass day filter
       );
       meetingPromises.push(all12StepMeetings);
     } else {
@@ -1149,4 +1159,395 @@ export const sendMentionNotifications = functions.https.onCall(
   }
 );
 
-// ... other functions ...
+/**
+ * Combines a specific date with a time string (HH:MM) and timezone
+ * to create an accurate Firestore Timestamp.
+ *
+ * @param date The target date (YYYY-MM-DD or Date object)
+ * @param time The time string (e.g., "19:00")
+ * @param timezone The IANA timezone string (e.g., "America/New_York")
+ * @returns Firestore Timestamp or null if inputs are invalid
+ */
+function createMeetingTimestamp(
+  date: Date | string,
+  time: string,
+  timezone: string
+): AdminTimestamp | null {
+  try {
+    if (!moment.tz.zone(timezone)) {
+      functions.logger.warn(
+        `Invalid timezone provided: ${timezone}. Falling back to UTC.`
+      );
+      timezone = "UTC";
+    }
+    // Use moment(...) directly if default import works
+    const dateString =
+      typeof date === "string" ? date : moment(date).format("YYYY-MM-DD");
+    const dateTimeString = `${dateString} ${time}`;
+    // Use moment.tz if default works, or stick to moment.tz if using namespaced import
+    const meetingMoment = moment.tz(
+      dateTimeString,
+      "YYYY-MM-DD HH:mm",
+      timezone
+    );
+
+    if (!meetingMoment.isValid()) {
+      functions.logger.error(
+        `Failed to parse combined date/time: ${dateTimeString} in timezone ${timezone}`
+      );
+      return null;
+    }
+    return AdminTimestamp.fromDate(meetingMoment.toDate());
+  } catch (error) {
+    functions.logger.error(
+      `Error creating meeting timestamp for ${date} ${time} [${timezone}]:`,
+      error
+    );
+    return null;
+  }
+}
+
+/**
+ * Helper function to generate meeting instances for a single meeting template
+ * within a given date range.
+ * Returns the number of instances created.
+ */
+async function generateInstancesForMeeting(
+  meetingId: string,
+  meetingTemplate: MeetingDocument, // Use the local type with any for timestamps
+  startDate: moment.Moment, // Start date (moment object, UTC)
+  endDate: moment.Moment, // End date (moment object, UTC)
+  groupTimezone: string,
+  db: admin.firestore.Firestore // Pass Firestore instance
+): Promise<number> {
+  const daysOfWeek = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ];
+  const templateDayIndex = daysOfWeek.indexOf(
+    (meetingTemplate.day || "").toLowerCase()
+  );
+  const templateTime = meetingTemplate.time;
+  const templateUpdatedAt: AdminTimestamp =
+    meetingTemplate.updatedAt || admin.firestore.Timestamp.now();
+  const groupId = meetingTemplate.groupId; // Get groupId from template
+
+  if (templateDayIndex === -1 || !templateTime || !groupId) {
+    functions.logger.warn(
+      `Cannot generate instances for meeting ${meetingId}: Invalid day, time, or missing groupId.`
+    );
+    return 0;
+  }
+
+  let batch = db.batch();
+  let operationsInBatch = 0;
+  let createdCount = 0;
+  const BATCH_LIMIT = 450;
+  const generationPromises: Promise<any>[] = [];
+
+  // Calculate dates within the range matching the template day
+  let currentDate = startDate.clone(); // Clone to avoid modifying original
+  while (currentDate.isSameOrBefore(endDate)) {
+    if (currentDate.day() === templateDayIndex) {
+      const scheduledAtTimestamp = createMeetingTimestamp(
+        currentDate.toDate(),
+        templateTime,
+        groupTimezone
+      );
+
+      if (scheduledAtTimestamp) {
+        // Check if instance already exists for this exact time
+        const instanceQuery = db
+          .collection("meetingInstances")
+          .where("meetingId", "==", meetingId)
+          .where("scheduledAt", "==", scheduledAtTimestamp)
+          .limit(1);
+        const existingInstance = await instanceQuery.get();
+
+        if (existingInstance.empty) {
+          const instanceRef = db.collection("meetingInstances").doc();
+          const instanceData: MeetingInstanceDocument = {
+            meetingId: meetingId,
+            groupId: groupId,
+            scheduledAt: scheduledAtTimestamp,
+            templateUpdatedAt: templateUpdatedAt,
+            name: meetingTemplate.name,
+            type: meetingTemplate.type,
+            format: meetingTemplate.format ?? null,
+            location: meetingTemplate.location ?? null,
+            address: meetingTemplate.address ?? null,
+            city: meetingTemplate.city ?? null,
+            state: meetingTemplate.state ?? null,
+            zip: meetingTemplate.zip ?? null,
+            lat: meetingTemplate.lat ?? null,
+            lng: meetingTemplate.lng ?? null,
+            locationName: meetingTemplate.locationName ?? null,
+            isOnline: meetingTemplate.isOnline ?? false,
+            link: meetingTemplate.onlineLink ?? null,
+            onlineNotes: meetingTemplate.onlineNotes ?? null,
+            isCancelled: false,
+            instanceNotice: null,
+          };
+          batch.set(instanceRef, instanceData);
+          operationsInBatch++;
+          createdCount++;
+
+          if (operationsInBatch >= BATCH_LIMIT) {
+            generationPromises.push(batch.commit());
+            batch = db.batch();
+            operationsInBatch = 0;
+          }
+        }
+      }
+    }
+    currentDate.add(1, "day"); // Move to the next day
+  }
+
+  if (operationsInBatch > 0) {
+    generationPromises.push(batch.commit());
+  }
+
+  await Promise.all(generationPromises);
+  functions.logger.info(
+    `Generated ${createdCount} instances for meeting ${meetingId} between ${startDate.format(
+      "YYYY-MM-DD"
+    )} and ${endDate.format("YYYY-MM-DD")}.`
+  );
+  return createdCount;
+}
+
+/**
+ * Scheduled function to generate meeting instances for the upcoming week.
+ */
+// Correct scheduled function syntax using v1 for broader compatibility or ensure v2 setup
+export const generateWeeklyMeetingInstances = functionsV1.pubsub
+  .schedule("every sunday 00:00")
+  .timeZone("UTC")
+  .onRun(async (context) => {
+    functions.logger.info("Starting weekly meeting instance generation...");
+    const db = admin.firestore(); // Get Firestore instance
+    const today = moment.utc();
+    const nextWeekEnd = moment.utc().add(7, "days").endOf("day");
+
+    try {
+      const groupsSnapshot = await db.collection("groups").get();
+      let totalInstancesCreated = 0;
+      const groupPromises: Promise<void>[] = [];
+
+      functions.logger.info(`Processing ${groupsSnapshot.size} groups.`);
+
+      groupsSnapshot.forEach((groupDoc) => {
+        const groupProcess = async () => {
+          const groupId = groupDoc.id;
+          const groupData = groupDoc.data();
+          const groupTimezone = groupData?.timezone || "UTC";
+
+          const meetingsSnapshot = await db
+            .collection("meetings")
+            .where("groupId", "==", groupId)
+            .get();
+
+          if (meetingsSnapshot.empty) return;
+
+          for (const meetingDoc of meetingsSnapshot.docs) {
+            try {
+              const count = await generateInstancesForMeeting(
+                meetingDoc.id,
+                meetingDoc.data() as MeetingDocument,
+                today, // Generate starting from today
+                nextWeekEnd, // Generate for the next week
+                groupTimezone,
+                db
+              );
+              totalInstancesCreated += count;
+            } catch (meetingError) {
+              functions.logger.error(
+                `Error generating instances for meeting ${meetingDoc.id}:`,
+                meetingError
+              );
+            }
+          }
+        };
+        groupPromises.push(groupProcess());
+      });
+
+      await Promise.all(groupPromises);
+      functions.logger.info(
+        `Weekly meeting instance generation finished. Total instances created: ${totalInstancesCreated}.`
+      );
+      return null;
+    } catch (error) {
+      functions.logger.error(
+        "Error in generateWeeklyMeetingInstances job:",
+        error
+      );
+      return null;
+    }
+  });
+
+/**
+ * Triggered when a Meeting template document is updated.
+ */
+export const updateFutureMeetingInstances = functionsV1.firestore
+  .document("meetings/{meetingId}")
+  .onUpdate(async (change, context) => {
+    const meetingId = context.params.meetingId;
+    const newData = change.after.data() as MeetingDocument | undefined;
+    const previousData = change.before.data() as MeetingDocument | undefined;
+    const db = admin.firestore(); // Get Firestore instance
+
+    if (!newData || !newData.updatedAt || !newData.groupId) {
+      functions.logger.error(`Missing data for updated meeting ${meetingId}`);
+      return null;
+    }
+
+    const newTs = newData.updatedAt;
+    const prevTs = previousData?.updatedAt;
+
+    if (
+      newTs &&
+      prevTs &&
+      typeof newTs.isEqual === "function" &&
+      newTs.isEqual(prevTs)
+    ) {
+      functions.logger.info(
+        `Meeting ${meetingId} timestamp unchanged. No propagation needed.`
+      );
+      return null;
+    }
+
+    // Check if day or time changed
+    const dayChanged = newData.day !== previousData?.day;
+    const timeChanged = newData.time !== previousData?.time;
+    const shouldRegenerate = dayChanged || timeChanged;
+
+    const now = admin.firestore.Timestamp.now();
+    const futureInstancesQuery = db
+      .collection("meetingInstances")
+      .where("meetingId", "==", meetingId)
+      .where("scheduledAt", ">=", now);
+
+    try {
+      if (shouldRegenerate) {
+        functions.logger.info(
+          `Regenerating future instances for meeting ${meetingId} due to day/time change.`
+        );
+
+        // 1. Delete existing future instances
+        const snapshotToDelete = await futureInstancesQuery.get();
+        if (!snapshotToDelete.empty) {
+          let deleteBatch = db.batch();
+          let deleteCount = 0;
+          snapshotToDelete.forEach((doc) => {
+            deleteBatch.delete(doc.ref);
+            deleteCount++;
+            if (deleteCount % 450 === 0) {
+              // Commit in batches
+              deleteBatch
+                .commit()
+                .catch((err) =>
+                  functions.logger.error("Batch delete error:", err)
+                );
+              deleteBatch = db.batch();
+            }
+          });
+          await deleteBatch.commit();
+          functions.logger.info(
+            `Deleted ${deleteCount} old future instances for meeting ${meetingId}.`
+          );
+        }
+
+        // 2. Generate new instances for the next ~4 weeks
+        const groupDoc = await db
+          .collection("groups")
+          .doc(newData.groupId)
+          .get();
+        const groupTimezone = groupDoc.data()?.timezone || "UTC";
+        const startDate = moment.utc(); // Start from today
+        const endDate = moment.utc().add(4, "weeks"); // Regenerate for 4 weeks
+
+        await generateInstancesForMeeting(
+          meetingId,
+          newData,
+          startDate,
+          endDate,
+          groupTimezone,
+          db
+        );
+      } else {
+        // Only day/time didn't change, so just update other fields
+        functions.logger.info(
+          `Propagating non-schedule changes to future instances for meeting ${meetingId}.`
+        );
+        const instancesSnapshot = await futureInstancesQuery.get();
+        if (instancesSnapshot.empty) return null;
+
+        let updateBatch = db.batch();
+        let updatedCount = 0;
+        const BATCH_LIMIT = 450;
+
+        instancesSnapshot.forEach((doc) => {
+          // Prepare update payload excluding schedule and instance-specific fields
+          const updatePayload: Partial<MeetingInstanceDocument> = {
+            name: newData.name,
+            type: newData.type,
+            format: newData.format ?? null,
+            location: newData.location ?? null,
+            address: newData.address ?? null,
+            city: newData.city ?? null,
+            state: newData.state ?? null,
+            zip: newData.zip ?? null,
+            lat: newData.lat ?? null,
+            lng: newData.lng ?? null,
+            locationName: newData.locationName ?? null,
+            isOnline: newData.isOnline ?? false,
+            link: newData.onlineLink ?? null,
+            onlineNotes: newData.onlineNotes ?? null,
+            templateUpdatedAt: newData.updatedAt, // Update template timestamp
+          };
+
+          Object.keys(updatePayload).forEach(
+            (key) =>
+              (updatePayload as any)[key] === undefined &&
+              delete (updatePayload as any)[key]
+          );
+
+          if (Object.keys(updatePayload).length > 0) {
+            // Only update if there are changes
+            updateBatch.update(doc.ref, updatePayload);
+            updatedCount++;
+            if (updatedCount % BATCH_LIMIT === 0) {
+              updateBatch
+                .commit()
+                .catch((err) =>
+                  functions.logger.error("Batch update error:", err)
+                );
+              updateBatch = db.batch();
+            }
+          }
+        });
+
+        if (updatedCount % BATCH_LIMIT !== 0 && updatedCount > 0) {
+          // Commit remaining updates
+          await updateBatch.commit();
+        }
+        functions.logger.info(
+          `Successfully propagated updates to ${updatedCount} future instances for meeting ${meetingId}.`
+        );
+      }
+      return { success: true };
+    } catch (error) {
+      functions.logger.error(
+        `Error processing update trigger for meeting ${meetingId}:`,
+        error
+      );
+      return null;
+    }
+  });
+
+// ... rest of the file ...

@@ -677,7 +677,7 @@ const ProfileScreen: React.FC = () => {
                     Track milestones and celebrate your progress
                   </Text>
                 </View>
-                <Icon name="chevron-right" size={24} color="#2196F3" />
+                <Icon name="arrow-forward-outline" size={24} color="#2196F3" />
               </View>
             </TouchableOpacity>
           )}

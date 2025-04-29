@@ -13,14 +13,15 @@ import {
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp} from '@react-navigation/native';
 import {GroupStackParamList} from '../../types/navigation';
-import {Meeting} from '../../types';
+import {Meeting, MeetingInstance} from '../../types';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
-  fetchGroupMeetings,
-  selectGroupMeetings,
+  fetchUpcomingMeetingInstances,
+  selectUpcomingMeetingInstances,
   selectMeetingsStatus,
   selectMeetingsError,
 } from '../../store/slices/meetingsSlice';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 type GroupScheduleScreenProps = {
   navigation: StackNavigationProp<GroupStackParamList, 'GroupSchedule'>;
@@ -35,86 +36,101 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
   const dispatch = useAppDispatch();
 
   // Get data from Redux store
-  const meetings = useAppSelector(state => selectGroupMeetings(state, groupId));
+  const meetingInstances = useAppSelector(state =>
+    selectUpcomingMeetingInstances(state, groupId),
+  );
   const status = useAppSelector(selectMeetingsStatus);
   const error = useAppSelector(selectMeetingsError);
   const loading = status === 'loading';
 
   useEffect(() => {
-    // Dispatch the action to fetch meetings for this group
-    dispatch(fetchGroupMeetings(groupId));
+    // Dispatch the action to fetch meeting instances
+    dispatch(fetchUpcomingMeetingInstances(groupId));
   }, [groupId, dispatch]);
 
-  // Helper function to sort meetings by day and time
-  const sortMeetingsByDayAndTime = (meetingsList: Meeting[]): Meeting[] => {
-    const dayOrder = [
-      'sunday',
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
-    ];
-
-    return [...meetingsList].sort((a, b) => {
-      // First sort by day
-      const dayA = dayOrder.indexOf((a.day || '').toLowerCase());
-      const dayB = dayOrder.indexOf((b.day || '').toLowerCase());
-
-      if (dayA !== dayB) {
-        return dayA - dayB;
-      }
-
-      // If same day, sort by time
-      return (a.time || '').localeCompare(b.time || '');
+  // Format date and time from the MeetingInstance
+  const formatDateTime = (date?: Date): string => {
+    if (!date) return 'TBD';
+    return date.toLocaleString('en-US', {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
     });
   };
 
-  // Get sorted meetings
-  const sortedMeetings = sortMeetingsByDayAndTime(meetings);
-
-  // Format time for display (e.g., "7:00 PM")
-  const formatTime = (time?: string): string => {
-    return time || 'TBD'; // Return 'TBD' if time is undefined
-  };
-
-  // Format day with first letter capitalized
-  const formatDay = (day?: string): string => {
-    if (!day) return 'TBD';
-    return day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
-  };
-
-  // Render a meeting item
-  const renderMeetingItem = ({item}: {item: Meeting}) => (
-    <View style={styles.meetingCard}>
+  // Render a meeting instance item
+  const renderMeetingInstanceItem = ({item}: {item: MeetingInstance}) => (
+    <View
+      style={[styles.meetingCard, item.isCancelled && styles.cancelledCard]}>
       <View style={styles.meetingHeader}>
         <Text style={styles.meetingName}>{item.name}</Text>
-        <View style={styles.meetingBadge}>
-          <Text style={styles.meetingBadgeText}>
-            {item.online ? 'Online' : 'In-Person'}
+        {item.isCancelled ? (
+          <View style={[styles.meetingBadge, styles.cancelledBadge]}>
+            <Text style={[styles.meetingBadgeText, styles.cancelledBadgeText]}>
+              Cancelled
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={[styles.meetingBadge, item.isOnline && styles.onlineBadge]}>
+            <Text
+              style={[
+                styles.meetingBadgeText,
+                item.isOnline && styles.onlineBadgeText,
+              ]}>
+              {item.isOnline ? 'Online' : 'In-Person'}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {(item.instanceNotice || item.temporaryNotice) && !item.isCancelled && (
+        <View style={styles.noticeContainer}>
+          <Icon name="information-outline" size={16} color="#FFA000" />
+          <Text style={styles.noticeText}>
+            {item.instanceNotice || item.temporaryNotice}
           </Text>
         </View>
-      </View>
+      )}
+
+      {item.isCancelled && item.instanceNotice && (
+        <View style={styles.noticeContainer}>
+          <Icon name="cancel" size={16} color="#D32F2F" />
+          <Text style={[styles.noticeText, styles.cancelledNoticeText]}>
+            {item.instanceNotice}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.meetingDetails}>
         <View style={styles.meetingDetailRow}>
-          <Text style={styles.meetingDetailLabel}>Day:</Text>
-          <Text style={styles.meetingDetailValue}>{formatDay(item.day)}</Text>
+          <Icon
+            name="calendar-clock"
+            size={16}
+            color="#757575"
+            style={styles.detailIcon}
+          />
+          <Text style={styles.meetingDetailValue}>
+            {formatDateTime(item.scheduledAt)}
+          </Text>
         </View>
         <View style={styles.meetingDetailRow}>
-          <Text style={styles.meetingDetailLabel}>Time:</Text>
-          <Text style={styles.meetingDetailValue}>{formatTime(item.time)}</Text>
-        </View>
-        <View style={styles.meetingDetailRow}>
-          <Text style={styles.meetingDetailLabel}>Format:</Text>
+          <Icon
+            name="tag-outline"
+            size={16}
+            color="#757575"
+            style={styles.detailIcon}
+          />
           <Text style={styles.meetingDetailValue}>
             {item.format || 'Standard'}
           </Text>
         </View>
       </View>
 
-      {item.online && item.link && (
+      {!item.isCancelled && item.isOnline && item.link && (
         <TouchableOpacity
           style={styles.joinButton}
           onPress={() => {
@@ -128,16 +144,28 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
         </TouchableOpacity>
       )}
 
-      {!item.online && item.address && (
-        <View style={styles.locationContainer}>
-          <Text style={styles.locationLabel}>Location:</Text>
-          <Text style={styles.locationText}>
-            {item.address}
-            {item.city && item.state && `, ${item.city}, ${item.state}`}
-            {item.zip && ` ${item.zip}`}
-          </Text>
-        </View>
-      )}
+      {!item.isCancelled &&
+        !item.isOnline &&
+        (item.address || item.locationName) && (
+          <View style={styles.locationContainer}>
+            <Icon
+              name="map-marker-outline"
+              size={16}
+              color="#757575"
+              style={styles.detailIcon}
+            />
+            <View style={styles.locationDetails}>
+              {item.locationName && (
+                <Text style={styles.locationNameText}>{item.locationName}</Text>
+              )}
+              <Text style={styles.locationText}>
+                {item.address}
+                {item.city && item.state && `, ${item.city}, ${item.state}`}
+                {item.zip && ` ${item.zip}`}
+              </Text>
+            </View>
+          </View>
+        )}
     </View>
   );
 
@@ -153,11 +181,11 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity
             style={styles.retryButton}
-            onPress={() => dispatch(fetchGroupMeetings(groupId))}>
+            onPress={() => dispatch(fetchUpcomingMeetingInstances(groupId))}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      ) : sortedMeetings.length === 0 ? (
+      ) : meetingInstances.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
             No meetings scheduled for this group.
@@ -165,11 +193,9 @@ const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
         </View>
       ) : (
         <FlatList
-          data={sortedMeetings}
-          renderItem={renderMeetingItem}
-          keyExtractor={item =>
-            item.id || `meeting-${item.name}-${item.day}-${item.time}`
-          }
+          data={meetingInstances}
+          renderItem={renderMeetingInstanceItem}
+          keyExtractor={item => item.instanceId}
           contentContainerStyle={styles.meetingsList}
         />
       )}
@@ -259,6 +285,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  cancelledCard: {
+    backgroundColor: '#fce8e6',
+    borderColor: '#ea4335',
+    borderWidth: 1,
+  },
   meetingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -270,60 +301,100 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#212121',
     flex: 1,
+    marginRight: 8,
   },
   meetingBadge: {
     backgroundColor: '#E3F2FD',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 12,
   },
   meetingBadgeText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#2196F3',
+    color: '#1E88E5',
+  },
+  onlineBadge: {
+    backgroundColor: '#E8F5E9',
+  },
+  onlineBadgeText: {
+    color: '#388E3C',
+  },
+  cancelledBadge: {
+    backgroundColor: '#FAD2CF',
+  },
+  cancelledBadgeText: {
+    color: '#D32F2F',
+  },
+  noticeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+  },
+  noticeText: {
+    marginLeft: 8,
+    fontSize: 13,
+    color: '#FFA000',
+    flex: 1,
+  },
+  cancelledNoticeText: {
+    color: '#D32F2F',
+    fontWeight: '500',
   },
   meetingDetails: {
     marginBottom: 12,
   },
   meetingDetailRow: {
     flexDirection: 'row',
-    marginBottom: 4,
+    alignItems: 'center',
+    marginBottom: 6,
   },
-  meetingDetailLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#757575',
-    width: 60,
+  detailIcon: {
+    marginRight: 8,
   },
   meetingDetailValue: {
     fontSize: 14,
-    color: '#212121',
+    color: '#424242',
     flex: 1,
   },
   joinButton: {
     backgroundColor: '#2196F3',
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 4,
+    borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
   },
   joinButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: 14,
   },
   locationContainer: {
-    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
+    paddingTop: 12,
   },
-  locationLabel: {
+  locationDetails: {
+    flex: 1,
+  },
+  locationNameText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#757575',
+    color: '#212121',
     marginBottom: 2,
   },
   locationText: {
     fontSize: 14,
-    color: '#212121',
+    color: '#424242',
+    lineHeight: 20,
   },
 });
 

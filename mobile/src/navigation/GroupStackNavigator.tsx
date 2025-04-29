@@ -19,6 +19,7 @@ import GroupScheduleScreen from '../screens/homegroup/GroupScheduleScreen';
 import AddTransactionScreen from '../screens/homegroup/AddTransactionScreen';
 import GroupChatScreen from '../screens/homegroup/GroupChatScreen';
 import GroupChatMediaPickerScreen from '../screens/homegroup/GroupChatMediaPickerScreen';
+import GroupServicePositionsScreen from '../screens/homegroup/GroupServicePositionsScreen';
 // import GroupEventDetailsScreen from '../screens/groups/GroupEventDetailsScreen';
 // import GroupBusinessMeetingScreen from '../screens/groups/GroupBusinessMeetingScreen';
 
@@ -145,6 +146,13 @@ const GroupStackNavigator: React.FC = () => {
           title: 'Choose Media',
           presentation: 'modal',
         }}
+      />
+      <Stack.Screen
+        name="GroupServicePositions"
+        component={GroupServicePositionsScreen}
+        options={({route}) => ({
+          title: `${route.params.groupName} - Service`,
+        })}
       />
     </Stack.Navigator>
   );

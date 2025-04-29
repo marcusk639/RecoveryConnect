@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   SafeAreaView,
   ScrollView,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import {useRoute, RouteProp} from '@react-navigation/native';
 import {useNavigation} from '@react-navigation/native';
@@ -25,6 +27,14 @@ import {
   selectTransactionsStatus,
   selectTransactionsError,
 } from '../../store/slices/transactionsSlice';
+import {
+  TransactionType,
+  IncomeCategory,
+  ExpenseCategory,
+} from '../../types/domain/treasury';
+import {Picker} from '@react-native-picker/picker';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import {fetchTreasuryStats} from '../../store/slices/treasurySlice';
 
 type AddTransactionScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -47,160 +57,236 @@ const AddTransactionScreen: React.FC = () => {
   const error = useAppSelector(selectTransactionsError);
   const isLoading = status === 'loading';
 
-  const [transactionType, setTransactionType] = useState<'income' | 'expense'>(
-    'income',
-  );
+  // Form State
+  const [transactionType, setTransactionType] =
+    useState<TransactionType>('income');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState<IncomeCategory | ExpenseCategory>(
+    '7th Tradition',
+  );
   const [description, setDescription] = useState('');
+  const [transactionDate, setTransactionDate] = useState(new Date());
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSave = async () => {
-    if (!amount || !category || !description) {
-      Alert.alert('Error', 'Please fill in all fields');
+  // Define categories based on type
+  const incomeCategories: IncomeCategory[] = [
+    '7th Tradition',
+    'Literature Sales',
+    'Event Income',
+    'Group Contributions',
+    'Other Income',
+  ];
+  const expenseCategories: ExpenseCategory[] = [
+    'Rent',
+    'Literature',
+    'Refreshments',
+    'Events',
+    'Contributions to Service Bodies',
+    'Supplies',
+    'Printing',
+    'Insurance',
+    'Other Expenses',
+  ];
+
+  const handleTypeChange = (type: TransactionType) => {
+    setTransactionType(type);
+    // Reset category when type changes
+    setCategory(type === 'income' ? incomeCategories[0] : expenseCategories[0]);
+  };
+
+  const showDatePicker = () => {
+    setDatePickerVisibility(true);
+  };
+
+  const hideDatePicker = () => {
+    setDatePickerVisibility(false);
+  };
+
+  const handleConfirmDate = (date: Date) => {
+    setTransactionDate(date);
+    hideDatePicker();
+  };
+
+  const handleSaveTransaction = async () => {
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid positive amount.');
+      return;
+    }
+    if (!category) {
+      Alert.alert('Missing Category', 'Please select a category.');
       return;
     }
 
-    const numericAmount = parseFloat(amount);
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
-      return;
-    }
-
-    const currentUser = auth().currentUser;
-    if (!currentUser) {
-      Alert.alert('Error', 'You must be logged in to add transactions');
-      return;
-    }
-
-    // Create the transaction document
-    const transactionId = firestore().collection('groups').doc().id;
-    const transaction: Transaction = {
-      id: transactionId,
-      type: transactionType,
-      amount: numericAmount,
-      category,
-      description,
-      createdAt: new Date(),
-      createdBy: currentUser.uid,
-      groupId: groupId,
-    };
-
-    // Dispatch the create transaction action
+    setLoading(true);
     try {
-      await dispatch(addTransaction(transaction)).unwrap();
-      Alert.alert('Success', 'Transaction added successfully');
+      await dispatch(
+        addTransaction({
+          groupId,
+          type: transactionType,
+          amount: parsedAmount,
+          category,
+          description: description.trim(),
+        }),
+      ).unwrap();
+
+      // Refresh treasury stats after adding
+      dispatch(fetchTreasuryStats(groupId));
+
+      Alert.alert('Success', 'Transaction added successfully.');
       navigation.goBack();
-    } catch (err) {
-      Alert.alert('Error', error || 'Failed to add transaction');
+    } catch (error: any) {
+      console.error('Error saving transaction:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to save transaction. Please try again.',
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
+  const currentCategories =
+    transactionType === 'income' ? incomeCategories : expenseCategories;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Add Transaction</Text>
-          <Text style={styles.subtitle}>{groupName}</Text>
-        </View>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{flex: 1}}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Add Transaction</Text>
+            <Text style={styles.subtitle}>{groupName}</Text>
+          </View>
 
-        <View style={styles.content}>
-          <View style={styles.typeSelector}>
-            <TouchableOpacity
-              style={[
-                styles.typeButton,
-                transactionType === 'income' && styles.typeButtonActive,
-              ]}
-              onPress={() => setTransactionType('income')}>
-              <Text
+          <View style={styles.formContainer}>
+            {/* Transaction Type Toggle */}
+            <View style={styles.typeSelectorContainer}>
+              <TouchableOpacity
                 style={[
-                  styles.typeButtonText,
-                  transactionType === 'income' && styles.typeButtonTextActive,
-                ]}>
-                Income
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.typeButton,
-                transactionType === 'expense' && styles.typeButtonActive,
-              ]}
-              onPress={() => setTransactionType('expense')}>
-              <Text
+                  styles.typeButton,
+                  transactionType === 'income' && styles.activeTypeButton,
+                ]}
+                onPress={() => handleTypeChange('income')}>
+                <Text
+                  style={[
+                    styles.typeButtonText,
+                    transactionType === 'income' && styles.activeTypeText,
+                  ]}>
+                  Income
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[
-                  styles.typeButtonText,
-                  transactionType === 'expense' && styles.typeButtonTextActive,
-                ]}>
-                Expense
-              </Text>
+                  styles.typeButton,
+                  transactionType === 'expense' && styles.activeTypeButton,
+                ]}
+                onPress={() => handleTypeChange('expense')}>
+                <Text
+                  style={[
+                    styles.typeButtonText,
+                    transactionType === 'expense' && styles.activeTypeText,
+                  ]}>
+                  Expense
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Amount */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Amount ($)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Category */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Category</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={category}
+                  onValueChange={itemValue => setCategory(itemValue as any)}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}>
+                  {currentCategories.map(cat => (
+                    <Picker.Item key={cat} label={cat} value={cat} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+
+            {/* Description */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Description (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.multilineInput]}
+                placeholder="e.g., 7th Tradition, Rent for Nov, Coffee supplies"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+              />
+            </View>
+
+            {/* Date */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Date</Text>
+              <TouchableOpacity
+                onPress={showDatePicker}
+                style={styles.dateDisplay}>
+                <Text style={styles.dateDisplayText}>
+                  {transactionDate.toLocaleDateString()}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Save Button */}
+            <TouchableOpacity
+              style={[styles.saveButton, loading && styles.disabledButton]}
+              onPress={handleSaveTransaction}
+              disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Save Transaction</Text>
+              )}
             </TouchableOpacity>
           </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Amount</Text>
-            <TextInput
-              style={styles.input}
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-              placeholderTextColor="#9E9E9E"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Category</Text>
-            <TextInput
-              style={styles.input}
-              value={category}
-              onChangeText={setCategory}
-              placeholder="e.g., 7th Tradition, Rent, Literature"
-              placeholderTextColor="#9E9E9E"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Description</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Brief description of the transaction"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              placeholderTextColor="#9E9E9E"
-            />
-          </View>
-
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSave}
-            disabled={isLoading}>
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.saveButtonText}>Save Transaction</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        </KeyboardAvoidingView>
       </ScrollView>
+
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        date={transactionDate} // Start with current selected date
+        onConfirm={handleConfirmDate}
+        onCancel={hideDatePicker}
+        maximumDate={new Date()} // Don't allow future dates
+      />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  scrollView: {
+  container: {
     flex: 1,
   },
   header: {
-    padding: 16,
+    padding: 20,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
+    alignItems: 'center',
   },
   title: {
     fontSize: 20,
@@ -212,24 +298,22 @@ const styles = StyleSheet.create({
     color: '#757575',
     marginTop: 4,
   },
-  content: {
-    padding: 16,
+  formContainer: {
+    padding: 20,
   },
-  typeSelector: {
+  typeSelectorContainer: {
     flexDirection: 'row',
-    marginBottom: 24,
+    marginBottom: 20,
+    backgroundColor: '#EEEEEE',
     borderRadius: 8,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   typeButton: {
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
   },
-  typeButtonActive: {
+  activeTypeButton: {
     backgroundColor: '#2196F3',
   },
   typeButtonText: {
@@ -237,42 +321,73 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#757575',
   },
-  typeButtonTextActive: {
+  activeTypeText: {
     color: '#FFFFFF',
   },
-  inputContainer: {
-    marginBottom: 16,
+  inputGroup: {
+    marginBottom: 20,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333333',
+    fontWeight: '500',
+    color: '#424242',
     marginBottom: 8,
   },
   input: {
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E0E0E0',
     borderRadius: 8,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8, // Adjust padding for platform
     fontSize: 16,
-    backgroundColor: '#FFFFFF',
     color: '#212121',
   },
-  textArea: {
+  multilineInput: {
     minHeight: 80,
     textAlignVertical: 'top',
   },
-  saveButton: {
-    backgroundColor: '#2196F3',
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
     borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden', // Needed for border radius on Android
+  },
+  picker: {
+    height: Platform.OS === 'ios' ? 120 : 50, // iOS picker needs more height
+    width: '100%',
+  },
+  pickerItem: {
+    height: 120, // Required for iOS item visibility
+    fontSize: 16,
+  },
+  dateDisplay: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  dateDisplayText: {
+    fontSize: 16,
+    color: '#212121',
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
     paddingVertical: 14,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
   },
   saveButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
 });
 

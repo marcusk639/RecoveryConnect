@@ -237,10 +237,6 @@ const GroupTreasuryScreen: React.FC = () => {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }>
-        <View style={styles.header}>
-          <Text style={styles.title}>{groupName} Treasury</Text>
-        </View>
-
         {renderTreasurySummary()}
 
         {(isAdmin || isTreasurer) && (

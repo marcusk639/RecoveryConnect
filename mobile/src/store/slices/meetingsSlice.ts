@@ -1,38 +1,49 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
 import {RootState} from '../index';
 import functions from '@react-native-firebase/functions';
+import firestore, {
+  FirebaseFirestoreTypes,
+} from '@react-native-firebase/firestore'; // Import firestore and Timestamp type
 import * as hashUtils from '../../utils/hashUtils';
 import {
   Meeting,
+  MeetingInstance, // Import MeetingInstance
   MeetingSearchInput,
   MeetingFilters,
   Location,
   MeetingSearchCriteria,
 } from '../../types';
-import {MeetingModel} from '../../models';
+import {MeetingModel} from '../../models'; // Keep for potential template interactions
 import {createSelector} from 'reselect';
+import {COLLECTION_PATHS} from '../../types/schema'; // Import paths
 
 // Define state type
 interface MeetingsState {
-  items: Record<string, Meeting>; // Store meetings by ID
-  groupMeetingIds: Record<string, string[]>; // Map groupId to array of meeting IDs
-  filteredIds: string[]; // IDs for search results (if applicable)
-  favoriteIds: string[]; // IDs of favorite meetings
+  items: Record<string, Meeting>; // Keep for meeting templates if needed elsewhere
+  instanceItems: Record<string, MeetingInstance>; // NEW: Store instances by instanceId
+  groupMeetingIds: Record<string, string[]>; // Keep for templates
+  groupMeetingInstanceIds: Record<string, string[]>; // NEW: Map groupId to array of instance IDs
+  filteredIds: string[];
+  favoriteIds: string[];
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
-  lastFetchedGroup: Record<string, number>; // Track last fetch time per group
+  lastFetchedGroup: Record<string, number>; // Timestamp for template fetches
+  lastFetchedGroupInstances: Record<string, number>; // NEW: Timestamp for instance fetches
   userLocation: Location | null;
 }
 
-// Initial state - adjust to new structure
+// Initial state
 const initialState: MeetingsState = {
   items: {},
+  instanceItems: {},
   groupMeetingIds: {},
+  groupMeetingInstanceIds: {},
   filteredIds: [],
   favoriteIds: [],
   status: 'idle',
   error: null,
   lastFetchedGroup: {},
+  lastFetchedGroupInstances: {},
   userLocation: null,
 };
 
@@ -44,6 +55,36 @@ const isDataStale = (lastFetched: number | null): boolean => {
   if (!lastFetched) return true;
   return Date.now() - lastFetched > CACHE_TTL;
 };
+
+// --- Instance Helper ---
+// Function to convert Firestore Instance Doc to MeetingInstance Type
+function instanceFromFirestore(docId: string, data: any): MeetingInstance {
+  return {
+    instanceId: docId,
+    meetingId: data.meetingId,
+    groupId: data.groupId,
+    scheduledAt: data.scheduledAt.toDate(), // Convert Timestamp to Date
+    name: data.name,
+    type: data.type,
+    format: data.format,
+    location: data.location,
+    address: data.address,
+    city: data.city,
+    state: data.state,
+    zip: data.zip,
+    lat: data.lat,
+    lng: data.lng,
+    locationName: data.locationName,
+    isOnline: data.isOnline,
+    link: data.link,
+    onlineNotes: data.onlineNotes,
+    isCancelled: data.isCancelled ?? false,
+    instanceNotice: data.instanceNotice ?? null,
+    templateUpdatedAt: data.templateUpdatedAt.toDate(), // Convert Timestamp
+    day: data.day ?? '', // Add day, provide default
+    time: data.time ?? '', // Add time, provide default
+  };
+}
 
 // Async thunks
 export const setUserLocation = createAsyncThunk(
@@ -227,6 +268,68 @@ export const fetchFavoriteMeetings = createAsyncThunk(
     } catch (error: any) {
       console.error('Error fetching meetings:', error);
       return rejectWithValue(error.message || 'Failed to fetch meetings');
+    }
+  },
+);
+
+// Define fetchUpcomingMeetingInstances thunk
+export const fetchUpcomingMeetingInstances = createAsyncThunk<
+  {groupId: string; instances: MeetingInstance[]}, // Return type
+  string, // Argument is groupId
+  {state: RootState; rejectValue: string}
+>(
+  'meetings/fetchUpcomingInstances',
+  async (groupId, {getState, rejectWithValue}) => {
+    try {
+      // TODO: Add caching logic based on lastFetchedGroupInstances[groupId]
+      const instances = await MeetingModel.getUpcomingInstancesByGroupId(
+        groupId,
+      );
+
+      return {groupId, instances};
+    } catch (error: any) {
+      console.error('Error fetching meeting instances:', error);
+      return rejectWithValue(
+        error.message || 'Failed to fetch upcoming meetings',
+      );
+    }
+  },
+);
+
+// NEW: Thunk to update a single meeting instance (e.g., for chairperson)
+export const updateMeetingInstance = createAsyncThunk<
+  MeetingInstance, // Return updated instance
+  {instanceId: string; updateData: Partial<MeetingInstance>}, // Args
+  {rejectValue: string}
+>(
+  'meetings/updateInstance',
+  async ({instanceId, updateData}, {rejectWithValue}) => {
+    try {
+      // Note: This currently uses MeetingModel.update which operates on MEETING TEMPLATES.
+      // We need MeetingModel.updateInstanceChairperson or a similar method specifically for instances.
+      // For now, let's assume updateInstanceChairperson handles the specific update needed.
+      // We pass only the fields relevant to the chairperson update.
+      await MeetingModel.updateInstanceChairperson(
+        instanceId,
+        updateData.chairpersonId ?? null,
+        updateData.chairpersonName ?? null,
+      );
+
+      // Fetch the updated instance to return (or construct locally if preferred)
+      // This requires a getMeetingInstanceById method in MeetingModel
+      // For simplicity, construct optimistic update based on input:
+      const tempUpdatedInstance: Partial<MeetingInstance> = {
+        ...updateData, // Include whatever was passed in
+        // We don't have the full instance data here without another fetch
+      };
+
+      // WARNING: Returning partial data. Ideally, fetch the full updated doc.
+      return tempUpdatedInstance as MeetingInstance; // Cast needed due to missing fields
+    } catch (error: any) {
+      console.error('Error updating meeting instance:', error);
+      return rejectWithValue(
+        error.message || 'Failed to update meeting instance',
+      );
     }
   },
 );
@@ -431,6 +534,55 @@ const meetingsSlice = createSlice({
       .addCase(updateMeeting.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload as string;
+      })
+
+      // --- fetchUpcomingMeetingInstances ---
+      .addCase(fetchUpcomingMeetingInstances.pending, state => {
+        state.status = 'loading';
+      })
+      .addCase(fetchUpcomingMeetingInstances.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const {groupId, instances} = action.payload;
+        const instanceIds: string[] = [];
+        instances.forEach(instance => {
+          state.instanceItems[instance.instanceId] = instance; // Store by instanceId
+          instanceIds.push(instance.instanceId);
+        });
+        state.groupMeetingInstanceIds[groupId] = instanceIds; // Update instance ID mapping
+        state.lastFetchedGroupInstances[groupId] = Date.now(); // Update instance fetch time
+        state.error = null;
+      })
+      .addCase(fetchUpcomingMeetingInstances.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload as string;
+      })
+
+      // --- updateMeetingInstance ---
+      .addCase(updateMeetingInstance.pending, state => {
+        state.status = 'loading'; // Or a specific 'updating' status
+      })
+      .addCase(updateMeetingInstance.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const updatedInstance = action.payload;
+        if (
+          updatedInstance.instanceId &&
+          state.instanceItems[updatedInstance.instanceId]
+        ) {
+          // Merge the updates into the existing instance state
+          state.instanceItems[updatedInstance.instanceId] = {
+            ...state.instanceItems[updatedInstance.instanceId],
+            ...updatedInstance,
+          };
+        } else if (updatedInstance.instanceId) {
+          // If it wasn't in state before, add it (less likely scenario)
+          state.instanceItems[updatedInstance.instanceId] = updatedInstance;
+          // Also need to potentially add to groupMeetingInstanceIds if not present
+        }
+        state.error = null;
+      })
+      .addCase(updateMeetingInstance.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload as string;
       });
   },
 });
@@ -439,23 +591,25 @@ const meetingsSlice = createSlice({
 export const {clearError, filterMeetings} = meetingsSlice.actions;
 
 // Selectors
-export const selectAllMeetings = (state: RootState) => state.meetings.items;
-export const selectGroupMeetingIds = (state: RootState, groupId: string) =>
-  state.meetings.groupMeetingIds[groupId] || [];
+export const selectAllMeetingTemplates = (state: RootState) =>
+  state.meetings.items;
+export const selectAllMeetingInstances = (state: RootState) =>
+  state.meetings.instanceItems;
+export const selectGroupMeetingTemplateIds = (
+  state: RootState,
+  groupId: string,
+) => state.meetings.groupMeetingIds[groupId] || [];
+export const selectGroupMeetingInstanceIds = (
+  state: RootState,
+  groupId: string,
+) => state.meetings.groupMeetingInstanceIds[groupId] || [];
 
-export const selectGroupMeetings = createSelector(
-  [selectAllMeetings, selectGroupMeetingIds],
-  (allItems, groupIds) => {
-    return groupIds.map(id => allItems[id]).filter(Boolean); // Filter out undefined if an ID doesn't exist
-  },
-);
-
-const selectFilteredIds = (state: RootState) => state.meetings.filteredIds;
-
-export const selectFilteredMeetings = createSelector(
-  [selectAllMeetings, selectFilteredIds],
-  (allItems, filteredIds) => {
-    return filteredIds.map(id => allItems[id]).filter(Boolean); // Filter out undefined if an ID doesn't exist
+// Selector for upcoming meeting instances for a specific group
+export const selectUpcomingMeetingInstances = createSelector(
+  [selectAllMeetingInstances, selectGroupMeetingInstanceIds],
+  (allInstances, instanceIds) => {
+    // Map IDs to instances and filter out any potential undefined results
+    return instanceIds.map(id => allInstances[id]).filter(Boolean);
   },
 );
 
@@ -463,8 +617,18 @@ export const selectMeetingById = (state: RootState, meetingId: string) =>
   state.meetings.items[meetingId];
 export const selectMeetingsStatus = (state: RootState) => state.meetings.status;
 export const selectMeetingsError = (state: RootState) => state.meetings.error;
+export const selectFilteredMeetings = (state: RootState) =>
+  state.meetings.filteredIds.map(id => state.meetings.items[id]);
 
 export const selectUserLocation = (state: RootState) =>
   state.meetings.userLocation;
+export const selectGroupMeetings = (state: RootState, groupId: string) =>
+  state.meetings.items[groupId] || [];
+
+// NEW: Selector for a single meeting instance by ID
+export const selectMeetingInstanceById = (
+  state: RootState,
+  instanceId: string,
+) => state.meetings.instanceItems[instanceId];
 
 export default meetingsSlice.reducer;

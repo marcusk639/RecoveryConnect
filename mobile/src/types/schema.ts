@@ -143,6 +143,8 @@ export interface AnnouncementDocument {
   authorName: string; // Display name for efficiency
   expiresAt?: Timestamp;
   groupId: string; // Group ID that this announcement belongs to
+  userId: string;
+  memberId: string;
 }
 
 /**
@@ -272,19 +274,18 @@ export interface DecisionDocument {
 }
 
 /**
- * Service Position Document
+ * Service Position Document (Firestore Schema)
+ * Stored in subcollection: groups/{groupId}/servicePositions/{positionId}
  */
 export interface ServicePositionDocument {
-  id: string;
   groupId: string;
   name: string;
-  description: string;
-  commitmentLength: number; // in months
-  requirements?: string;
-  currentHolder?: string; // User ID
-  startDate?: Timestamp;
-  endDate?: Timestamp;
-  isFilled: boolean;
+  description?: string;
+  commitmentLength?: number | null; // months
+  currentHolderId?: string | null;
+  currentHolderName?: string | null;
+  termStartDate?: Timestamp | null;
+  termEndDate?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -398,23 +399,53 @@ export interface ChatMessageDocument {
 }
 
 /**
+ * Meeting Instance Document (Firestore Schema) - Add Chairperson
+ */
+export interface MeetingInstanceDocument {
+  meetingId: string;
+  groupId: string;
+  scheduledAt: Timestamp;
+  name: string;
+  type: string;
+  format?: string | null;
+  location?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  locationName?: string | null;
+  isOnline?: boolean;
+  link?: string | null;
+  onlineNotes?: string | null;
+  isCancelled: boolean;
+  instanceNotice?: string | null;
+  templateUpdatedAt: Timestamp;
+  // Add Chairperson fields
+  chairpersonId?: string | null;
+  chairpersonName?: string | null;
+}
+
+/**
  * Firestore Collection Paths
  */
 export const COLLECTION_PATHS = {
   USERS: 'users',
   GROUPS: 'groups',
-  MEMBERS: 'members', // New top-level members collection
-  GROUP_MEMBERS: 'members', // Legacy path, will be migrated
-  ANNOUNCEMENTS: 'announcements', // Updated to top-level collection
+  MEMBERS: 'members',
+  GROUP_MEMBERS: (groupId: string) => `groups/${groupId}/members`, // Keep old path if needed
+  SERVICE_POSITIONS: (groupId: string) => `groups/${groupId}/servicePositions`, // Subcollection
+  ANNOUNCEMENTS: 'announcements',
   EVENTS: (groupId: string) => `groups/${groupId}/events`,
   TRANSACTIONS: `transactions`,
   TREASURY_OVERVIEW: `treasury_overviews`,
   MEETINGS: 'meetings',
+  MEETING_INSTANCES: 'meetingInstances',
   NOTIFICATIONS: 'notifications',
   BUSINESS_MEETINGS: 'business_meetings',
   AGENDA_ITEMS: (meetingId: string) => `business_meetings/${meetingId}/agenda`,
   DECISIONS: (meetingId: string) => `business_meetings/${meetingId}/decisions`,
-  SERVICE_POSITIONS: 'service_positions',
   LITERATURE: 'literature',
   GROUP_LITERATURE: (groupId: string) => `groups/${groupId}/literature`,
   DIRECT_MESSAGE_THREADS: 'direct_message_threads',

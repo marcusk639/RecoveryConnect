@@ -8,30 +8,36 @@ import {
 import firestore, {
   FirebaseFirestoreTypes,
 } from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import {GroupModel} from './GroupModel'; // For permission checks
 
 /**
  * Model for handling Announcement data
  */
 export class AnnouncementModel {
   /**
-   * Convert Firestore document to Announcement object
+   * Convert Firestore Document to Announcement app type
    */
   static fromFirestore(
-    doc: FirebaseFirestoreTypes.DocumentSnapshot,
+    snapshot: FirebaseFirestoreTypes.DocumentSnapshot,
   ): Announcement {
-    const data = doc.data() as AnnouncementDocument;
-
+    const data = snapshot.data() as AnnouncementDocument | undefined; // Get data
+    if (!data) {
+      throw new Error(`Announcement data missing for doc ${snapshot.id}`);
+    }
     return {
-      id: doc.id,
+      id: snapshot.id, // Use snapshot ID
+      groupId: data.groupId,
       title: data.title,
       content: data.content,
-      isPinned: data.isPinned,
-      createdAt: data.createdAt?.toDate() || new Date(),
-      updatedAt: data.updatedAt?.toDate() || new Date(),
+      isPinned: data.isPinned ?? false,
+      createdAt: data.createdAt.toDate(),
+      updatedAt: data.updatedAt.toDate(),
       createdBy: data.createdBy,
       authorName: data.authorName,
       expiresAt: data.expiresAt?.toDate(),
-      groupId: data.groupId,
+      userId: data.userId,
+      memberId: data.memberId,
     };
   }
 
@@ -192,6 +198,121 @@ export class AnnouncementModel {
     } catch (error) {
       console.error('Error managing pinned announcements', error);
       throw error;
+    }
+  }
+
+  /**
+   * Fetch all announcements for a specific group, ordered by creation date
+   */
+  static async getAnnouncementsForGroup(
+    groupId: string,
+    limit: number = 50,
+  ): Promise<Announcement[]> {
+    try {
+      const snapshot = await firestore()
+        .collection(COLLECTION_PATHS.ANNOUNCEMENTS)
+        .where('groupId', '==', groupId)
+        .orderBy('createdAt', 'desc')
+        .limit(limit)
+        .get();
+
+      // Call fromFirestore with the snapshot doc
+      return snapshot.docs.map(doc => this.fromFirestore(doc));
+    } catch (error) {
+      console.error('Error fetching announcements for group:', groupId, error);
+      throw new Error('Failed to fetch announcements.');
+    }
+  }
+
+  /**
+   * Create a new announcement for a group
+   */
+  static async createAnnouncement(
+    groupId: string,
+    data: {
+      title: string;
+      content: string;
+      isPinned?: boolean;
+      expiresAt?: Date | null;
+      userId: string;
+      memberId: string;
+    },
+  ): Promise<Announcement> {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      throw new Error('Authentication required.');
+    }
+
+    // Permission check: Ensure user is an admin of the group
+    const isAdmin = await GroupModel.isGroupAdmin(groupId, currentUser.uid);
+    if (!isAdmin) {
+      throw new Error('User does not have permission to create announcements.');
+    }
+
+    const now = new Date();
+    const newDocRef = firestore()
+      .collection(COLLECTION_PATHS.ANNOUNCEMENTS)
+      .doc();
+
+    const announcementData: AnnouncementDocument = {
+      groupId: groupId,
+      userId: data.userId,
+      memberId: data.memberId,
+      title: data.title,
+      content: data.content,
+      isPinned: data.isPinned ?? false,
+      createdAt: firestore.Timestamp.fromDate(now),
+      updatedAt: firestore.Timestamp.fromDate(now),
+      createdBy: currentUser.uid,
+      authorName: currentUser.displayName || 'Admin', // Use display name
+      ...(data.expiresAt && {
+        expiresAt: firestore.Timestamp.fromDate(data.expiresAt),
+      }),
+    };
+
+    try {
+      await newDocRef.set(announcementData);
+      // Fetch the created doc to pass to fromFirestore
+      const createdDoc = await newDocRef.get();
+      return this.fromFirestore(createdDoc); // Pass the snapshot
+    } catch (error) {
+      console.error('Error creating announcement:', error);
+      throw new Error('Failed to create announcement.');
+    }
+  }
+
+  /**
+   * Delete an announcement
+   */
+  static async deleteAnnouncement(
+    groupId: string,
+    announcementId: string,
+  ): Promise<void> {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      throw new Error('Authentication required.');
+    }
+
+    // Permission check
+    const isAdmin = await GroupModel.isGroupAdmin(groupId, currentUser.uid);
+    // Optional: Allow creator to delete?
+    // const announcementDoc = await firestore().collection(COLLECTION_PATHS.ANNOUNCEMENTS).doc(announcementId).get();
+    // const isCreator = announcementDoc.data()?.createdBy === currentUser.uid;
+    // if (!isAdmin && !isCreator) { ... }
+    if (!isAdmin) {
+      throw new Error(
+        'User does not have permission to delete this announcement.',
+      );
+    }
+
+    try {
+      const docRef = firestore()
+        .collection(COLLECTION_PATHS.ANNOUNCEMENTS)
+        .doc(announcementId);
+      await docRef.delete();
+    } catch (error) {
+      console.error('Error deleting announcement:', announcementId, error);
+      throw new Error('Failed to delete announcement.');
     }
   }
 }

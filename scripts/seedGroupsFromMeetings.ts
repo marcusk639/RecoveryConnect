@@ -102,13 +102,16 @@ export interface Group {
   type: "AA";
   treasurers: string[];
   treasury: {
-    id: string;
-    groupId: string;
     balance: number;
     prudentReserve: number;
     transactions: [];
-    createdAt: Date;
-    updatedAt: Date;
+    summary: {
+      balance: number;
+      prudentReserve: number;
+      monthlyIncome: number;
+      monthlyExpenses: number;
+      lastUpdated: Date;
+    };
   };
 }
 
@@ -415,12 +418,18 @@ function createGroupDataFromMeeting(meeting: Meeting): {
   const now = admin.firestore.Timestamp.now();
 
   // Create a new treasury object for the group
-  const treasuryData = {
-    id: crypto.randomUUID(),
-    groupId: "", // Will be set after group ID is generated
+  const treasuryData: Treasury = {
     balance: 0,
     prudentReserve: 0,
     transactions: [] as [], // Explicitly typed empty array
+    // Add the required summary field
+    summary: {
+      balance: 0,
+      prudentReserve: 0,
+      monthlyIncome: 0,
+      monthlyExpenses: 0,
+      lastUpdated: new Date(),
+    },
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -736,7 +745,6 @@ async function seedGroups() {
 
             // Set the ID in the group data and treasury
             newGroupData.id = newGroupRef.id;
-            newGroupData.treasury.groupId = newGroupRef.id;
 
             console.log(
               `Creating new group "${newGroupData.name}" (${

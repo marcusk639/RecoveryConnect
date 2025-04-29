@@ -1,3 +1,4 @@
+import { Timestamp } from "firebase-admin/firestore";
 import { Location } from "./GeocodeResponse";
 
 export class Meeting {
@@ -54,4 +55,63 @@ export interface MeetingSearchCriteria {
   time?: string;
   location?: Location;
   street?: string;
+}
+
+/**
+ * Meeting Instance Document (Firestore Schema)
+ */
+export interface MeetingInstanceDocument {
+  meetingId: string;
+  groupId: string;
+  scheduledAt: Timestamp; // Specific date and time as Firestore Timestamp
+  name: string;
+  type: string; // Store MeetingType as string
+  format?: string | null;
+  location?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  locationName?: string | null;
+  isOnline?: boolean;
+  link?: string | null;
+  onlineNotes?: string | null;
+  isCancelled: boolean;
+  instanceNotice?: string | null;
+  templateUpdatedAt: Timestamp; // Timestamp of the template
+  // Optional future fields
+  // chairpersonId?: string;
+  // speakerId?: string;
+  // topic?: string;
+}
+
+export interface MeetingDocument {
+  name: string;
+  type: string; // AA, NA, etc.
+  day: string;
+  country?: string;
+  time: string;
+  street?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  lat?: number;
+  lng?: number;
+  location?: string;
+  isOnline: boolean;
+  onlineLink?: string;
+  onlineNotes?: string;
+  verified: boolean;
+  addedBy?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  groupId: string;
+  format?: string;
+  locationName?: string;
+  geohash?: string;
+  temporaryNotice?: string | null;
+  isCancelledTemporarily?: boolean;
 }
