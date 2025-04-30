@@ -67,14 +67,15 @@ const ForgotPasswordScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="forgot-password-screen">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}>
+            onPress={() => navigation.goBack()}
+            testID="forgot-password-back-button">
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
 
@@ -98,7 +99,8 @@ const ForgotPasswordScreen: React.FC = () => {
                 </Text>
                 <TouchableOpacity
                   style={styles.returnButton}
-                  onPress={() => navigation.navigate('Login')}>
+                  onPress={() => navigation.navigate('Login')}
+                  testID="forgot-password-return-to-login-button">
                   <Text style={styles.returnButtonText}>Return to Sign In</Text>
                 </TouchableOpacity>
               </View>
@@ -116,14 +118,22 @@ const ForgotPasswordScreen: React.FC = () => {
                     autoCorrect={false}
                     autoComplete="email"
                     editable={!loading}
+                    testID="forgot-password-email-input"
                   />
-                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                  {error ? (
+                    <Text
+                      style={styles.errorText}
+                      testID="forgot-password-error-text">
+                      {error}
+                    </Text>
+                  ) : null}
                 </View>
 
                 <TouchableOpacity
                   style={[styles.resetButton, loading && styles.disabledButton]}
                   onPress={handleResetPassword}
-                  disabled={loading}>
+                  disabled={loading}
+                  testID="forgot-password-reset-button">
                   {loading ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (

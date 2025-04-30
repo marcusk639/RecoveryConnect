@@ -25,6 +25,7 @@ import {
 import moment from "moment";
 import * as admin from "firebase-admin";
 import { Query } from "firebase-admin/firestore";
+import crypto from "crypto";
 
 // expects time in military format (800, 1600, 2300, etc)
 const getMeetingTime = (time: number) => {
@@ -600,4 +601,24 @@ export function getQueriesForDocumentsAround(ref, center, radiusInKm, day) {
       .where("geohash", ">=", location[0])
       .where("geohash", "<=", location[1]);
   });
+}
+
+export function generateMeetingHash(meeting: Meeting): string {
+  // Create a consistent string representation including all unique identifiers
+  const meetingString = [
+    meeting.name?.trim() || "",
+    meeting.day || "", // CRITICAL: Include the day
+    meeting.time || "",
+    meeting.link || "",
+    meeting.formattedAddress?.trim() || "", // Use full address string for location part
+    // Optional: Add more fields ONLY if they are consistently available and define uniqueness
+    // meeting.locationName?.trim() || "",
+    // meeting.link?.trim() || "",
+  ].join("|");
+
+  // Generate SHA-1 hash
+  const hash = crypto.createHash("sha1").update(meetingString).digest("hex");
+
+  // Return a significant portion (e.g., first 24 chars) for practical uniqueness
+  return hash.substring(0, 24);
 }

@@ -9,10 +9,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  SafeAreaView,
 } from 'react-native';
 import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Import types
 import {GroupStackParamList} from '../../types/navigation';
@@ -147,7 +149,8 @@ const GroupMembersScreen: React.FC = () => {
   const renderMemberItem = ({item}: {item: GroupMember}) => (
     <TouchableOpacity
       style={styles.memberItem}
-      onPress={() => handleMemberPress(item)}>
+      onPress={() => handleMemberPress(item)}
+      testID={`group-member-item-${item.id}`}>
       <View style={styles.memberInitialContainer}>
         {item.photoURL ? (
           <Image
@@ -184,6 +187,21 @@ const GroupMembersScreen: React.FC = () => {
           </Text>
         )}
       </View>
+
+      {isAdmin && !item.isAdmin && (
+        <View style={styles.adminActions}>
+          <TouchableOpacity
+            onPress={() => handleToggleAdmin(item)}
+            testID={`member-admin-toggle-${item.id}`}>
+            <Icon name="account-plus-outline" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => confirmRemoveMember(item)}
+            testID={`member-remove-button-${item.id}`}>
+            <Icon name="account-remove-outline" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
@@ -226,7 +244,9 @@ const GroupMembersScreen: React.FC = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      testID={`group-members-screen-${groupId}`}>
       <FlatList
         data={members}
         renderItem={renderMemberItem}
@@ -238,7 +258,8 @@ const GroupMembersScreen: React.FC = () => {
               {isAdmin && (
                 <TouchableOpacity
                   style={styles.inviteButton}
-                  onPress={() => setInviteModalVisible(true)}>
+                  onPress={() => setInviteModalVisible(true)}
+                  testID="group-members-invite-button">
                   <Text style={styles.inviteButtonText}>Invite</Text>
                 </TouchableOpacity>
               )}
@@ -258,6 +279,7 @@ const GroupMembersScreen: React.FC = () => {
             <Text style={styles.emptyText}>No members found</Text>
           </View>
         }
+        testID="group-members-list"
       />
 
       {/* Invite Modal */}
@@ -267,7 +289,7 @@ const GroupMembersScreen: React.FC = () => {
         groupId={groupId}
         groupName={groupName}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -426,6 +448,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9E9E9E',
     textAlign: 'center',
+  },
+  adminActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
   },
 });
 

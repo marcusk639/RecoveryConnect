@@ -105,19 +105,21 @@ const GroupServicePositionsScreen: React.FC = () => {
   };
 
   const renderItem = ({item}: {item: ServicePosition}) => (
-    <View style={styles.positionCard}>
+    <View style={styles.positionCard} testID={`service-pos-item-${item.id}`}>
       <View style={styles.positionHeader}>
         <Text style={styles.positionName}>{item.name}</Text>
         {isAdmin && (
           <View style={styles.adminActions}>
             <TouchableOpacity
               onPress={() => handleEditPosition(item)}
-              style={styles.actionButton}>
+              style={styles.actionButton}
+              testID={`service-pos-edit-button-${item.id}`}>
               <Icon name="pencil-outline" size={20} color="#2196F3" />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => handleDeletePosition(item.id)}
-              style={styles.actionButton}>
+              style={styles.actionButton}
+              testID={`service-pos-delete-button-${item.id}`}>
               <Icon name="delete-outline" size={20} color="#F44336" />
             </TouchableOpacity>
           </View>
@@ -162,8 +164,8 @@ const GroupServicePositionsScreen: React.FC = () => {
       {!item.currentHolderId && isAdmin && (
         <TouchableOpacity
           style={styles.assignButton}
-          onPress={() => handleEditPosition(item)} // Reuse edit for assignment
-        >
+          onPress={() => handleEditPosition(item)}
+          testID={`service-pos-assign-button-${item.id}`}>
           <Text style={styles.assignButtonText}>Assign Member</Text>
         </TouchableOpacity>
       )}
@@ -171,22 +173,35 @@ const GroupServicePositionsScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      testID={`group-service-positions-screen-${groupId}`}>
       {isAdmin && (
-        <TouchableOpacity style={styles.addButton} onPress={handleAddPosition}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleAddPosition}
+          testID="service-pos-add-button">
           <Icon name="plus-circle-outline" size={24} color="#FFFFFF" />
           <Text style={styles.addButtonText}>Add New Position</Text>
         </TouchableOpacity>
       )}
       {status === 'loading' && positions.length === 0 ? (
-        <ActivityIndicator size="large" color="#2196F3" style={styles.loader} />
+        <ActivityIndicator
+          size="large"
+          color="#2196F3"
+          style={styles.loader}
+          testID="service-pos-loader"
+        />
       ) : error ? (
-        <Text style={styles.errorText}>Error: {error}</Text>
+        <Text style={styles.errorText} testID="service-pos-error">
+          Error: {error}
+        </Text>
       ) : (
         <FlatList
           data={positions}
           renderItem={renderItem}
           keyExtractor={item => item.id}
+          testID="service-pos-list"
           contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl
@@ -195,7 +210,7 @@ const GroupServicePositionsScreen: React.FC = () => {
             />
           }
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
+            <Text style={styles.emptyText} testID="service-pos-empty-list">
               No service positions defined for this group yet.
             </Text>
           }

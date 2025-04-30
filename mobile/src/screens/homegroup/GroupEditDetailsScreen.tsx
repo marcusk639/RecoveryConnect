@@ -156,7 +156,9 @@ const GroupEditDetailsScreen: React.FC<GroupEditDetailsScreenProps> = ({
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      testID={`group-edit-screen-${groupId}`}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.formContainer}>
           <Text style={styles.label}>Group Name</Text>
@@ -165,6 +167,7 @@ const GroupEditDetailsScreen: React.FC<GroupEditDetailsScreenProps> = ({
             value={name}
             onChangeText={setName}
             placeholder="Enter group name"
+            testID="group-edit-name-input"
           />
 
           <Text style={styles.label}>Description</Text>
@@ -174,7 +177,7 @@ const GroupEditDetailsScreen: React.FC<GroupEditDetailsScreenProps> = ({
             onChangeText={setDescription}
             placeholder="Enter group description"
             multiline
-            numberOfLines={4}
+            testID="group-edit-description-input"
           />
 
           <LocationPicker
@@ -193,6 +196,7 @@ const GroupEditDetailsScreen: React.FC<GroupEditDetailsScreenProps> = ({
             onPress={handleSave}
             loading={saving}
             style={styles.saveButton}
+            testID="group-edit-save-button"
           />
         </View>
       </ScrollView>

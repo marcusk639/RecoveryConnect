@@ -110,7 +110,8 @@ const GroupsListScreen: React.FC = () => {
   const renderHomeGroupItem = ({item}: {item: HomeGroup}) => (
     <TouchableOpacity
       style={styles.homeGroupCard}
-      onPress={() => navigateToGroupDetails(item)}>
+      onPress={() => navigateToGroupDetails(item)}
+      testID={`group-card-${item.id}`}>
       <View style={styles.homeGroupHeader}>
         <Text style={styles.homeGroupName}>{item.name}</Text>
         {item.admins.includes(auth().currentUser?.uid || '') && (
@@ -159,7 +160,7 @@ const GroupsListScreen: React.FC = () => {
 
     // Show empty state when loaded but no groups found
     return (
-      <View style={styles.emptyStateContainer}>
+      <View style={styles.emptyStateContainer} testID="group-list-empty-state">
         <Icon
           name="account-group-outline"
           size={64}
@@ -174,12 +175,14 @@ const GroupsListScreen: React.FC = () => {
         <View style={styles.emptyStateButtons}>
           <TouchableOpacity
             style={styles.emptyStateButtonPrimary}
-            onPress={navigateToGroupSearch}>
+            onPress={navigateToGroupSearch}
+            testID="empty-state-find-group-button">
             <Text style={styles.emptyStateButtonPrimaryText}>Find a Group</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.emptyStateButtonSecondary}
-            onPress={navigateToCreateGroup}>
+            onPress={navigateToCreateGroup}
+            testID="empty-state-create-group-button">
             <Text style={styles.emptyStateButtonSecondaryText}>
               Create Group
             </Text>
@@ -203,7 +206,7 @@ const GroupsListScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="group-list-screen">
       <ScrollView
         style={styles.scrollView}
         refreshControl={
@@ -224,10 +227,11 @@ const GroupsListScreen: React.FC = () => {
             <View style={styles.headerButtons}>
               <TouchableOpacity
                 style={styles.createGroupButton}
-                onPress={navigateToCreateGroup}>
+                onPress={navigateToCreateGroup}
+                testID="group-list-create-button">
                 <Text style={styles.createGroupButtonText}>Create</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={navigateToGroupSearch}>
+              <TouchableOpacity onPress={navigateToGroupSearch} testID="group-list-search-button">
                 <Text style={styles.seeAllText}>Join New</Text>
               </TouchableOpacity>
             </View>
@@ -238,6 +242,7 @@ const GroupsListScreen: React.FC = () => {
               data={groups}
               renderItem={renderHomeGroupItem}
               keyExtractor={item => item.id!}
+              testID="group-list"
               horizontal={false}
               showsHorizontalScrollIndicator={false}
               scrollEnabled={false}

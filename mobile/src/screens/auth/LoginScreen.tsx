@@ -95,7 +95,7 @@ const LoginScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="login-screen">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{flex: 1}}>
@@ -119,9 +119,12 @@ const LoginScreen = () => {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
+                testID="login-email-input"
               />
               {errors.email ? (
-                <Text style={styles.errorText}>{errors.email}</Text>
+                <Text style={styles.errorText} testID="login-error-text">
+                  {errors.email}
+                </Text>
               ) : null}
             </View>
 
@@ -136,9 +139,12 @@ const LoginScreen = () => {
                 onChangeText={setPassword}
                 placeholder="Enter your password"
                 secureTextEntry
+                testID="login-password-input"
               />
               {errors.password ? (
-                <Text style={styles.errorText}>{errors.password}</Text>
+                <Text style={styles.errorText} testID="login-error-text">
+                  {errors.password}
+                </Text>
               ) : null}
             </View>
 
@@ -162,7 +168,8 @@ const LoginScreen = () => {
                     'Coming Soon',
                     'Password reset functionality will be available soon.',
                   )
-                }>
+                }
+                testID="login-forgot-password-button">
                 <Text style={styles.forgotPassword}>Forgot password?</Text>
               </TouchableOpacity>
             </View>
@@ -170,7 +177,8 @@ const LoginScreen = () => {
             <TouchableOpacity
               style={styles.loginButton}
               onPress={handleLogin}
-              disabled={status === 'loading'}>
+              disabled={status === 'loading'}
+              testID="login-signin-button">
               {status === 'loading' ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
@@ -198,7 +206,9 @@ const LoginScreen = () => {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account?</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Register')}
+              testID="login-register-link">
               <Text style={styles.registerLink}>Create an account</Text>
             </TouchableOpacity>
           </View>

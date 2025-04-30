@@ -16,6 +16,7 @@ import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 import {GroupStackParamList} from '../../types/navigation';
 import {useAppDispatch, useAppSelector} from '../../store';
@@ -25,6 +26,7 @@ import {
   selectAnnouncementsByGroupId,
   selectAnnouncementsStatus,
   selectAnnouncementsError,
+  deleteAnnouncement,
 } from '../../store/slices/announcementsSlice';
 import {Announcement} from '../../types';
 import {selectGroupById} from '../../store/slices/groupsSlice';
@@ -109,6 +111,12 @@ const GroupAnnouncementsScreen: React.FC = () => {
       return;
     }
 
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'Please sign in to create an announcement.');
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -119,6 +127,8 @@ const GroupAnnouncementsScreen: React.FC = () => {
           title: title.trim(),
           content: content.trim(),
           isPinned,
+          userId: currentUser.uid,
+          memberId: currentUser.uid,
         }),
       ).unwrap();
 
@@ -130,6 +140,15 @@ const GroupAnnouncementsScreen: React.FC = () => {
       Alert.alert('Error', 'Failed to create announcement. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (announcementId: string) => {
+    try {
+      await dispatch(deleteAnnouncement({groupId, announcementId})).unwrap();
+    } catch (error) {
+      console.error('Error deleting announcement:', error);
+      Alert.alert('Error', 'Failed to delete announcement. Please try again.');
     }
   };
 
@@ -154,16 +173,26 @@ const GroupAnnouncementsScreen: React.FC = () => {
     });
   };
 
-  const renderAnnouncementItem = ({item}: {item: Announcement}) => (
-    <TouchableOpacity
-      style={[styles.announcementCard, item.isPinned && styles.pinnedCard]}
-      onPress={() => handleViewDetails(item)}>
+  const renderItem = ({item}: {item: Announcement}) => (
+    <View
+      style={styles.announcementCard}
+      testID={`announcement-card-${item.id}`}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.announcementTitle}>{item.title}</Text>
+        {isAdmin && (
+          <TouchableOpacity
+            onPress={() => handleDelete(item.id)}
+            style={styles.deleteButton}
+            testID={`announcement-delete-button-${item.id}`}>
+            <Icon name="delete-outline" size={20} color="#F44336" />
+          </TouchableOpacity>
+        )}
+      </View>
       {item.isPinned && (
         <View style={styles.pinnedBadge}>
           <Text style={styles.pinnedText}>📌 Pinned</Text>
         </View>
       )}
-      <Text style={styles.announcementTitle}>{item.title}</Text>
       <Text style={styles.announcementContent} numberOfLines={3}>
         {item.content}
       </Text>
@@ -172,7 +201,7 @@ const GroupAnnouncementsScreen: React.FC = () => {
           Posted by {item.authorName} on {formatDate(item.createdAt)}
         </Text>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   const renderModal = () => (
@@ -252,16 +281,26 @@ const GroupAnnouncementsScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      testID={`group-announcements-screen-${groupId}`}>
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2196F3" />
+          <ActivityIndicator
+            size="large"
+            color="#2196F3"
+            testID="announcements-loader"
+          />
         </View>
+      ) : error ? (
+        <Text style={styles.errorText} testID="announcements-error-text">
+          Error: {error}
+        </Text>
       ) : (
         <View style={styles.announcementsContainer}>
           <FlatList
             data={announcements}
-            renderItem={renderAnnouncementItem}
+            renderItem={renderItem}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.announcementsList}
             refreshControl={
@@ -272,16 +311,22 @@ const GroupAnnouncementsScreen: React.FC = () => {
             }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No announcements yet</Text>
+                <Text
+                  style={styles.emptyText}
+                  testID="announcements-empty-list">
+                  No announcements yet
+                </Text>
               </View>
             }
+            testID="group-announcements-list"
           />
 
           {isAdmin && (
             <View style={styles.createButtonContainer}>
               <TouchableOpacity
                 style={styles.createButtonCentered}
-                onPress={() => setModalVisible(true)}>
+                onPress={() => setModalVisible(true)}
+                testID="group-announcements-create-button">
                 <Text style={styles.createButtonText}>Create Announcement</Text>
               </TouchableOpacity>
             </View>
@@ -519,6 +564,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  errorText: {
+    color: '#F44336',
+    textAlign: 'center',
+    marginTop: 16,
   },
 });
 

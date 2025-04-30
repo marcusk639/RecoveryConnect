@@ -1,205 +1,298 @@
-import React, {useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator,
+  RefreshControl,
   Alert,
+  ActivityIndicator,
   FlatList,
 } from 'react-native';
+import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
-import {RouteProp} from '@react-navigation/native';
-import {GroupStackParamList} from '../../types/navigation';
-import {Meeting, MeetingInstance} from '../../types';
+import auth from '@react-native-firebase/auth';
+import moment from 'moment';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+
+// Import types and Redux
+import {GroupStackParamList} from '../../types/navigation'; // Adjust path as needed
+import {Meeting, MeetingInstance} from '../../types'; // Adjust path as needed
 import {useAppDispatch, useAppSelector} from '../../store';
+import {
+  fetchGroupById,
+  selectGroupById,
+  selectGroupsStatus,
+} from '../../store/slices/groupsSlice';
 import {
   fetchUpcomingMeetingInstances,
   selectUpcomingMeetingInstances,
+  fetchGroupMeetings, // Fetch meeting templates
+  selectGroupMeetingTemplateIds, // Correct selector name
   selectMeetingsStatus,
-  selectMeetingsError,
+  selectMeetingById, // To get data for editing
 } from '../../store/slices/meetingsSlice';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+// import MeetingEditModal from '../../components/meetings/MeetingEditModal'; // Comment out for now
 
-type GroupScheduleScreenProps = {
-  navigation: StackNavigationProp<GroupStackParamList, 'GroupSchedule'>;
-  route: RouteProp<GroupStackParamList, 'GroupSchedule'>;
-};
+type GroupScheduleScreenRouteProp = RouteProp<
+  GroupStackParamList,
+  'GroupSchedule'
+>;
+type GroupScheduleScreenNavigationProp =
+  StackNavigationProp<GroupStackParamList>;
 
-const GroupScheduleScreen: React.FC<GroupScheduleScreenProps> = ({
-  navigation,
-  route,
-}) => {
+const GroupScheduleScreen: React.FC = () => {
+  const route = useRoute<GroupScheduleScreenRouteProp>();
+  const navigation = useNavigation<GroupScheduleScreenNavigationProp>();
   const {groupId, groupName} = route.params;
+  const currentUser = auth().currentUser;
+
   const dispatch = useAppDispatch();
 
   // Get data from Redux store
-  const meetingInstances = useAppSelector(state =>
+  const group = useAppSelector(state => selectGroupById(state, groupId));
+  const upcomingInstances = useAppSelector(state =>
     selectUpcomingMeetingInstances(state, groupId),
   );
-  const status = useAppSelector(selectMeetingsStatus);
-  const error = useAppSelector(selectMeetingsError);
-  const loading = status === 'loading';
+  const meetingTemplates = useAppSelector(
+    state =>
+      selectGroupMeetingTemplateIds(state, groupId)
+        .map(id => useAppSelector(state => selectMeetingById(state, id)))
+        .filter((m): m is Meeting => !!m), // Get full template objects
+  );
+  const meetingsStatus = useAppSelector(selectMeetingsStatus);
+  const groupsStatus = useAppSelector(selectGroupsStatus);
 
-  useEffect(() => {
-    // Dispatch the action to fetch meeting instances
-    dispatch(fetchUpcomingMeetingInstances(groupId));
+  // Local state
+  const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showTemplates, setShowTemplates] = useState(false); // Flag to show templates as fallback
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [selectedMeetingToEdit, setSelectedMeetingToEdit] =
+    useState<Meeting | null>(null);
+
+  // Correct admin check using only 'admins' if 'adminUids' doesn't exist on HomeGroup type
+  const isCurrentUserAdmin = group?.admins?.includes(currentUser?.uid || '');
+
+  const loadScheduleData = useCallback(async () => {
+    setIsLoading(true);
+    setRefreshing(true);
+    try {
+      // Fetch instances first
+      await dispatch(fetchUpcomingMeetingInstances(groupId)).unwrap();
+      // Check if instances were fetched - need access to the result or updated state
+      // For now, we'll check the state *after* the fetch completes in useEffect
+
+      // Fetch group details (needed for admin check)
+      await dispatch(fetchGroupById(groupId)).unwrap();
+    } catch (error: any) {
+      console.error('Error loading group schedule data:', error);
+      if (error?.name !== 'ConditionError') {
+        // Avoid duplicate errors if already handled
+        Alert.alert(
+          'Error',
+          'Failed to load schedule data. Please try again later.',
+        );
+      }
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
   }, [groupId, dispatch]);
 
-  // Format date and time from the MeetingInstance
-  const formatDateTime = (date?: Date): string => {
-    if (!date) return 'TBD';
-    return date.toLocaleString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
+  useEffect(() => {
+    loadScheduleData();
+  }, [loadScheduleData]);
+
+  // Effect to decide whether to fetch/show templates
+  useEffect(() => {
+    // Only run this check once loading is finished and instances have been fetched (or failed)
+    if (!isLoading && meetingsStatus !== 'loading') {
+      if (upcomingInstances.length === 0) {
+        setShowTemplates(true);
+        // Fetch templates only if no instances are found and templates aren't loaded
+        if (meetingTemplates.length === 0) {
+          console.log(
+            `No instances found for group ${groupId}, fetching templates...`,
+          );
+          dispatch(fetchGroupMeetings(groupId));
+        }
+      } else {
+        setShowTemplates(false);
+      }
+    }
+  }, [
+    isLoading,
+    meetingsStatus,
+    upcomingInstances,
+    meetingTemplates,
+    groupId,
+    dispatch,
+  ]);
+
+  const handleEditMeeting = (meetingId: string) => {
+    // Explicitly type the parameter in find callback
+    const meetingToEdit = meetingTemplates.find(
+      (m: Meeting) => m.id === meetingId,
+    );
+    if (meetingToEdit) {
+      setSelectedMeetingToEdit(meetingToEdit);
+      // setIsEditModalVisible(true); // Comment out modal usage for now
+    }
   };
 
-  // Render a meeting instance item
-  const renderMeetingInstanceItem = ({item}: {item: MeetingInstance}) => (
-    <View
-      style={[styles.meetingCard, item.isCancelled && styles.cancelledCard]}>
-      <View style={styles.meetingHeader}>
-        <Text style={styles.meetingName}>{item.name}</Text>
-        {item.isCancelled ? (
-          <View style={[styles.meetingBadge, styles.cancelledBadge]}>
-            <Text style={[styles.meetingBadgeText, styles.cancelledBadgeText]}>
-              Cancelled
-            </Text>
-          </View>
-        ) : (
-          <View
-            style={[styles.meetingBadge, item.isOnline && styles.onlineBadge]}>
-            <Text
+  const renderMeetingItem = ({item}: {item: MeetingInstance | Meeting}) => {
+    const isInstance = 'instanceId' in item;
+    const scheduledAt = isInstance
+      ? (item as MeetingInstance).scheduledAt
+      : undefined;
+    const dateStr = scheduledAt
+      ? moment(scheduledAt).format('ddd, MMM D')
+      : (item as Meeting).day;
+    const timeStr = scheduledAt
+      ? moment(scheduledAt).format('h:mm A')
+      : (item as Meeting).time;
+    const isCancelled = isInstance
+      ? (item as MeetingInstance).isCancelled
+      : false;
+    const notice = isInstance
+      ? (item as MeetingInstance).instanceNotice ||
+        (item as MeetingInstance).temporaryNotice
+      : null;
+    // Use 'online' property which exists on both types (adjusting for boolean value)
+    const isOnline = item.online ?? false;
+    const locationDisplay = isOnline
+      ? 'Online Meeting'
+      : item.locationName || item.address || 'Location TBD';
+
+    return (
+      <View
+        style={[
+          styles.meetingItemContainer,
+          isCancelled && styles.cancelledItem,
+        ]}>
+        <View style={styles.dateTimeContainer}>
+          <Text style={styles.dayText}>
+            {dateStr ? dateStr.toUpperCase() : 'TBD'}
+          </Text>
+          <Text style={styles.timeText}>{timeStr || 'Time TBD'}</Text>
+          {isCancelled && <Text style={styles.cancelledText}>CANCELLED</Text>}
+        </View>
+        <View style={styles.detailsContainer}>
+          <Text style={styles.meetingName}>{item.name}</Text>
+          {!isCancelled && (
+            <Text style={styles.locationText}>{locationDisplay}</Text>
+          )}
+          {notice && (
+            <View
               style={[
-                styles.meetingBadgeText,
-                item.isOnline && styles.onlineBadgeText,
+                styles.noticeContainer,
+                isCancelled && styles.cancelledNotice,
               ]}>
-              {item.isOnline ? 'Online' : 'In-Person'}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {(item.instanceNotice || item.temporaryNotice) && !item.isCancelled && (
-        <View style={styles.noticeContainer}>
-          <Icon name="information-outline" size={16} color="#FFA000" />
-          <Text style={styles.noticeText}>
-            {item.instanceNotice || item.temporaryNotice}
-          </Text>
-        </View>
-      )}
-
-      {item.isCancelled && item.instanceNotice && (
-        <View style={styles.noticeContainer}>
-          <Icon name="cancel" size={16} color="#D32F2F" />
-          <Text style={[styles.noticeText, styles.cancelledNoticeText]}>
-            {item.instanceNotice}
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.meetingDetails}>
-        <View style={styles.meetingDetailRow}>
-          <Icon
-            name="calendar-clock"
-            size={16}
-            color="#757575"
-            style={styles.detailIcon}
-          />
-          <Text style={styles.meetingDetailValue}>
-            {formatDateTime(item.scheduledAt)}
-          </Text>
-        </View>
-        <View style={styles.meetingDetailRow}>
-          <Icon
-            name="tag-outline"
-            size={16}
-            color="#757575"
-            style={styles.detailIcon}
-          />
-          <Text style={styles.meetingDetailValue}>
-            {item.format || 'Standard'}
-          </Text>
-        </View>
-      </View>
-
-      {!item.isCancelled && item.isOnline && item.link && (
-        <TouchableOpacity
-          style={styles.joinButton}
-          onPress={() => {
-            // Handle joining online meeting
-            Alert.alert(
-              'Join Meeting',
-              'This feature will open the meeting link.',
-            );
-          }}>
-          <Text style={styles.joinButtonText}>Join Online</Text>
-        </TouchableOpacity>
-      )}
-
-      {!item.isCancelled &&
-        !item.isOnline &&
-        (item.address || item.locationName) && (
-          <View style={styles.locationContainer}>
-            <Icon
-              name="map-marker-outline"
-              size={16}
-              color="#757575"
-              style={styles.detailIcon}
-            />
-            <View style={styles.locationDetails}>
-              {item.locationName && (
-                <Text style={styles.locationNameText}>{item.locationName}</Text>
-              )}
-              <Text style={styles.locationText}>
-                {item.address}
-                {item.city && item.state && `, ${item.city}, ${item.state}`}
-                {item.zip && ` ${item.zip}`}
+              <Icon
+                name={isCancelled ? 'cancel' : 'information-outline'}
+                size={14}
+                color={
+                  isCancelled
+                    ? styles.cancelledNoticeText.color
+                    : styles.noticeText.color
+                }
+                style={{marginRight: 4}}
+              />
+              <Text
+                style={[
+                  styles.noticeText,
+                  isCancelled && styles.cancelledNoticeText,
+                ]}>
+                {notice}
               </Text>
             </View>
-          </View>
+          )}
+        </View>
+        {!isInstance && isCurrentUserAdmin && (
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => handleEditMeeting(item.id!)}>
+            <Icon
+              name="pencil-outline"
+              size={20}
+              color={styles.editButtonText.color}
+            />
+          </TouchableOpacity>
         )}
-    </View>
-  );
+      </View>
+    );
+  };
+
+  const renderContent = () => {
+    if (isLoading && meetingsStatus === 'loading') {
+      return (
+        <ActivityIndicator
+          size="large"
+          color="#2196F3"
+          style={{marginTop: 50}}
+        />
+      );
+    }
+
+    const dataToShow = showTemplates ? meetingTemplates : upcomingInstances;
+    const listTitle = showTemplates
+      ? 'Recurring Meeting Schedule'
+      : 'Upcoming Meeting Instances';
+    const emptyText = showTemplates
+      ? 'No recurring meeting templates found for this group. An admin can add them.'
+      : 'No upcoming meetings scheduled for the next week.';
+
+    return (
+      <>
+        <Text style={styles.listTitle}>{listTitle}</Text>
+        {showTemplates && upcomingInstances.length === 0 && (
+          <Text style={styles.fallbackNotice}>
+            Showing recurring schedule as no specific instances were found for
+            the upcoming week.
+          </Text>
+        )}
+        <FlatList
+          data={dataToShow}
+          renderItem={renderMeetingItem}
+          keyExtractor={(item: MeetingInstance | Meeting, index: number) =>
+            ('instanceId' in item ? item.instanceId : item.id) ??
+            `no-id-${index}`
+          }
+          ListEmptyComponent={<Text style={styles.emptyText}>{emptyText}</Text>}
+          contentContainerStyle={{paddingBottom: 20}}
+        />
+      </>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2196F3" />
-          <Text style={styles.loadingText}>Loading schedule...</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => dispatch(fetchUpcomingMeetingInstances(groupId))}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : meetingInstances.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>
-            No meetings scheduled for this group.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={meetingInstances}
-          renderItem={renderMeetingInstanceItem}
-          keyExtractor={item => item.instanceId}
-          contentContainerStyle={styles.meetingsList}
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={{flexGrow: 1}}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={loadScheduleData}
+          />
+        }>
+        {renderContent()}
+      </ScrollView>
+
+      {/* Keep Modal commented out */}
+      {/* {selectedMeetingToEdit && (
+        <MeetingEditModal
+          visible={isEditModalVisible}
+          onClose={() => {
+            setIsEditModalVisible(false);
+            setSelectedMeetingToEdit(null);
+          }}
+          meeting={selectedMeetingToEdit}
+          groupId={groupId}
         />
-      )}
-    </SafeAreaView>
+      )} */}
+    </View>
   );
 };
 
@@ -208,193 +301,114 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  backButton: {
-    marginRight: 16,
-  },
-  backButtonText: {
-    fontSize: 24,
-    color: '#2196F3',
-  },
-  headerTitle: {
+  listTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#212121',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#757575',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#F44336',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: '#2196F3',
+    color: '#424242',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#9E9E9E',
+  fallbackNotice: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: '#757575',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     textAlign: 'center',
   },
-  meetingsList: {
-    padding: 16,
-  },
-  meetingCard: {
+  meetingItemContainer: {
+    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    marginHorizontal: 12,
+    marginBottom: 10,
+    borderRadius: 8,
+    padding: 12,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
-  },
-  cancelledCard: {
-    backgroundColor: '#fce8e6',
-    borderColor: '#ea4335',
-    borderWidth: 1,
-  },
-  meetingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+  },
+  cancelledItem: {
+    backgroundColor: '#FFF0F0', // Lighter red for cancelled
+    opacity: 0.7,
+  },
+  dateTimeContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: 12,
+    marginRight: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#EEEEEE',
+    minWidth: 80, // Ensure consistent width
+  },
+  dayText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#757575',
+    marginBottom: 4,
+  },
+  timeText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#2196F3',
+  },
+  cancelledText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#D32F2F',
+    marginTop: 4,
+  },
+  detailsContainer: {
+    flex: 1, // Take remaining space
   },
   meetingName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#212121',
-    flex: 1,
-    marginRight: 8,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
   },
-  meetingBadge: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  meetingBadgeText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#1E88E5',
-  },
-  onlineBadge: {
-    backgroundColor: '#E8F5E9',
-  },
-  onlineBadgeText: {
-    color: '#388E3C',
-  },
-  cancelledBadge: {
-    backgroundColor: '#FAD2CF',
-  },
-  cancelledBadgeText: {
-    color: '#D32F2F',
+  locationText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
   },
   noticeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF8E1',
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginBottom: 12,
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginTop: 4,
+    alignSelf: 'flex-start',
   },
   noticeText: {
-    marginLeft: 8,
-    fontSize: 13,
+    fontSize: 12,
     color: '#FFA000',
-    flex: 1,
+    flexShrink: 1,
+  },
+  cancelledNotice: {
+    backgroundColor: '#FFEBEE',
   },
   cancelledNoticeText: {
     color: '#D32F2F',
-    fontWeight: '500',
   },
-  meetingDetails: {
-    marginBottom: 12,
+  editButton: {
+    padding: 8, // Make touch target larger
+    marginLeft: 8,
   },
-  meetingDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
+  editButtonText: {
+    color: '#2196F3', // Consistent blue color
   },
-  detailIcon: {
-    marginRight: 8,
-  },
-  meetingDetailValue: {
-    fontSize: 14,
-    color: '#424242',
-    flex: 1,
-  },
-  joinButton: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  joinButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
-    paddingTop: 12,
-  },
-  locationDetails: {
-    flex: 1,
-  },
-  locationNameText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#212121',
-    marginBottom: 2,
-  },
-  locationText: {
-    fontSize: 14,
-    color: '#424242',
-    lineHeight: 20,
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 40,
+    fontSize: 15,
+    color: '#757575',
+    paddingHorizontal: 20,
   },
 });
 

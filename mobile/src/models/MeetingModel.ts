@@ -337,7 +337,7 @@ export class MeetingModel {
     try {
       const now = Firestore.Timestamp.now();
       const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 7);
+      endDate.setDate(endDate.getDate() + 30);
       const endTimestamp = Firestore.Timestamp.fromDate(endDate);
 
       const instancesSnapshot = await firestore

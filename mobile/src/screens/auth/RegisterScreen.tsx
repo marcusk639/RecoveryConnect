@@ -26,6 +26,7 @@ import Input from '../../components/common/Input';
 import SocialSignInButton from '../../components/common/SocialSignInButton';
 import DatePicker from '../../components/common/DatePicker';
 import {validateEmail, validatePassword} from '../../utils/validation';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Define RegisterScreen props
 type RegisterScreenProps = {
@@ -266,6 +267,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
         keyboardType="email-address"
         autoCapitalize="none"
         error={errors.email}
+        testID="register-email-input"
       />
 
       <Input
@@ -275,6 +277,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
         placeholder="Create a secure password"
         secureTextEntry
         error={errors.password}
+        testID="register-password-input"
       />
       <Text style={styles.helperText}>
         Password must be at least 8 characters and include a mix of letters and
@@ -288,6 +291,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
         placeholder="Confirm your password"
         secureTextEntry
         error={errors.confirmPassword}
+        testID="register-confirm-password-input"
       />
 
       <View style={styles.socialSignInContainer}>
@@ -336,6 +340,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
         onChangeText={text => setDisplayName(text)}
         placeholder="First name or nickname"
         error={errors.displayName}
+        testID="register-displayname-input"
       />
 
       <View style={styles.switchContainer}>
@@ -355,7 +360,8 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
       <Text style={styles.sectionTitle}>Recovery Date (Optional)</Text>
       <TouchableOpacity
         style={styles.datePickerButton}
-        onPress={() => setShowDatePicker(true)}>
+        onPress={() => setShowDatePicker(true)}
+        testID="register-datepicker-button">
         <Text style={styles.datePickerButtonText}>
           {recoveryDate
             ? formatDateForDisplay(recoveryDate)
@@ -454,7 +460,8 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
 
       <TouchableOpacity
         style={styles.checkboxContainer}
-        onPress={() => setAgreeToTerms(!agreeToTerms)}>
+        onPress={() => setAgreeToTerms(!agreeToTerms)}
+        testID="register-terms-checkbox">
         <View
           style={[styles.checkbox, agreeToTerms ? styles.checkboxChecked : {}]}>
           {agreeToTerms && <Text style={styles.checkmark}>✓</Text>}
@@ -504,7 +511,9 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
       </TouchableOpacity>
 
       {errors.terms ? (
-        <Text style={styles.errorText}>{errors.terms}</Text>
+        <Text style={styles.errorText} testID="register-error-text">
+          {errors.terms}
+        </Text>
       ) : null}
 
       <View style={styles.buttonsContainer}>
@@ -521,6 +530,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
           style={styles.continueButton}
           loading={loading}
           disabled={loading}
+          testID="register-create-account-button"
         />
       </View>
     </View>
@@ -608,7 +618,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="register-screen">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}>
@@ -633,7 +643,9 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
           {/* Sign In Link */}
           <View style={styles.signInContainer}>
             <Text style={styles.signInText}>Already have an account?</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Login')}
+              testID="register-login-link">
               <Text style={styles.signInLink}>Sign in</Text>
             </TouchableOpacity>
           </View>

@@ -1,22 +1,14 @@
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import upperFirst from 'lodash/upperFirst';
-
+import {DAYS_OF_WEEK} from '../../types/utils';
 interface DayPickerProps {
   selectedDay: string;
   onSelectDay: (day: string) => void;
 }
 
 const DayPicker: React.FC<DayPickerProps> = ({selectedDay, onSelectDay}) => {
-  const days = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-  ].map(day => day.toLowerCase());
+  const days = DAYS_OF_WEEK.map(day => day.toLowerCase());
 
   return (
     <View style={styles.container}>

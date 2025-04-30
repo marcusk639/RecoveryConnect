@@ -151,7 +151,9 @@ const AddTransactionScreen: React.FC = () => {
     transactionType === 'income' ? incomeCategories : expenseCategories;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={styles.safeArea}
+      testID={`add-transaction-screen-${groupId}`}>
       <ScrollView style={styles.container}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -169,7 +171,8 @@ const AddTransactionScreen: React.FC = () => {
                   styles.typeButton,
                   transactionType === 'income' && styles.activeTypeButton,
                 ]}
-                onPress={() => handleTypeChange('income')}>
+                onPress={() => handleTypeChange('income')}
+                testID="add-tx-type-income-button">
                 <Text
                   style={[
                     styles.typeButtonText,
@@ -183,7 +186,8 @@ const AddTransactionScreen: React.FC = () => {
                   styles.typeButton,
                   transactionType === 'expense' && styles.activeTypeButton,
                 ]}
-                onPress={() => handleTypeChange('expense')}>
+                onPress={() => handleTypeChange('expense')}
+                testID="add-tx-type-expense-button">
                 <Text
                   style={[
                     styles.typeButtonText,
@@ -203,6 +207,7 @@ const AddTransactionScreen: React.FC = () => {
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="numeric"
+                testID="add-tx-amount-input"
               />
             </View>
 
@@ -213,6 +218,7 @@ const AddTransactionScreen: React.FC = () => {
                 <Picker
                   selectedValue={category}
                   onValueChange={itemValue => setCategory(itemValue as any)}
+                  testID="add-tx-category-picker"
                   style={styles.picker}
                   itemStyle={styles.pickerItem}>
                   {currentCategories.map(cat => (
@@ -231,6 +237,7 @@ const AddTransactionScreen: React.FC = () => {
                 value={description}
                 onChangeText={setDescription}
                 multiline
+                testID="add-tx-description-input"
               />
             </View>
 
@@ -239,7 +246,8 @@ const AddTransactionScreen: React.FC = () => {
               <Text style={styles.label}>Date</Text>
               <TouchableOpacity
                 onPress={showDatePicker}
-                style={styles.dateDisplay}>
+                style={styles.dateDisplay}
+                testID="add-tx-date-button">
                 <Text style={styles.dateDisplayText}>
                   {transactionDate.toLocaleDateString()}
                 </Text>
@@ -250,7 +258,8 @@ const AddTransactionScreen: React.FC = () => {
             <TouchableOpacity
               style={[styles.saveButton, loading && styles.disabledButton]}
               onPress={handleSaveTransaction}
-              disabled={loading}>
+              disabled={loading}
+              testID="add-tx-save-button">
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
