@@ -9,7 +9,9 @@ import {
   Platform,
 } from 'react-native';
 // Use react-native-gcanvas
+// @ts-ignore
 import {GCanvasView} from '@flyskywhy/react-native-gcanvas'; // Import GCanvasView
+// @ts-ignore
 import type {GCanvasRef} from '@flyskywhy/react-native-gcanvas'; // Import the ref type (assuming you created gcanvas.d.ts)
 
 // Use core three.js

@@ -99,6 +99,7 @@ export interface HomeGroup {
   type: string;
   meetings: Meeting[];
   treasury: Treasury;
+  distanceInKm?: number;
 }
 
 export interface GroupMember {

@@ -39,6 +39,7 @@ const GroupDonationScreen: React.FC = () => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [donationId, setDonationId] = useState<string | null>(null);
   const dispatch = useAppDispatch();
   // Function to fetch payment intent from backend
   const fetchPaymentIntentClientSecret = async () => {
@@ -128,7 +129,15 @@ const GroupDonationScreen: React.FC = () => {
       setClientSecret(null);
     } else {
       setSuccess(true);
-      dispatch(completeDonation({groupId, amount, donationId}));
+      dispatch(
+        completeDonation({
+          groupId,
+          amount: parseInt(amount, 10),
+          donationId: donationId!,
+        }),
+      );
+      setDonationId(null);
+      setAmount('10');
       // Show success message and navigate back after a delay
       setTimeout(() => {
         navigation.goBack();

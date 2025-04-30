@@ -121,6 +121,7 @@ export interface GroupDocument {
     | null;
   subscriptionExpiresAt?: Timestamp | null; // Tracks when the current period ends
   stripeConnectAccountId?: string | null;
+  distanceInKm?: number;
 }
 
 /**
