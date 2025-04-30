@@ -20,7 +20,8 @@ import functions from '@react-native-firebase/functions'; // Import Firebase Fun
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useSelector} from 'react-redux';
 import {selectUser, selectUserData} from '../../store/slices/authSlice';
-
+import {completeDonation} from '../../store/slices/groupsSlice';
+import {useAppDispatch} from '../../store';
 type ScreenRouteProp = RouteProp<GroupStackParamList, 'GroupDonation'>;
 type ScreenNavigationProp = StackNavigationProp<
   GroupStackParamList,
@@ -38,7 +39,7 @@ const GroupDonationScreen: React.FC = () => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
+  const dispatch = useAppDispatch();
   // Function to fetch payment intent from backend
   const fetchPaymentIntentClientSecret = async () => {
     setLoading(true);
@@ -127,6 +128,7 @@ const GroupDonationScreen: React.FC = () => {
       setClientSecret(null);
     } else {
       setSuccess(true);
+      dispatch(completeDonation({groupId, amount, donationId}));
       // Show success message and navigate back after a delay
       setTimeout(() => {
         navigation.goBack();

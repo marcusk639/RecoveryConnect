@@ -347,6 +347,32 @@ export class GroupModel {
     }
   }
 
+  static async completeDonation(
+    groupId: string,
+    amount: number,
+    donationId: string,
+  ): Promise<HomeGroup | null> {
+    try {
+      // Use MemberModel to add donation to group
+      const groupRef = firestore().collection('groups').doc(groupId);
+
+      await groupRef.update({
+        treasury: {
+          balance: firestore.FieldValue.increment(amount),
+        },
+      });
+      await groupRef.collection('donations').doc(donationId).update({
+        amount,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        status: 'completed',
+      });
+      return GroupModel.getById(groupId);
+    } catch (error) {
+      console.error('Error adding donation:', error);
+      throw error;
+    }
+  }
+
   /**
    * Remove a user as admin of a group
    */

@@ -93,16 +93,18 @@ export const createStripePaymentIntent = functions.https.onCall(
         status: "pending",
       };
 
-      await db
+      const donationRef = db
         .collection("groups")
         .doc(groupId)
         .collection("donations")
-        .doc()
-        .set(donation);
+        .doc();
+
+      await donationRef.set(donation);
 
       // Return only the client secret to the frontend
       return {
         clientSecret: paymentIntent.client_secret,
+        donationId: donationRef.id,
       };
     } catch (error: any) {
       console.error("Error creating Stripe PaymentIntent:", error);
