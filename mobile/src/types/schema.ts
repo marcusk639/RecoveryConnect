@@ -75,6 +75,7 @@ export interface UserDocument {
   fcmTokens?: string[]; // For push notifications
   subscriptionTier?: 'free' | 'plus'; // For premium features
   subscriptionValidUntil?: Timestamp;
+  stripeCustomerId?: string | null;
 }
 
 /**

@@ -22,6 +22,7 @@ export interface User {
   photoUrl?: string | null;
   phoneNumber?: string | null;
   fcmTokens?: string[];
+  stripeCustomerId?: string;
 }
 
 export interface NotificationSettings {

@@ -30,6 +30,7 @@ export type GroupStackParamList = {
     currentChairpersonId?: string | null;
     scheduledAt: number;
   };
+  GroupDonation: {groupId: string; groupName: string};
 };
 
 // Profile Stack Navigation Params (assuming it exists)

@@ -4,6 +4,7 @@ import { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../utils/firebase";
 import { stripe } from "../utils/stripe"; // Import only stripe instance
 import * as admin from "firebase-admin";
+import { Donation } from "../entities/Group";
 
 interface PaymentIntentData {
   groupId: string;
@@ -63,7 +64,6 @@ export const createStripePaymentIntent = functions.https.onCall(
         });
         console.log(`Stripe customer ${customerId} created for user ${userId}`);
       }
-
       // Create PaymentIntent
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount, // Amount in cents
@@ -84,9 +84,27 @@ export const createStripePaymentIntent = functions.https.onCall(
         `Created PaymentIntent ${paymentIntent.id} for group ${groupId}`
       );
 
+      const donation: Donation = {
+        userId: userId,
+        amount: amount,
+        createdAt: new Date(),
+        paymentMethod: "stripe",
+        transactionId: paymentIntent.id,
+        status: "pending",
+      };
+
+      const donationRef = db
+        .collection("groups")
+        .doc(groupId)
+        .collection("donations")
+        .doc();
+
+      await donationRef.set(donation);
+
       // Return only the client secret to the frontend
       return {
         clientSecret: paymentIntent.client_secret,
+        donationId: donationRef.id,
       };
     } catch (error: any) {
       console.error("Error creating Stripe PaymentIntent:", error);

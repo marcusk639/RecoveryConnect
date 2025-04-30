@@ -10,6 +10,15 @@ export interface TreasurySummary {
 
 export type TransactionType = "income" | "expense";
 
+export interface Donation {
+  userId: string;
+  amount: number;
+  createdAt: Date;
+  paymentMethod: string;
+  transactionId: string;
+  status: "pending" | "completed" | "failed";
+}
+
 export interface Transaction {
   id: string;
   groupId: string;

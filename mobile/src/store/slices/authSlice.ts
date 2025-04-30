@@ -36,6 +36,7 @@ interface UserData {
     allowDirectMessages?: boolean;
   } | null;
   fcmTokens?: string[];
+  customerId?: string;
 }
 
 interface AuthState {

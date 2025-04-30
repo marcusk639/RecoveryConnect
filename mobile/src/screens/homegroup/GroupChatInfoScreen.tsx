@@ -97,7 +97,7 @@ const GroupChatInfoScreen: React.FC = () => {
         onPress={() => navigateToMemberDetails(item.id)}
         testID={`chat-info-member-${item.id}`}>
         <View style={styles.memberAvatarContainer}>
-          {item.photoURL ? (
+          {item.photoUrl ? (
             <View style={styles.memberAvatar}>
               <Text style={styles.memberAvatarText}>
                 {item.name.charAt(0).toUpperCase()}

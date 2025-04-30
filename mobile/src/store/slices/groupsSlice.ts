@@ -139,6 +139,29 @@ export const createGroup = createAsyncThunk(
   },
 );
 
+export const completeDonation = createAsyncThunk(
+  'groups/completeDonation',
+  async (
+    {
+      groupId,
+      amount,
+      donationId,
+    }: {groupId: string; amount: number; donationId: string},
+    {rejectWithValue},
+  ) => {
+    try {
+      const updatedGroup = await GroupModel.completeDonation(
+        groupId,
+        amount,
+        donationId,
+      );
+      return updatedGroup;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to complete donation');
+    }
+  },
+);
+
 export const updateGroup = createAsyncThunk(
   'groups/updateGroup',
   async (
@@ -459,6 +482,26 @@ const groupsSlice = createSlice({
         state.status = 'failed';
         state.error =
           (action.payload as string) || 'Failed to request admin access';
+      })
+
+      // Complete donation
+      .addCase(completeDonation.pending, state => {
+        state.status = 'loading';
+      })
+      .addCase(completeDonation.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+
+        if (action.payload) {
+          state.items[action.payload.id!] = action.payload;
+          state.lastFetched[action.payload.id!] = Date.now();
+        }
+
+        state.error = null;
+      })
+      .addCase(completeDonation.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error =
+          (action.payload as string) || 'Failed to complete donation';
       });
   },
 });
