@@ -29,12 +29,14 @@ import {
   selectGroupAdmins,
   selectMembersStatus,
   selectMembersError,
-  GroupMember,
+  toggleAdmin,
+  removeMember,
 } from '../../store/slices/membersSlice';
 import {
   selectGroupById,
   selectGroupsStatus,
 } from '../../store/slices/groupsSlice';
+import {GroupMember} from '../../types';
 
 type GroupMembersScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -146,15 +148,23 @@ const GroupMembersScreen: React.FC = () => {
     ).toUpperCase();
   };
 
+  const handleToggleAdmin = (member: GroupMember) => {
+    dispatch(toggleAdmin({groupId, userId: member.userId}));
+  };
+
+  const confirmRemoveMember = (member: GroupMember) => {
+    dispatch(removeMember({groupId, userId: member.userId}));
+  };
+
   const renderMemberItem = ({item}: {item: GroupMember}) => (
     <TouchableOpacity
       style={styles.memberItem}
       onPress={() => handleMemberPress(item)}
       testID={`group-member-item-${item.id}`}>
       <View style={styles.memberInitialContainer}>
-        {item.photoURL ? (
+        {item.photoUrl ? (
           <Image
-            source={{uri: item.photoURL}}
+            source={{uri: item.photoUrl}}
             style={styles.memberPhoto}
             onError={() => {
               console.log(`Failed to load photo for ${item.name}`);

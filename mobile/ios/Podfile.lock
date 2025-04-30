@@ -1758,6 +1758,42 @@ PODS:
   - SexyTooltip (1.2.5):
     - pop (~> 1.0)
   - SocketRocket (0.6.1)
+  - Stripe (24.12.0):
+    - StripeApplePay (= 24.12.0)
+    - StripeCore (= 24.12.0)
+    - StripePayments (= 24.12.0)
+    - StripePaymentsUI (= 24.12.0)
+    - StripeUICore (= 24.12.0)
+  - stripe-react-native (0.45.0):
+    - React-Core
+    - Stripe (~> 24.12.0)
+    - StripeApplePay (~> 24.12.0)
+    - StripeFinancialConnections (~> 24.12.0)
+    - StripePayments (~> 24.12.0)
+    - StripePaymentSheet (~> 24.12.0)
+    - StripePaymentsUI (~> 24.12.0)
+  - StripeApplePay (24.12.0):
+    - StripeCore (= 24.12.0)
+  - StripeCore (24.12.0)
+  - StripeFinancialConnections (24.12.0):
+    - StripeCore (= 24.12.0)
+    - StripeUICore (= 24.12.0)
+  - StripePayments (24.12.0):
+    - StripeCore (= 24.12.0)
+    - StripePayments/Stripe3DS2 (= 24.12.0)
+  - StripePayments/Stripe3DS2 (24.12.0):
+    - StripeCore (= 24.12.0)
+  - StripePaymentSheet (24.12.0):
+    - StripeApplePay (= 24.12.0)
+    - StripeCore (= 24.12.0)
+    - StripePayments (= 24.12.0)
+    - StripePaymentsUI (= 24.12.0)
+  - StripePaymentsUI (24.12.0):
+    - StripeCore (= 24.12.0)
+    - StripePayments (= 24.12.0)
+    - StripeUICore (= 24.12.0)
+  - StripeUICore (24.12.0):
+    - StripeCore (= 24.12.0)
   - Yoga (1.14.0)
 
 DEPENDENCIES:
@@ -1829,6 +1865,7 @@ DEPENDENCIES:
   - RNPermissions (from `../node_modules/react-native-permissions`)
   - RNScreens (from `../node_modules/react-native-screens`)
   - SexyTooltip (from `https://github.com/prscX/SexyTooltip.git`)
+  - "stripe-react-native (from `../node_modules/@stripe/stripe-react-native`)"
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -1878,6 +1915,14 @@ SPEC REPOS:
     - SDWebImage
     - SDWebImageWebPCoder
     - SocketRocket
+    - Stripe
+    - StripeApplePay
+    - StripeCore
+    - StripeFinancialConnections
+    - StripePayments
+    - StripePaymentSheet
+    - StripePaymentsUI
+    - StripeUICore
 
 EXTERNAL SOURCES:
   boost:
@@ -2014,6 +2059,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-screens"
   SexyTooltip:
     :git: https://github.com/prscX/SexyTooltip.git
+  stripe-react-native:
+    :path: "../node_modules/@stripe/stripe-react-native"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -2135,6 +2182,15 @@ SPEC CHECKSUMS:
   SDWebImageWebPCoder: 908b83b6adda48effe7667cd2b7f78c897e5111d
   SexyTooltip: 5c9b4dec52bfb317938cb0488efd9da3717bb6fd
   SocketRocket: f32cd54efbe0f095c4d7594881e52619cfe80b17
+  Stripe: ddb4645ea7f46475ce790b4a6c6475ec3e45bfd4
+  stripe-react-native: d54ec5d7344324c3347b00756ebfb2ee2e7a57f3
+  StripeApplePay: ab8fc9905220fe4d5a46fd8b790065982bbfbad8
+  StripeCore: 1c40a6b42a385bf96d051a6184dd3969b9ab3174
+  StripeFinancialConnections: 4c5c2136191e0a385332eb59566f9b966d40a660
+  StripePayments: 6c5f517eb6723d9765af93b3fbc81b2cfe68ddc9
+  StripePaymentSheet: a825ebac6b93606f64661d66fabe9dab71ca2c74
+  StripePaymentsUI: 724c562849578aa4747d17e9f3cfe0ef3f8ab7fb
+  StripeUICore: 0e0f3005fd3027dad3d3d77927f371d5fe4eb9ac
   Yoga: eddf2bbe4a896454c248a8f23b4355891eb720a6
 
 PODFILE CHECKSUM: fe4a4589cc2b48a32e84066ef220586f611918ef

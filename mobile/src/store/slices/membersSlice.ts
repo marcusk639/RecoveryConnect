@@ -245,6 +245,34 @@ export const updatePhoneNumberVisibility = createAsyncThunk(
   },
 );
 
+export const toggleAdmin = createAsyncThunk(
+  'members/toggleAdmin',
+  async (
+    {groupId, userId}: {groupId: string; userId: string},
+    {rejectWithValue},
+  ) => {
+    try {
+      await GroupModel.makeAdmin(groupId, userId);
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to toggle admin');
+    }
+  },
+);
+
+export const removeMember = createAsyncThunk(
+  'members/removeMember',
+  async (
+    {groupId, userId}: {groupId: string; userId: string},
+    {rejectWithValue},
+  ) => {
+    try {
+      await GroupModel.removeMember(groupId, userId);
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to remove member');
+    }
+  },
+);
+
 // Create the slice
 const membersSlice = createSlice({
   name: 'members',

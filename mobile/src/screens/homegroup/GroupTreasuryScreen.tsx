@@ -40,6 +40,7 @@ import {
   selectTreasuryStatus,
   selectTreasuryError,
 } from '../../store/slices/treasurySlice';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 type GroupTreasuryScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -241,10 +242,10 @@ const GroupTreasuryScreen: React.FC = () => {
         }>
         {renderTreasurySummary()}
 
-        {(isAdmin || isTreasurer) && (
-          <View style={styles.addTransactionContainer}>
+        <View style={styles.actionsContainer}>
+          {(isAdmin || isTreasurer) && (
             <TouchableOpacity
-              style={styles.addButton}
+              style={styles.actionButton}
               onPress={() =>
                 navigation.navigate('AddTransaction', {
                   groupId,
@@ -252,10 +253,33 @@ const GroupTreasuryScreen: React.FC = () => {
                 })
               }
               testID="treasury-add-transaction-button">
-              <Text style={styles.addButtonText}>Add Transaction</Text>
+              <Icon
+                name="plus-circle-outline"
+                size={20}
+                color="#1976D2"
+                style={styles.actionIcon}
+              />
+              <Text style={styles.actionButtonText}>Add Transaction</Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.donateButton]}
+            onPress={() =>
+              navigation.navigate('GroupDonation', {groupId, groupName})
+            }
+            testID="treasury-donate-button">
+            <Icon
+              name="gift-outline"
+              size={20}
+              color="#4CAF50"
+              style={styles.actionIcon}
+            />
+            <Text style={[styles.actionButtonText, styles.donateButtonText]}>
+              Make 7th Tradition
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.transactionsContainer}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
@@ -310,28 +334,42 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#212121',
   },
-  addTransactionContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    margin: 16,
+  actionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginHorizontal: 16,
+    marginBottom: 16,
     marginTop: 0,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 4,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
-    alignItems: 'center',
   },
-  addButton: {
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4,
+  actionIcon: {
+    marginRight: 8,
   },
-  addButtonText: {
-    color: '#FFFFFF',
+  actionButtonText: {
+    color: '#1976D2',
     fontWeight: '600',
+    fontSize: 14,
+  },
+  donateButton: {
+    borderColor: '#4CAF50',
+  },
+  donateButtonText: {
+    color: '#4CAF50',
   },
   summaryContainer: {
     backgroundColor: '#FFFFFF',

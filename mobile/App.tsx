@@ -20,6 +20,7 @@ import messaging from '@react-native-firebase/messaging';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {RootStackParamList} from './src/types/navigation';
 import {StripeProvider} from '@stripe/stripe-react-native';
+
 require('react-native').LogBox.ignoreLogs(['`GCanvasReady` with no listeners']);
 
 // Define the structure of expected deep link params - Simplified
@@ -272,14 +273,22 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Root App component ONLY renders the Provider
+// Root App component wraps everything in Providers
 const App = () => {
+  // !! REPLACE WITH YOUR ACTUAL STRIPE PUBLISHABLE KEY !!
+  // Consider using react-native-dotenv for better key management
+  const stripePublishableKey = process.env
+    .STRIPE_TEST_PUBLISHABLE_KEY as string;
   return (
-    <StripeProvider publishableKey="pk_test_51N0000000000000000000000">
-      <Provider store={store}>
+    <Provider store={store}>
+      <StripeProvider
+        publishableKey={stripePublishableKey}
+        // merchantIdentifier="merchant.com.your-app-identifier" // Required for Apple Pay
+        // urlScheme="your-url-scheme" // Required for some payment methods
+      >
         <AppContent />
-      </Provider>
-    </StripeProvider>
+      </StripeProvider>
+    </Provider>
   );
 };
 
