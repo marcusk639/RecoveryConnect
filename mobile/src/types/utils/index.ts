@@ -95,6 +95,7 @@ export enum DayOfWeek {
   THURSDAY = 'thursday',
   FRIDAY = 'friday',
   SATURDAY = 'saturday',
+  ALL = 'all',
 }
 
 export enum GroupRoleEnum {

@@ -305,9 +305,10 @@ const GroupOverviewScreen: React.FC = () => {
       style={styles.container}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={loadGroupData} />
-      }>
+      }
+      testID={`group-overview-screen-${groupId}`}>
       {/* Group Info Section */}
-      <View style={styles.section}>
+      <View style={styles.section} testID="group-info-section">
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Group Information</Text>
         </View>
@@ -337,7 +338,8 @@ const GroupOverviewScreen: React.FC = () => {
           !isCurrentUserAdmin() && (
             <TouchableOpacity
               style={styles.claimGroupButton}
-              onPress={() => setClaimModalVisible(true)}>
+              onPress={() => setClaimModalVisible(true)}
+              testID="group-overview-claim-button">
               <Text style={styles.claimGroupButtonText}>
                 Is this your group? Claim Admin Access
               </Text>
@@ -346,7 +348,9 @@ const GroupOverviewScreen: React.FC = () => {
 
         {/* Show pending status if user has submitted a request */}
         {hasPendingAdminRequest() && (
-          <View style={styles.pendingRequestContainer}>
+          <View
+            style={styles.pendingRequestContainer}
+            testID="group-overview-pending-request">
             <Text style={styles.pendingRequestText}>
               Admin request pending review
             </Text>
@@ -380,7 +384,8 @@ const GroupOverviewScreen: React.FC = () => {
       <View style={styles.navTilesContainer}>
         <TouchableOpacity
           style={styles.navTile}
-          onPress={navigateToGroupMembers}>
+          onPress={navigateToGroupMembers}
+          testID="group-overview-members-tile">
           <View style={styles.navTileIcon}>
             <Text style={styles.navTileIconText}>👥</Text>
           </View>
@@ -389,7 +394,8 @@ const GroupOverviewScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.navTile}
-          onPress={navigateToGroupAnnouncements}>
+          onPress={navigateToGroupAnnouncements}
+          testID="group-overview-announcements-tile">
           <View style={styles.navTileIcon}>
             <Text style={styles.navTileIconText}>📢</Text>
           </View>
@@ -398,7 +404,8 @@ const GroupOverviewScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.navTile}
-          onPress={navigateToGroupTreasury}>
+          onPress={navigateToGroupTreasury}
+          testID="group-overview-treasury-tile">
           <View style={styles.navTileIcon}>
             <Text style={styles.navTileIconText}>💰</Text>
           </View>
@@ -407,14 +414,18 @@ const GroupOverviewScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.navTile}
-          onPress={navigateToGroupSchedule}>
+          onPress={navigateToGroupSchedule}
+          testID="group-overview-schedule-tile">
           <View style={styles.navTileIcon}>
             <Text style={styles.navTileIconText}>📅</Text>
           </View>
           <Text style={styles.navTileText}>Meetings</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navTile} onPress={navigateToGroupChat}>
+        <TouchableOpacity
+          style={styles.navTile}
+          onPress={navigateToGroupChat}
+          testID="group-overview-chat-tile">
           <View style={styles.navTileIcon}>
             <Text style={styles.navTileIconText}>💬</Text>
           </View>
@@ -424,6 +435,7 @@ const GroupOverviewScreen: React.FC = () => {
         <TouchableOpacity
           style={[styles.navTile, {opacity: 0.5}]}
           disabled={true}
+          testID="group-overview-literature-tile"
           onPress={navigateToGroupLiterature}>
           <View style={styles.navTileIcon}>
             <Text style={styles.navTileIconText}>📚</Text>
@@ -445,7 +457,7 @@ const GroupOverviewScreen: React.FC = () => {
 
       {/* Admin Actions */}
       {group.admins && group.admins.includes(auth().currentUser?.uid || '') && (
-        <View style={styles.section}>
+        <View style={styles.section} testID="group-admin-actions-section">
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Admin Actions</Text>
           </View>
@@ -457,7 +469,8 @@ const GroupOverviewScreen: React.FC = () => {
                 groupId,
                 groupName,
               })
-            }>
+            }
+            testID="group-admin-edit-button">
             <Text style={styles.adminButtonText}>Edit Group Details</Text>
           </TouchableOpacity>
 
@@ -468,17 +481,20 @@ const GroupOverviewScreen: React.FC = () => {
                 'Manage Members',
                 'This feature will be available soon.',
               )
-            }>
+            }
+            testID="group-admin-manage-members-button">
             <Text style={styles.adminButtonText}>Manage Members</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Upcoming Meetings Section - Updated for Instances */}
-      <View style={styles.section}>
+      <View style={styles.section} testID="group-upcoming-meetings-section">
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming Meetings</Text>
-          <TouchableOpacity onPress={navigateToGroupSchedule}>
+          <TouchableOpacity
+            onPress={navigateToGroupSchedule}
+            testID="group-overview-view-schedule-button">
             <Text style={styles.seeAllText}>View Full Schedule</Text>
           </TouchableOpacity>
         </View>
@@ -495,7 +511,8 @@ const GroupOverviewScreen: React.FC = () => {
                 style={[
                   styles.meetingItem,
                   instance.isCancelled && styles.cancelledItem,
-                ]}>
+                ]}
+                testID={`group-overview-meeting-${instance.instanceId}`}>
                 <View style={styles.meetingTimeContainer}>
                   {/* Show specific date */}
                   <Text style={styles.meetingDateText}>{meetingDate}</Text>
@@ -560,24 +577,31 @@ const GroupOverviewScreen: React.FC = () => {
             );
           })
         ) : (
-          <Text style={styles.emptyStateText}>
+          <Text
+            style={styles.emptyStateText}
+            testID="group-overview-no-meetings">
             No upcoming meetings scheduled for the next week.
           </Text>
         )}
       </View>
 
       {/* Announcements Section */}
-      <View style={styles.section}>
+      <View style={styles.section} testID="group-announcements-section">
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Announcements</Text>
-          <TouchableOpacity onPress={navigateToGroupAnnouncements}>
+          <TouchableOpacity
+            onPress={navigateToGroupAnnouncements}
+            testID="group-overview-view-announcements-button">
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
 
         {announcements.length > 0 ? (
           announcements.slice(0, 2).map(announcement => (
-            <View key={announcement.id} style={styles.announcementItem}>
+            <View
+              key={announcement.id}
+              style={styles.announcementItem}
+              testID={`group-overview-announcement-${announcement.id}`}>
               <Text style={styles.announcementTitle}>{announcement.title}</Text>
               <Text style={styles.announcementMessage} numberOfLines={2}>
                 {announcement.content}
@@ -591,19 +615,26 @@ const GroupOverviewScreen: React.FC = () => {
             </View>
           ))
         ) : (
-          <Text style={styles.emptyStateText}>No announcements</Text>
+          <Text
+            style={styles.emptyStateText}
+            testID="group-overview-no-announcements">
+            No announcements
+          </Text>
         )}
       </View>
 
       {/* Celebrations Section */}
-      <View style={styles.section}>
+      <View style={styles.section} testID="group-celebrations-section">
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming Celebrations</Text>
         </View>
 
         {celebrations.length > 0 ? (
           celebrations.map((celebration, index) => (
-            <View key={index} style={styles.celebrationItem}>
+            <View
+              key={index}
+              style={styles.celebrationItem}
+              testID={`group-overview-celebration-${index}`}>
               <View style={styles.celebrationIcon}>
                 <Text style={styles.celebrationIconText}>🎉</Text>
               </View>
@@ -619,7 +650,11 @@ const GroupOverviewScreen: React.FC = () => {
             </View>
           ))
         ) : (
-          <Text style={styles.emptyStateText}>No upcoming celebrations</Text>
+          <Text
+            style={styles.emptyStateText}
+            testID="group-overview-no-celebrations">
+            No upcoming celebrations
+          </Text>
         )}
       </View>
 
@@ -627,7 +662,8 @@ const GroupOverviewScreen: React.FC = () => {
       <TouchableOpacity
         style={styles.leaveGroupButton}
         onPress={handleLeaveGroup}
-        disabled={leaveGroupLoading}>
+        disabled={leaveGroupLoading}
+        testID="group-overview-leave-button">
         {leaveGroupLoading ? (
           <ActivityIndicator size="small" color="#FFFFFF" />
         ) : (
@@ -640,7 +676,8 @@ const GroupOverviewScreen: React.FC = () => {
         animationType="slide"
         transparent={true}
         visible={claimModalVisible}
-        onRequestClose={() => setClaimModalVisible(false)}>
+        onRequestClose={() => setClaimModalVisible(false)}
+        testID="group-claim-modal">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Request Admin Access</Text>
@@ -660,6 +697,7 @@ const GroupOverviewScreen: React.FC = () => {
               placeholder="e.g., 'I am the group secretary' or 'I attend regularly'"
               value={adminRequestMessage}
               onChangeText={setAdminRequestMessage}
+              testID="group-claim-message-input"
             />
 
             <View style={styles.modalButtons}>
@@ -668,14 +706,16 @@ const GroupOverviewScreen: React.FC = () => {
                 onPress={() => {
                   setClaimModalVisible(false);
                   setAdminRequestMessage('');
-                }}>
+                }}
+                testID="group-claim-cancel-button">
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.submitButton}
                 onPress={handleRequestAdminAccess}
-                disabled={requestSubmitting}>
+                disabled={requestSubmitting}
+                testID="group-claim-submit-button">
                 {requestSubmitting ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (

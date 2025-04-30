@@ -24,7 +24,36 @@ import {
 } from "../entities/CelebrateRecoveryMeeting";
 import moment from "moment";
 import * as admin from "firebase-admin";
-import { Query } from "firebase-admin/firestore";
+import { Query, Timestamp } from "firebase-admin/firestore";
+import crypto from "crypto";
+import * as geofire from "geofire-common";
+
+// Local minimal interface definition for Firestore data
+interface FuncMeetingDocument {
+  id: string;
+  type: string;
+  day?: string | null;
+  geohash?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  name?: string; // Needed for filtering/mapping
+  // Add other fields used in mapping or filtering
+  createdAt?: Timestamp; // Use Admin SDK Timestamp
+  updatedAt?: Timestamp; // Use Admin SDK Timestamp
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  location?: string | null;
+  isOnline?: boolean;
+  onlineLink?: string | null;
+  onlineNotes?: string | null;
+  format?: string | null;
+  locationName?: string | null;
+  verified?: boolean;
+  addedBy?: string | null;
+  groupId?: string;
+}
 
 // expects time in military format (800, 1600, 2300, etc)
 const getMeetingTime = (time: number) => {
@@ -272,35 +301,126 @@ const parseXml = (xml: string): Promise<CelebrateRecoveryMeetings> => {
   });
 };
 
+const mapFirestoreToMeeting = (
+  id: string,
+  data: FuncMeetingDocument
+): Meeting => {
+  const meeting = new Meeting();
+
+  meeting.createdAt = data.createdAt.toDate();
+  meeting.updatedAt = data.updatedAt.toDate();
+  meeting.id = data.id;
+
+  return meeting;
+};
+
 /**
  * Returns meetings by location and optionally by other criteria
  * @param location
  * @param meetingName
  */
 export async function getAlcoholicsAnonymousMeetings(
-  location: { lat: number; lng: number },
+  location?: { lat: number; lng: number },
   criteria?: MeetingSearchCriteria,
   dayFilter?: string | null
 ): Promise<Meeting[]> {
-  let query: Query = admin
-    .firestore()
-    .collection("meetings")
-    .where("type", "==", "AA");
+  const start = Date.now();
+  logger.info("getAlcoholicsAnonymousMeetings called with:", {
+    location,
+    criteria,
+    dayFilter,
+  });
 
-  // Apply day filter if provided
-  if (dayFilter) {
-    query = query.where("day", "==", dayFilter);
+  try {
+    const db = admin.firestore();
+    const meetingsCollection = db.collection("meetings");
+    let baseQuery: Query = meetingsCollection.where("type", "==", "AA");
+    let results: Meeting[] = [];
+
+    // --- Apply Day Filter ---
+    if (dayFilter) {
+      baseQuery = baseQuery.where("day", "==", dayFilter);
+      logger.info(`Applied day filter: ${dayFilter}`);
+    }
+
+    // --- Apply Location Filter (Geohash) or Fetch All (Limited) ---
+    if (location?.lat != null && location?.lng != null) {
+      logger.info(
+        `Applying location filter around [${location.lat}, ${location.lng}]`
+      );
+      const center: [number, number] = [location.lat, location.lng];
+      const radiusKm = 25; // Default search radius: 25km
+      const radiusInM = radiusKm * 1000;
+
+      const bounds = geofire.geohashQueryBounds(center, radiusInM);
+      const promises: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+
+      for (const b of bounds) {
+        // Important: Create the query from the baseQuery to include day filter
+        let q = baseQuery.orderBy("geohash").startAt(b[0]).endAt(b[1]);
+        promises.push(q.get());
+      }
+
+      const snapshots = await Promise.all(promises);
+      const meetingsWithDistance: { meeting: Meeting; distance: number }[] = [];
+      const processedIds = new Set<string>(); // Keep track of processed IDs
+
+      for (const snap of snapshots) {
+        for (const doc of snap.docs) {
+          if (processedIds.has(doc.id)) continue; // Skip if already processed due to overlapping bounds
+
+          const meetingData = doc.data() as FuncMeetingDocument;
+          if (meetingData.lat != null && meetingData.lng != null) {
+            const distanceInKm = geofire.distanceBetween(
+              [meetingData.lat, meetingData.lng],
+              center
+            );
+            // Precise distance check
+            if (distanceInKm <= radiusKm) {
+              const meeting = mapFirestoreToMeeting(doc.id, meetingData);
+              meetingsWithDistance.push({
+                meeting: meeting,
+                distance: distanceInKm,
+              });
+              processedIds.add(doc.id);
+            }
+          }
+        }
+      }
+      // Sort by distance
+      meetingsWithDistance.sort((a, b) => a.distance - b.distance);
+      results = meetingsWithDistance.map((item) => item.meeting); // Extract meetings
+      logger.info(`Found ${results.length} AA meetings within radius.`);
+    } else {
+      // No Location Filter
+      logger.info(
+        "No location provided, fetching without distance constraints (limit 200)."
+      );
+      const snapshot = await baseQuery.limit(200).get();
+      results = snapshot.docs.map((doc) =>
+        mapFirestoreToMeeting(doc.id, doc.data() as FuncMeetingDocument)
+      );
+      logger.info(`Found ${results.length} AA meetings (no location filter).`);
+    }
+
+    // --- Apply Criteria Filtering (e.g., Name) ---
+    if (criteria) {
+      logger.info("Applying criteria filtering:", criteria);
+      // Assuming filterMeetingsByCriteria works on the Meeting type from entities
+      results = filterMeetingsByCriteria(results, criteria, "AA");
+      logger.info(`Found ${results.length} meetings after criteria filter.`);
+    }
+
+    logger.info(
+      `getAlcoholicsAnonymousMeetings finished in ${
+        (Date.now() - start) / 1000
+      } seconds.`
+    );
+    return results;
+  } catch (error) {
+    logger.error("Error retrieving AA meetings from Firestore:", error);
+    return []; // Return empty array on error
   }
-
-  // TODO: Apply location/criteria filtering logic here
-  // ... (add .where clauses for criteria, .orderBy for distance if needed) ...
-
-  const snapshot = await query.limit(100).get(); // Apply limit
-  const meetings = snapshot.docs.map(
-    (doc) => ({ id: doc.id, ...doc.data() } as Meeting)
-  );
-  // TODO: Add distance calculation and sorting if location filtering is used
-  return meetings;
 }
 
 export const getAll12StepMeetings = async (
@@ -600,4 +720,24 @@ export function getQueriesForDocumentsAround(ref, center, radiusInKm, day) {
       .where("geohash", ">=", location[0])
       .where("geohash", "<=", location[1]);
   });
+}
+
+export function generateMeetingHash(meeting: Meeting): string {
+  // Create a consistent string representation including all unique identifiers
+  const meetingString = [
+    meeting.name?.trim() || "",
+    meeting.day || "", // CRITICAL: Include the day
+    meeting.time || "",
+    meeting.link || "",
+    meeting.formattedAddress?.trim() || "", // Use full address string for location part
+    // Optional: Add more fields ONLY if they are consistently available and define uniqueness
+    // meeting.locationName?.trim() || "",
+    // meeting.link?.trim() || "",
+  ].join("|");
+
+  // Generate SHA-1 hash
+  const hash = crypto.createHash("sha1").update(meetingString).digest("hex");
+
+  // Return a significant portion (e.g., first 24 chars) for practical uniqueness
+  return hash.substring(0, 24);
 }

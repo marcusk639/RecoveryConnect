@@ -12,10 +12,13 @@ import {
   MeetingFilters,
   Location,
   MeetingSearchCriteria,
+  MeetingType, // Import MeetingType
 } from '../../types';
 import {MeetingModel} from '../../models'; // Keep for potential template interactions
 import {createSelector} from 'reselect';
 import {COLLECTION_PATHS} from '../../types/schema'; // Import paths
+import moment from 'moment-timezone'; // Import moment-timezone
+import {DayOfWeek, DAYS_OF_WEEK} from '../../types/utils';
 
 // Define state type
 interface MeetingsState {
@@ -272,6 +275,36 @@ export const fetchFavoriteMeetings = createAsyncThunk(
   },
 );
 
+// --- Helper to calculate next meeting date ---
+function getNextMeetingDate(dayOfWeek: string, time: string): Date | null {
+  if (!dayOfWeek || !time) return null;
+
+  const days = DAYS_OF_WEEK;
+  const targetDayIndex = days.indexOf(dayOfWeek.toLowerCase() as DayOfWeek);
+  if (targetDayIndex === -1) return null;
+
+  const now = moment(); // Use moment in local timezone for comparison
+  let nextDate = now.clone().day(targetDayIndex);
+
+  // Parse time (handle potential AM/PM or 24hr)
+  const meetingTime = moment(time, ['h:mm A', 'HH:mm']);
+  if (!meetingTime.isValid()) return null;
+
+  // Set the time on the target date
+  nextDate
+    .hour(meetingTime.hour())
+    .minute(meetingTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  // If the calculated date/time is in the past relative to now, move to the next week
+  if (nextDate.isBefore(now)) {
+    nextDate.add(1, 'week');
+  }
+
+  return nextDate.toDate();
+}
+
 // Define fetchUpcomingMeetingInstances thunk
 export const fetchUpcomingMeetingInstances = createAsyncThunk<
   {groupId: string; instances: MeetingInstance[]}, // Return type
@@ -281,10 +314,46 @@ export const fetchUpcomingMeetingInstances = createAsyncThunk<
   'meetings/fetchUpcomingInstances',
   async (groupId, {getState, rejectWithValue}) => {
     try {
-      // TODO: Add caching logic based on lastFetchedGroupInstances[groupId]
-      const instances = await MeetingModel.getUpcomingInstancesByGroupId(
-        groupId,
-      );
+      // Attempt to fetch pre-generated instances first
+      let instances = await MeetingModel.getUpcomingInstancesByGroupId(groupId);
+
+      // --- Fallback Logic ---
+      if (!instances || instances.length === 0) {
+        console.log(
+          `No pre-generated instances found for group ${groupId}, attempting fallback from templates.`,
+        );
+        // Fetch meeting templates as a fallback
+        const meetings = await MeetingModel.getMeetingsByGroupId(groupId);
+        const now = new Date(); // For templateUpdatedAt default
+
+        instances = meetings
+          .map(meeting => {
+            const scheduledAtDate = getNextMeetingDate(
+              meeting.day,
+              meeting.time,
+            );
+
+            // Create a mock instance - essential fields must be present
+            const instance: MeetingInstance = {
+              // Inherit most fields from the template
+              ...meeting,
+              // Override/Add instance-specific fields
+              instanceId: `${meeting.id}-fallback-${
+                scheduledAtDate?.getTime() || Date.now()
+              }`, // Create a unique-ish ID
+              meetingId: meeting.id || 'unknown-template',
+              groupId: meeting.groupId || groupId,
+              scheduledAt: scheduledAtDate || now, // Use calculated date or fallback to now
+              isCancelled: meeting.isCancelledTemporarily ?? false, // Use template cancellation as instance cancellation
+              instanceNotice: meeting.temporaryNotice ?? null, // Use template notice as instance notice
+              templateUpdatedAt: meeting.updatedAt || now, // Use template update time or now
+            };
+            return instance;
+          })
+          .filter(instance => instance.scheduledAt >= now) // Filter out any calculated past dates
+          .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime()); // Sort chronologically
+      }
+      // --- End Fallback Logic ---
 
       return {groupId, instances};
     } catch (error: any) {

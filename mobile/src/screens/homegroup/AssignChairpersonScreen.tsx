@@ -101,7 +101,8 @@ const AssignChairpersonScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={[styles.memberItem, isSelected && styles.selectedMemberItem]}
-        onPress={() => handleSelectMember(item.id)}>
+        onPress={() => handleSelectMember(item.id)}
+        testID={`assign-chair-member-item-${item.id}`}>
         <Icon
           name={isSelected ? 'radiobox-marked' : 'radiobox-blank'}
           size={24}
@@ -127,15 +128,23 @@ const AssignChairpersonScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      testID={`assign-chair-screen-${instanceId}`}>
       {membersStatus === 'loading' ? (
-        <ActivityIndicator size="large" color="#2196F3" style={styles.loader} />
+        <ActivityIndicator
+          size="large"
+          color="#2196F3"
+          style={styles.loader}
+          testID="assign-chair-loader"
+        />
       ) : (
         <FlatList
           data={members}
           renderItem={renderItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
+          testID="assign-chair-member-list"
           ListHeaderComponent={
             // Option to clear the chairperson
             <TouchableOpacity
@@ -143,7 +152,8 @@ const AssignChairpersonScreen: React.FC = () => {
                 styles.memberItem,
                 selectedMemberId === null && styles.selectedMemberItem,
               ]}
-              onPress={() => handleSelectMember(null)}>
+              onPress={() => handleSelectMember(null)}
+              testID="assign-chair-clear-button">
               <Icon
                 name={
                   selectedMemberId === null
@@ -166,7 +176,7 @@ const AssignChairpersonScreen: React.FC = () => {
             </TouchableOpacity>
           }
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
+            <Text style={styles.emptyText} testID="assign-chair-empty-list">
               No members found in this group.
             </Text>
           }
@@ -177,7 +187,7 @@ const AssignChairpersonScreen: React.FC = () => {
         style={[styles.saveButton, isSaving && styles.disabledButton]}
         onPress={handleSave}
         disabled={isSaving || selectedMemberId === currentChairpersonId} // Disable if no change
-      >
+        testID="assign-chair-save-button">
         {isSaving ? (
           <ActivityIndicator color="#FFFFFF" />
         ) : (

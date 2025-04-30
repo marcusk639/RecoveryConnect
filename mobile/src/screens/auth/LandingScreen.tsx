@@ -22,7 +22,7 @@ const LandingScreen = () => {
   const navigation = useNavigation<NavigationProp>();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="landing-screen">
       <View style={styles.header}>
         <View style={styles.logoSmall}>
           <Text style={styles.logoText}>RC</Text>
@@ -30,7 +30,8 @@ const LandingScreen = () => {
         <Text style={styles.headerTitle}>Recovery Connect</Text>
         <TouchableOpacity
           style={styles.signInButton}
-          onPress={() => navigation.navigate('Login')}>
+          onPress={() => navigation.navigate('Login')}
+          testID="landing-signin-button">
           <Text style={styles.signInButtonText}>Sign In</Text>
         </TouchableOpacity>
       </View>
@@ -51,13 +52,15 @@ const LandingScreen = () => {
               style={styles.primaryButton}
               onPress={() => {
                 navigation.navigate('Meetings');
-              }}>
+              }}
+              testID="landing-find-meeting-button">
               <Text style={styles.primaryButtonText}>Find a Meeting</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.secondaryButton}
-              onPress={() => navigation.navigate('Register')}>
+              onPress={() => navigation.navigate('Register')}
+              testID="landing-register-button">
               <Text style={styles.secondaryButtonText}>Register</Text>
             </TouchableOpacity>
           </View>

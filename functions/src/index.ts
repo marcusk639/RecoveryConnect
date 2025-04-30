@@ -4,6 +4,7 @@ import {
   getAll12StepMeetings,
   getCustomMeetings,
   getAlcoholicsAnonymousMeetings,
+  generateMeetingHash,
 } from "./utils/meetings";
 import {
   Meeting,
@@ -402,12 +403,16 @@ export const fetchMeetingsForNewGroup = functionsV1.firestore
         `Found ${relevantMeetings.length} meetings relevant to group ${groupId}`
       );
 
+      const db = admin.firestore();
+      db.settings({ ignoreUndefinedProperties: true });
+
       // Create meeting documents in Firestore
-      const batch = admin.firestore().batch();
+      const batch = db.batch();
       let meetingsCreated = 0;
 
       for (const meeting of relevantMeetings) {
-        const meetingDocRef = admin.firestore().collection("meetings").doc();
+        const id = generateMeetingHash(meeting);
+        const meetingDocRef = db.collection("meetings").doc(id);
 
         // Create meeting document with a reference to the group
         batch.set(meetingDocRef, {
@@ -465,6 +470,7 @@ function formatMeetingForFirestore(meeting: any): Meeting {
     onlineNotes: meeting.location_notes || "",
     online: !!meeting.conference_url, // If there's a URL, it's likely online
     link: meeting.conference_url || null,
+    ...meeting,
   };
 }
 
@@ -1326,13 +1332,14 @@ async function generateInstancesForMeeting(
  */
 // Correct scheduled function syntax using v1 for broader compatibility or ensure v2 setup
 export const generateWeeklyMeetingInstances = functionsV1.pubsub
-  .schedule("every sunday 00:00")
+  .schedule("0 0 1 * *")
   .timeZone("UTC")
   .onRun(async (context) => {
-    functions.logger.info("Starting weekly meeting instance generation...");
+    functions.logger.info("Starting monthly meeting instance generation...");
     const db = admin.firestore(); // Get Firestore instance
     const today = moment.utc();
-    const nextWeekEnd = moment.utc().add(7, "days").endOf("day");
+    // Calculate end date for the next month
+    const nextMonthEnd = moment.utc().add(1, "month").endOf("month"); // Generate instances up to the end of next month
 
     try {
       const groupsSnapshot = await db.collection("groups").get();
@@ -1360,7 +1367,7 @@ export const generateWeeklyMeetingInstances = functionsV1.pubsub
                 meetingDoc.id,
                 meetingDoc.data() as MeetingDocument,
                 today, // Generate starting from today
-                nextWeekEnd, // Generate for the next week
+                nextMonthEnd, // Generate for the next month
                 groupTimezone,
                 db
               );
@@ -1378,7 +1385,7 @@ export const generateWeeklyMeetingInstances = functionsV1.pubsub
 
       await Promise.all(groupPromises);
       functions.logger.info(
-        `Weekly meeting instance generation finished. Total instances created: ${totalInstancesCreated}.`
+        `Monthly meeting instance generation finished. Total instances created/checked: ${totalInstancesCreated}.`
       );
       return null;
     } catch (error) {

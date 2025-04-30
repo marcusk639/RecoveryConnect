@@ -573,6 +573,7 @@ const GroupChatScreen: React.FC = () => {
     return (
       <Pressable
         onLongPress={() => !isSystem && handleMessageLongPress(item.id)}
+        testID={`chat-message-${item.id}`}
         style={[
           styles.messageBubbleContainer,
           isCurrentUser
@@ -623,10 +624,8 @@ const GroupChatScreen: React.FC = () => {
           {/* Text message */}
           {item.text && (
             <Text
-              style={[
-                styles.messageText,
-                isSystem && styles.systemMessageText,
-              ]}>
+              style={[styles.messageText, isSystem && styles.systemMessageText]}
+              testID={`chat-message-text-${item.id}`}>
               {renderParsedText(item.text)}
             </Text>
           )}
@@ -677,13 +676,15 @@ const GroupChatScreen: React.FC = () => {
           {
             opacity: fadeAnim,
           },
-        ]}>
+        ]}
+        testID={`chat-reaction-picker-${selectedMessage}`}>
         <View style={styles.reactionOptions}>
           {REACTIONS.map(reaction => (
             <TouchableOpacity
               key={reaction.name}
               style={styles.reactionOption}
-              onPress={() => handleAddReaction(selectedMessage, reaction.name)}>
+              onPress={() => handleAddReaction(selectedMessage, reaction.name)}
+              testID={`chat-reaction-option-${reaction.name}`}>
               <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
             </TouchableOpacity>
           ))}
@@ -697,7 +698,8 @@ const GroupChatScreen: React.FC = () => {
               if (message) {
                 handleReplyToMessage(message);
               }
-            }}>
+            }}
+            testID="chat-message-option-reply">
             <Icon name="reply" size={24} color="#424242" />
             <Text style={styles.messageOptionText}>Reply</Text>
           </TouchableOpacity>
@@ -706,7 +708,8 @@ const GroupChatScreen: React.FC = () => {
             style={[styles.messageOption, styles.deleteOption]}
             onPress={() =>
               selectedMessage && handleDeleteMessage(selectedMessage)
-            }>
+            }
+            testID="chat-message-option-delete">
             <Icon name="delete" size={24} color="#F44336" />
             <Text style={styles.deleteOptionText}>Delete</Text>
           </TouchableOpacity>
@@ -723,7 +726,7 @@ const GroupChatScreen: React.FC = () => {
               useNativeDriver: true,
             }).start();
           }}
-        />
+          testID="chat-reaction-picker-backdrop"></TouchableOpacity>
       </Animated.View>
     );
   };
@@ -767,14 +770,16 @@ const GroupChatScreen: React.FC = () => {
 
   // Main render
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={styles.safeArea}
+      testID={`group-chat-screen-${groupId}`}>
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
         {status === 'loading' && messages.length === 0 ? (
-          <View style={styles.loadingContainer}>
+          <View style={styles.loadingContainer} testID="chat-loader">
             <ActivityIndicator size="large" color="#2196F3" />
             <Text style={styles.loadingText}>Loading messages...</Text>
           </View>
@@ -784,6 +789,7 @@ const GroupChatScreen: React.FC = () => {
             data={messages}
             renderItem={renderMessageBubble}
             keyExtractor={item => item.id}
+            testID="chat-message-list"
             contentContainerStyle={styles.messagesList}
             onEndReached={() =>
               flatListRef.current?.scrollToEnd({animated: false})
@@ -822,7 +828,9 @@ const GroupChatScreen: React.FC = () => {
         {/* Input area */}
         <View style={styles.inputContainer}>
           {replyingTo && (
-            <View style={styles.replyInputContainer}>
+            <View
+              style={styles.replyInputContainer}
+              testID="chat-replying-to-banner">
               <View style={styles.replyInputContent}>
                 <Text style={styles.replyInputLabel}>
                   Replying to {replyingTo.senderName}
@@ -833,7 +841,8 @@ const GroupChatScreen: React.FC = () => {
               </View>
               <TouchableOpacity
                 style={styles.cancelReplyButton}
-                onPress={handleCancelReply}>
+                onPress={handleCancelReply}
+                testID="chat-cancel-reply-button">
                 <Icon name="close" size={16} color="#9E9E9E" />
               </TouchableOpacity>
             </View>
@@ -844,7 +853,8 @@ const GroupChatScreen: React.FC = () => {
               style={styles.attachButton}
               onPress={() =>
                 navigation.navigate('GroupChatMediaPicker', {groupId})
-              }>
+              }
+              testID="chat-attach-button">
               <Icon name="plus" size={24} color="#2196F3" />
             </TouchableOpacity>
 
@@ -859,13 +869,15 @@ const GroupChatScreen: React.FC = () => {
                 multiline
                 onFocus={handleInputFocus}
                 onBlur={handleInputBlur}
+                testID="chat-message-input"
               />
             </Animated.View>
 
             <TouchableOpacity
               style={styles.sendButton}
               onPress={handleSendMessage}
-              disabled={!messageText.trim()}>
+              disabled={!messageText.trim()}
+              testID="chat-send-button">
               <Icon
                 name="send"
                 size={24}
@@ -884,7 +896,7 @@ const GroupChatScreen: React.FC = () => {
 
       {/* Error Display */}
       {error && (
-        <View style={styles.errorContainer}>
+        <View style={styles.errorContainer} testID="chat-error-banner">
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}

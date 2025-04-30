@@ -100,6 +100,7 @@ export const sendMessage = createAsyncThunk(
       replyToMessageId = null,
       isSystemMessage = false,
       attachments,
+      mentionedUserIds,
     }: {
       groupId: string;
       text: string;
@@ -112,6 +113,7 @@ export const sendMessage = createAsyncThunk(
         size?: number;
         duration?: number;
       }[];
+      mentionedUserIds?: string[];
     },
     {rejectWithValue},
   ) => {
@@ -119,9 +121,16 @@ export const sendMessage = createAsyncThunk(
       const message = await ChatModel.sendMessage(
         groupId,
         text,
-        replyToMessageId,
-        isSystemMessage,
         attachments,
+        replyToMessageId
+          ? {
+              messageId: replyToMessageId,
+              senderName: 'System',
+              text: 'This is a system message',
+            }
+          : null,
+        isSystemMessage,
+        mentionedUserIds,
       );
       return {groupId, message};
     } catch (error: any) {
@@ -381,9 +390,11 @@ export const selectMessagesByGroup = (state: RootState, groupId: string) => {
   const messagesObj = state.chat.messages[groupId] || {};
   // Convert to array and sort by sentAt (oldest first)
   return Object.values(messagesObj).sort((a, b) => {
-    const dateA = a.sentAt instanceof Date ? a.sentAt : new Date(a.sentAt!);
-    const dateB = b.sentAt instanceof Date ? b.sentAt : new Date(b.sentAt!);
-    return dateA.getTime() - dateB.getTime();
+    const dateA =
+      (a.sentAt as any) instanceof Date ? a.sentAt : new Date(a.sentAt!);
+    const dateB =
+      (b.sentAt as any) instanceof Date ? b.sentAt : new Date(b.sentAt!);
+    return (dateA as Date).getTime() - (dateB as Date).getTime();
   });
 };
 

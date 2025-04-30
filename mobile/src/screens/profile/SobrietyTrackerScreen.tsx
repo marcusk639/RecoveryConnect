@@ -269,7 +269,8 @@ const SobrietyTrackerScreen: React.FC = () => {
         style={styles.medallionPressableArea} // Use a slightly larger press area
         onPress={() => onMilestonePress(index)}
         disabled={!isEarned}
-        activeOpacity={0.8}>
+        activeOpacity={0.8}
+        testID={`sobriety-medallion-${milestone.key}`}>
         <Animated.View
           style={[
             styles.medallionContainer,
@@ -323,7 +324,9 @@ const SobrietyTrackerScreen: React.FC = () => {
     if (!showCelebration || !newMilestone) return null;
 
     return (
-      <View style={styles.celebrationOverlay}>
+      <View
+        style={styles.celebrationOverlay}
+        testID={`sobriety-celebration-modal-${newMilestone.key}`}>
         <View style={styles.celebrationContainer}>
           <LottieViewFallback
             ref={confettiRef}
@@ -357,7 +360,8 @@ const SobrietyTrackerScreen: React.FC = () => {
 
             <TouchableOpacity
               style={styles.closeCelebrationButton}
-              onPress={() => setShowCelebration(false)}>
+              onPress={() => setShowCelebration(false)}
+              testID="sobriety-celebration-close-button">
               <Text style={styles.closeCelebrationText}>Continue</Text>
             </TouchableOpacity>
           </AnimatedView>
@@ -396,19 +400,21 @@ const SobrietyTrackerScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="sobriety-tracker-screen">
       <ScrollView style={styles.scrollViewContent}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Sobriety Tracker</Text>
         </View>
 
         {/* Sobriety Counter */}
-        <View style={styles.counterContainer}>
+        <View style={styles.counterContainer} testID="sobriety-counter-section">
           <GradientFallback
             colors={['#2196F3', '#3949AB']}
             style={styles.counterGradient}>
             <Text style={styles.counterLabel}>Your Sobriety</Text>
-            <Text style={styles.counterValue}>{sobrietyDays}</Text>
+            <Text style={styles.counterValue} testID="sobriety-days-count">
+              {sobrietyDays}
+            </Text>
             <Text style={styles.counterUnit}>Days</Text>
             <Text style={styles.counterDetail}>
               {sobrietyHours} hours, {sobrietyMinutes} minutes
@@ -420,7 +426,7 @@ const SobrietyTrackerScreen: React.FC = () => {
         </View>
 
         {/* Sobriety Stats */}
-        <View style={styles.statsContainer}>
+        <View style={styles.statsContainer} testID="sobriety-stats-section">
           <View style={styles.statItem}>
             <Icon name="cash" size={28} color="#4CAF50" />
             <Text style={styles.statValue}>${moneySaved.toFixed(0)}</Text>
@@ -445,7 +451,7 @@ const SobrietyTrackerScreen: React.FC = () => {
         </View>
 
         {/* Current Progress */}
-        <View style={styles.progressSection}>
+        <View style={styles.progressSection} testID="sobriety-progress-section">
           <Text style={styles.progressTitle}>Progress to Next Milestone</Text>
           <View style={styles.progressBarContainer}>
             <Animated.View
@@ -471,7 +477,7 @@ const SobrietyTrackerScreen: React.FC = () => {
             </Text>
           </View>
           {currentMilestoneIndex < MILESTONES.length - 1 && (
-            <Text style={styles.daysToGo}>
+            <Text style={styles.daysToGo} testID="sobriety-days-to-go">
               {MILESTONES[nextMilestoneIndex].days - sobrietyDays} days to go!
             </Text>
           )}
@@ -487,6 +493,7 @@ const SobrietyTrackerScreen: React.FC = () => {
           <ScrollView
             horizontal
             ref={scrollViewRef}
+            testID="sobriety-medallion-scrollview"
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.medallionsScrollContent}
             snapToInterval={WINDOW_WIDTH * 0.5}

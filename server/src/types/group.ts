@@ -16,6 +16,11 @@ export interface Group {
   meetingTime: string;
   location: string;
   address?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  formattedAddress?: string;
   format: string;
   isOnline: boolean;
   onlineLink?: string;

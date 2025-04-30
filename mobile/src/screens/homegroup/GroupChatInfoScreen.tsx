@@ -94,7 +94,8 @@ const GroupChatInfoScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={styles.memberItem}
-        onPress={() => navigateToMemberDetails(item.id)}>
+        onPress={() => navigateToMemberDetails(item.id)}
+        testID={`chat-info-member-${item.id}`}>
         <View style={styles.memberAvatarContainer}>
           {item.photoURL ? (
             <View style={styles.memberAvatar}>
@@ -139,12 +140,14 @@ const GroupChatInfoScreen: React.FC = () => {
 
   // Main render
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={styles.safeArea}
+      testID={`group-chat-info-screen-${groupId}`}>
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
       <View style={styles.container}>
         {isLoading ? (
-          <View style={styles.loadingContainer}>
+          <View style={styles.loadingContainer} testID="chat-info-loader">
             <ActivityIndicator size="large" color="#2196F3" />
             <Text style={styles.loadingText}>Loading chat information...</Text>
           </View>
@@ -154,6 +157,7 @@ const GroupChatInfoScreen: React.FC = () => {
             renderItem={renderMemberItem}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.listContainer}
+            testID="chat-info-member-list"
             ListHeaderComponent={
               <>
                 {/* Group info section */}
@@ -161,7 +165,8 @@ const GroupChatInfoScreen: React.FC = () => {
                   <Text style={styles.sectionTitle}>Group Information</Text>
                   <TouchableOpacity
                     style={styles.groupInfoButton}
-                    onPress={navigateToGroupOverview}>
+                    onPress={navigateToGroupOverview}
+                    testID="chat-info-view-group-button">
                     <Icon name="account-group" size={24} color="#2196F3" />
                     <Text style={styles.groupInfoText}>View Group Profile</Text>
                     <Icon name="chevron-right" size={24} color="#BDBDBD" />
@@ -169,7 +174,9 @@ const GroupChatInfoScreen: React.FC = () => {
                 </View>
 
                 {/* Chat settings section */}
-                <View style={styles.settingsSection}>
+                <View
+                  style={styles.settingsSection}
+                  testID="chat-info-settings-section">
                   <Text style={styles.sectionTitle}>Chat Settings</Text>
 
                   <View style={styles.settingItem}>
@@ -180,6 +187,7 @@ const GroupChatInfoScreen: React.FC = () => {
                     <Switch
                       value={notificationsEnabled}
                       onValueChange={toggleNotifications}
+                      testID="chat-info-notifications-switch"
                       trackColor={{false: '#BDBDBD', true: '#81D4FA'}}
                       thumbColor={notificationsEnabled ? '#2196F3' : '#F5F5F5'}
                       ios_backgroundColor="#BDBDBD"

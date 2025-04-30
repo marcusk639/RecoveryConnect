@@ -37,7 +37,13 @@ import LocationPicker from '../../components/groups/LocationPicker';
 import moment from 'moment';
 
 // Types for meetings data
-import {Meeting, MeetingType, Location, DaysAndTimes} from '../../types';
+import {
+  Meeting,
+  MeetingType,
+  Location,
+  DaysAndTimes,
+  MeetingFilters,
+} from '../../types';
 
 const MeetingsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
@@ -72,9 +78,9 @@ const MeetingsScreen: React.FC = () => {
   >('All');
   const [showOnline, setShowOnline] = useState(true);
   const [showInPerson, setShowInPerson] = useState(true);
-  const [selectedDayFilter, setSelectedDayFilter] = useState<string | null>(
-    null,
-  );
+  const [selectedDayFilter, setSelectedDayFilter] = useState<
+    keyof DaysAndTimes | null
+  >(null);
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string | null>(
     null,
   );
@@ -169,6 +175,7 @@ const MeetingsScreen: React.FC = () => {
         fetchMeetings({
           location: currentUserLocation || undefined,
           filters: {
+            day: selectedDayFilter || undefined,
             type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
           },
         }),
@@ -188,6 +195,7 @@ const MeetingsScreen: React.FC = () => {
           fetchMeetings({
             location,
             filters: {
+              day: selectedDayFilter || undefined,
               type:
                 selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
             },
@@ -203,6 +211,7 @@ const MeetingsScreen: React.FC = () => {
           fetchMeetings({
             location: customLocation || undefined,
             filters: {
+              day: selectedDayFilter || undefined,
               type:
                 selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
             },
@@ -242,6 +251,7 @@ const MeetingsScreen: React.FC = () => {
         fetchMeetings({
           location: customLocation,
           filters: {
+            day: selectedDayFilter || undefined,
             type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
           },
         }),
@@ -263,15 +273,27 @@ const MeetingsScreen: React.FC = () => {
     }
   }, [error]);
 
-  const applyFilters = () => {
-    fetchMeetingsWithCriteria(activeLocation);
-  };
-
   const fetchMeetingsWithCriteria = (locationToUse: Location | null) => {
-    const filters: any = {
+    let validDay: keyof DaysAndTimes | undefined = undefined;
+    const potentialDay = selectedDayFilter; // Already string | null
+
+    if (
+      potentialDay &&
+      daysOfWeek
+        .slice(1)
+        .map(d => d.toLowerCase())
+        .includes(potentialDay)
+    ) {
+      // Only if the string is a valid day name (excluding 'All')
+      validDay = potentialDay as keyof DaysAndTimes; // Assert here after validation
+    }
+
+    const filters: MeetingFilters = {
       type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-      day: selectedDayFilter,
+      day: validDay, // Now assigning the correctly typed variable
     };
+
+    console.log('Fetching with filters:', filters);
     dispatch(fetchMeetings({location: locationToUse || undefined, filters}));
   };
 
@@ -329,7 +351,11 @@ const MeetingsScreen: React.FC = () => {
 
   const formatDayAndTime = (meeting: Meeting): string => {
     if (meeting.day) {
-      const day = meeting.day.charAt(0).toUpperCase() + meeting.day.slice(1);
+      let meetingDay = meeting.day;
+      if (typeof meetingDay === 'number') {
+        meetingDay = daysOfWeek[meetingDay - 1];
+      }
+      const day = meetingDay.charAt(0).toUpperCase() + meetingDay.slice(1);
       const formattedTime = formatMeetingTime(meeting.time); // Use the new formatter
       return `${day} at ${formattedTime}`;
     }
@@ -376,7 +402,8 @@ const MeetingsScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={styles.meetingCard}
-        onPress={() => showMeetingDetails(item)}>
+        onPress={() => showMeetingDetails(item)}
+        testID={`meeting-card-${item.id || item.name}`}>
         <View style={styles.meetingHeader}>
           <View style={styles.meetingTimeContainer}>
             <Text style={styles.meetingDay}>{formatDayAndTime(item)}</Text>
@@ -409,7 +436,8 @@ const MeetingsScreen: React.FC = () => {
       visible={showFilterModal}
       animationType="slide"
       transparent={true}
-      onRequestClose={() => setShowFilterModal(false)}>
+      onRequestClose={() => setShowFilterModal(false)}
+      testID="meetings-filter-modal">
       <Pressable style={styles.modalOverlay}>
         <View style={styles.filterModalContainer}>
           <View style={styles.pullIndicator} />
@@ -417,7 +445,8 @@ const MeetingsScreen: React.FC = () => {
             <Text style={styles.locationModalTitle}>Filters</Text>
             <TouchableOpacity
               onPress={() => setShowFilterModal(false)}
-              style={styles.closeButton}>
+              style={styles.closeButton}
+              testID="meetings-filter-close-button">
               <Icon name="close" size={24} color="#757575" />
             </TouchableOpacity>
           </View>
@@ -432,7 +461,8 @@ const MeetingsScreen: React.FC = () => {
                   showInPerson && styles.typeFilterActive,
                   !showOnline && !showInPerson && styles.typeFilterInactive,
                 ]}
-                onPress={() => setShowInPerson(!showInPerson)}>
+                onPress={() => setShowInPerson(!showInPerson)}
+                testID="filter-inperson-button">
                 <Text
                   style={[
                     styles.typeFilterText,
@@ -447,7 +477,8 @@ const MeetingsScreen: React.FC = () => {
                   showOnline && styles.typeFilterActive,
                   !showOnline && !showInPerson && styles.typeFilterInactive,
                 ]}
-                onPress={() => setShowOnline(!showOnline)}>
+                onPress={() => setShowOnline(!showOnline)}
+                testID="filter-online-button">
                 <Text
                   style={[
                     styles.typeFilterText,
@@ -477,7 +508,8 @@ const MeetingsScreen: React.FC = () => {
                     setSelectedTypeFilter(
                       selectedTypeFilter === type ? 'All' : type,
                     )
-                  }>
+                  }
+                  testID={`filter-type-${type}-chip`}>
                   <Text
                     style={[
                       styles.chipText,
@@ -498,20 +530,25 @@ const MeetingsScreen: React.FC = () => {
                   style={[
                     styles.chipButton,
                     selectedDayFilter ===
-                      (day === 'All' ? null : day.toLowerCase()) &&
-                      styles.chipButtonActive,
+                      (day.toLowerCase() === 'all'
+                        ? null
+                        : day.toLowerCase()) && styles.chipButtonActive,
                   ]}
                   onPress={() =>
                     setSelectedDayFilter(
-                      day === 'All' ? null : day.toLowerCase(),
+                      day === 'All'
+                        ? null
+                        : (day.toLowerCase() as keyof DaysAndTimes),
                     )
-                  }>
+                  }
+                  testID={`filter-day-${day}-chip`}>
                   <Text
                     style={[
                       styles.chipText,
                       selectedDayFilter ===
-                        (day === 'All' ? null : day.toLowerCase()) &&
-                        styles.chipTextActive,
+                        (day.toLowerCase() === 'all'
+                          ? null
+                          : day.toLowerCase()) && styles.chipTextActive,
                     ]}>
                     {day}
                   </Text>
@@ -537,7 +574,8 @@ const MeetingsScreen: React.FC = () => {
                     setSelectedTimeFilter(
                       timeOption === 'All' ? null : timeOption.toLowerCase(),
                     )
-                  }>
+                  }
+                  testID={`filter-time-${timeOption}-chip`}>
                   <Text
                     style={[
                       styles.chipText,
@@ -555,7 +593,8 @@ const MeetingsScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.applyFilterButton}
-            onPress={onFilterModalClose}>
+            onPress={onFilterModalClose}
+            testID="meetings-filter-apply-button">
             <Text style={styles.applyFilterButtonText}>Apply Filters</Text>
           </TouchableOpacity>
         </View>
@@ -567,13 +606,15 @@ const MeetingsScreen: React.FC = () => {
     <Modal
       visible={showLocationPicker}
       animationType="slide"
-      onRequestClose={() => setShowLocationPicker(false)}>
+      onRequestClose={() => setShowLocationPicker(false)}
+      testID="meetings-location-picker-modal">
       <SafeAreaView style={styles.locationModalContainer}>
         <View style={styles.locationModalHeader}>
           <Text style={styles.locationModalTitle}>Search Location</Text>
           <TouchableOpacity
             onPress={() => setShowLocationPicker(false)}
-            style={styles.closeButton}>
+            style={styles.closeButton}
+            testID="location-picker-close-button">
             <Icon name="close" size={24} color="#757575" />
           </TouchableOpacity>
         </View>
@@ -602,7 +643,8 @@ const MeetingsScreen: React.FC = () => {
               setCustomLocation(null);
               setCustomLocationAddress(null);
               setShowLocationPicker(false);
-            }}>
+            }}
+            testID="location-picker-use-my-location-button">
             <Text style={styles.useMyLocationText}>
               Use My Current Location
             </Text>
@@ -617,15 +659,19 @@ const MeetingsScreen: React.FC = () => {
       visible={meetingDetailsVisible}
       animationType="slide"
       transparent={true}
-      onRequestClose={() => setMeetingDetailsVisible(false)}>
+      onRequestClose={() => setMeetingDetailsVisible(false)}
+      testID={`meeting-details-modal-${selectedMeeting?.id}`}>
       {selectedMeeting && (
         <View style={styles.modalOverlay}>
-          <View style={styles.detailsModalContent}>
+          <View
+            style={styles.detailsModalContent}
+            testID={`meeting-details-modal-${selectedMeeting.id}`}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Meeting Details</Text>
               <TouchableOpacity
                 onPress={() => setMeetingDetailsVisible(false)}
-                style={styles.modalCloseButton}>
+                style={styles.modalCloseButton}
+                testID="meeting-details-close-button">
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -665,7 +711,8 @@ const MeetingsScreen: React.FC = () => {
                     style={styles.linkButton}
                     onPress={() => {
                       Linking.openURL(selectedMeeting.link || '#');
-                    }}>
+                    }}
+                    testID="meeting-details-join-link-button">
                     <Text style={styles.linkButtonText}>Join Meeting</Text>
                   </TouchableOpacity>
                 )}
@@ -702,7 +749,8 @@ const MeetingsScreen: React.FC = () => {
                         },
                       });
                       setMeetingDetailsVisible(false);
-                    }}>
+                    }}
+                    testID="meeting-details-create-group-button">
                     <Text style={styles.createGroupButtonText}>
                       Create Group
                     </Text>
@@ -758,7 +806,7 @@ const MeetingsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="meetings-screen">
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Find Meetings</Text>
         <Text style={styles.headerSubtitle}>
@@ -786,13 +834,15 @@ const MeetingsScreen: React.FC = () => {
             value={nameQuery}
             onChangeText={handleSearchChange}
             returnKeyType="search"
+            testID="meetings-search-input"
           />
         </View>
 
         <View style={styles.filterButtonsRow}>
           <TouchableOpacity
             style={styles.filterChipButton}
-            onPress={() => setShowFilterModal(true)}>
+            onPress={() => setShowFilterModal(true)}
+            testID="meetings-filter-button">
             <Icon name="filter-variant" size={18} color="#1976D2" />
             <Text style={styles.filterChipButtonText}>
               {selectedTypeFilter === 'All' ? 'Filters' : selectedTypeFilter}
@@ -802,7 +852,8 @@ const MeetingsScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.filterChipButton}
-            onPress={() => setShowLocationPicker(true)}>
+            onPress={() => setShowLocationPicker(true)}
+            testID="meetings-location-button">
             <Icon name="map-marker-outline" size={18} color="#1976D2" />
             <Text
               style={styles.filterChipButtonText}
@@ -815,7 +866,8 @@ const MeetingsScreen: React.FC = () => {
 
           <TouchableOpacity
             style={[styles.filterChipButton, styles.resetChipButton]}
-            onPress={resetFilters}>
+            onPress={resetFilters}
+            testID="meetings-reset-filters-button">
             <Icon name="filter-variant-remove" size={18} color="#757575" />
           </TouchableOpacity>
         </View>
@@ -855,7 +907,7 @@ const MeetingsScreen: React.FC = () => {
       )}
 
       {isLoading && !refreshing ? (
-        <View style={styles.loaderContainer}>
+        <View style={styles.loaderContainer} testID="meetings-loader">
           <ActivityIndicator size="large" color="#2196F3" />
           <Text style={styles.loadingText}>Finding meetings...</Text>
         </View>
@@ -891,6 +943,7 @@ const MeetingsScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           }
+          testID="meetings-list"
         />
       )}
 

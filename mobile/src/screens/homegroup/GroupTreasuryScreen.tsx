@@ -160,7 +160,7 @@ const GroupTreasuryScreen: React.FC = () => {
   };
 
   const renderTransactionItem = ({item}: {item: Transaction}) => (
-    <View style={styles.transactionItem}>
+    <View style={styles.transactionItem} testID={`transaction-item-${item.id}`}>
       <View style={styles.transactionHeader}>
         <Text style={styles.transactionDate}>
           {item.createdAt?.toLocaleDateString()}
@@ -183,7 +183,7 @@ const GroupTreasuryScreen: React.FC = () => {
     if (!treasuryStats) return null;
 
     return (
-      <View style={styles.summaryContainer}>
+      <View style={styles.summaryContainer} testID="treasury-summary-section">
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Current Balance</Text>
@@ -231,7 +231,9 @@ const GroupTreasuryScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      testID={`group-treasury-screen-${groupId}`}>
       <ScrollView
         style={styles.scrollView}
         refreshControl={
@@ -248,7 +250,8 @@ const GroupTreasuryScreen: React.FC = () => {
                   groupId,
                   groupName,
                 })
-              }>
+              }
+              testID="treasury-add-transaction-button">
               <Text style={styles.addButtonText}>Add Transaction</Text>
             </TouchableOpacity>
           </View>
@@ -262,9 +265,12 @@ const GroupTreasuryScreen: React.FC = () => {
               renderItem={renderTransactionItem}
               keyExtractor={item => item.id}
               scrollEnabled={false}
+              testID="treasury-transactions-list"
             />
           ) : (
-            <Text style={styles.emptyText}>No transactions found</Text>
+            <Text style={styles.emptyText} testID="treasury-no-transactions">
+              No transactions found
+            </Text>
           )}
         </View>
       </ScrollView>
