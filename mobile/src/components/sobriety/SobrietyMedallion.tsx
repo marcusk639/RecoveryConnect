@@ -17,7 +17,6 @@ import type {GCanvasRef} from '@flyskywhy/react-native-gcanvas'; // Import the r
 // Use core three.js
 import * as THREE from 'three';
 // Import OrbitControls from examples and rely on the custom declaration file
-import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls';
 // Note: For actual model loading, you'd need setup for GLTFLoader
 // from 'three/examples/jsm/loaders/GLTFLoader' and asset loading.
 
