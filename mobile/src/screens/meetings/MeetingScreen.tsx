@@ -37,8 +37,13 @@ import LocationPicker from '../../components/groups/LocationPicker';
 import moment from 'moment';
 
 // Types for meetings data
-import {Meeting, MeetingType, Location, DaysAndTimes} from '../../types';
-import {DayOfWeek, DAYS_OF_WEEK} from '../../types/utils';
+import {
+  Meeting,
+  MeetingType,
+  Location,
+  DaysAndTimes,
+  MeetingFilters,
+} from '../../types';
 
 const MeetingsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
@@ -73,9 +78,9 @@ const MeetingsScreen: React.FC = () => {
   >('All');
   const [showOnline, setShowOnline] = useState(true);
   const [showInPerson, setShowInPerson] = useState(true);
-  const [selectedDayFilter, setSelectedDayFilter] = useState<DayOfWeek | null>(
-    null,
-  );
+  const [selectedDayFilter, setSelectedDayFilter] = useState<
+    keyof DaysAndTimes | null
+  >(null);
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string | null>(
     null,
   );
@@ -88,7 +93,16 @@ const MeetingsScreen: React.FC = () => {
     'Custom',
   ];
   // Define days and time options
-  const daysOfWeek = DAYS_OF_WEEK;
+  const daysOfWeek = [
+    'All',
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
   const timeOfDayOptions = ['All', 'Morning', 'Afternoon', 'Evening']; // Define time ranges if needed
 
   const meetings = useMemo(() => {
@@ -161,6 +175,7 @@ const MeetingsScreen: React.FC = () => {
         fetchMeetings({
           location: currentUserLocation || undefined,
           filters: {
+            day: selectedDayFilter || undefined,
             type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
           },
         }),
@@ -180,6 +195,7 @@ const MeetingsScreen: React.FC = () => {
           fetchMeetings({
             location,
             filters: {
+              day: selectedDayFilter || undefined,
               type:
                 selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
             },
@@ -195,6 +211,7 @@ const MeetingsScreen: React.FC = () => {
           fetchMeetings({
             location: customLocation || undefined,
             filters: {
+              day: selectedDayFilter || undefined,
               type:
                 selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
             },
@@ -234,6 +251,7 @@ const MeetingsScreen: React.FC = () => {
         fetchMeetings({
           location: customLocation,
           filters: {
+            day: selectedDayFilter || undefined,
             type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
           },
         }),
@@ -255,15 +273,27 @@ const MeetingsScreen: React.FC = () => {
     }
   }, [error]);
 
-  const applyFilters = () => {
-    fetchMeetingsWithCriteria(activeLocation);
-  };
-
   const fetchMeetingsWithCriteria = (locationToUse: Location | null) => {
-    const filters: any = {
+    let validDay: keyof DaysAndTimes | undefined = undefined;
+    const potentialDay = selectedDayFilter; // Already string | null
+
+    if (
+      potentialDay &&
+      daysOfWeek
+        .slice(1)
+        .map(d => d.toLowerCase())
+        .includes(potentialDay)
+    ) {
+      // Only if the string is a valid day name (excluding 'All')
+      validDay = potentialDay as keyof DaysAndTimes; // Assert here after validation
+    }
+
+    const filters: MeetingFilters = {
       type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-      day: selectedDayFilter,
+      day: validDay, // Now assigning the correctly typed variable
     };
+
+    console.log('Fetching with filters:', filters);
     dispatch(fetchMeetings({location: locationToUse || undefined, filters}));
   };
 
@@ -323,7 +353,7 @@ const MeetingsScreen: React.FC = () => {
     if (meeting.day) {
       let meetingDay = meeting.day;
       if (typeof meetingDay === 'number') {
-        meetingDay = DAYS_OF_WEEK[meetingDay - 1];
+        meetingDay = daysOfWeek[meetingDay - 1];
       }
       const day = meetingDay.charAt(0).toUpperCase() + meetingDay.slice(1);
       const formattedTime = formatMeetingTime(meeting.time); // Use the new formatter
@@ -500,15 +530,15 @@ const MeetingsScreen: React.FC = () => {
                   style={[
                     styles.chipButton,
                     selectedDayFilter ===
-                      (day.toLowerCase() === DayOfWeek.ALL
+                      (day.toLowerCase() === 'all'
                         ? null
                         : day.toLowerCase()) && styles.chipButtonActive,
                   ]}
                   onPress={() =>
                     setSelectedDayFilter(
-                      (day.toLowerCase() === DayOfWeek.ALL
+                      day === 'All'
                         ? null
-                        : day.toLowerCase()) as DayOfWeek,
+                        : (day.toLowerCase() as keyof DaysAndTimes),
                     )
                   }
                   testID={`filter-day-${day}-chip`}>
@@ -516,7 +546,7 @@ const MeetingsScreen: React.FC = () => {
                     style={[
                       styles.chipText,
                       selectedDayFilter ===
-                        (day.toLowerCase() === DayOfWeek.ALL
+                        (day.toLowerCase() === 'all'
                           ? null
                           : day.toLowerCase()) && styles.chipTextActive,
                     ]}>
