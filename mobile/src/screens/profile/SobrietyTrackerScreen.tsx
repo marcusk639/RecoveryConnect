@@ -401,6 +401,17 @@ const SobrietyTrackerScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} testID="sobriety-tracker-screen">
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          testID="sobriety-tracker-back-button">
+          <Icon name="arrow-left" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Sobriety Tracker</Text>
+        <View style={styles.headerPlaceholder} />
+      </View>
+
       <ScrollView style={styles.scrollViewContent}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Sobriety Tracker</Text>
@@ -543,18 +554,30 @@ const styles = StyleSheet.create({
     color: '#757575',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#2196F3',
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
+  backButton: {
+    padding: 8,
+    marginRight: 16,
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  headerPlaceholder: {
+    width: 40,
   },
   counterContainer: {
     margin: 16,

@@ -17,21 +17,47 @@ import * as admin from "firebase-admin";
 import * as geofire from "geofire-common";
 // Import the v1 namespace specifically
 import * as functionsV1 from "firebase-functions/v1";
-import { migrateGeohashes } from "./migrations/migrateGeohashes";
 import { Query } from "firebase-admin/firestore";
-import { HttpsError } from "firebase-functions/v1/https";
 import { getMessaging } from "firebase-admin/messaging";
 import moment from "moment-timezone";
+import Stripe from "stripe";
+// Import CallableRequest type if available from functions, might need v1
+
+// Initialize Stripe with secret key from environment config
+const stripeSecretKey = functions.config().stripe?.secret_key;
+if (!stripeSecretKey) {
+  console.error(
+    "Stripe secret key not configured. Set using 'firebase functions:config:set stripe.secret_key=...'"
+  );
+}
+const stripe = new Stripe(
+  stripeSecretKey || "YOUR_FALLBACK_TEST_KEY", // Ensure you replace the fallback if needed
+  {
+    apiVersion: "2025-03-31.basil", // Revert to the version expected by installed types
+    typescript: true,
+  }
+);
+
+// Get other config values
+const webhookSecret = functions.config().stripe?.webhook_secret;
+const priceIdBase = functions.config().stripe?.price_id_base;
+const priceIdMember = functions.config().stripe?.price_id_member;
 
 // Use admin SDK Timestamp type consistently
 import { Timestamp as AdminTimestamp } from "firebase-admin/firestore"; // Alias Admin timestamp
 // Import implementation file as suggested by linter
 import { FirebaseFirestoreTypes } from "../../mobile/node_modules/@react-native-firebase/firestore/lib/index";
+import { CallableResponse } from "firebase-functions/https";
+import { CallableRequest } from "firebase-functions/lib/common/providers/https";
 type ClientTimestamp = FirebaseFirestoreTypes.Timestamp;
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
+
+// Stripe Webhook Secret - Set this in Firebase config
+// firebase functions:config:set stripe.webhook_secret="whsec_..."
+const stripeWebhookSecret = functions.config().stripe?.webhook_secret;
 
 /**
  * Retrieves all meetings based on the location and filters sent in the request
@@ -586,10 +612,16 @@ export const generateGroupInvite = functions.https.onCall(
     const inviterUid = request.auth?.uid;
 
     if (!inviterUid) {
-      throw new HttpsError("unauthenticated", "User must be logged in.");
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be logged in."
+      );
     }
     if (!groupId) {
-      throw new HttpsError("invalid-argument", "Group ID is required.");
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Group ID is required."
+      );
     }
 
     // --- Configuration ---
@@ -600,7 +632,7 @@ export const generateGroupInvite = functions.https.onCall(
       const groupSnap = await groupRef.get();
 
       if (!groupSnap.exists) {
-        throw new HttpsError("not-found", "Group not found.");
+        throw new functions.https.HttpsError("not-found", "Group not found.");
       }
 
       const groupData = groupSnap.data();
@@ -609,13 +641,13 @@ export const generateGroupInvite = functions.https.onCall(
       // --- Authorization Check --- (Keep existing logic)
       if (!admins.includes(inviterUid)) {
         if (admins.length > 0) {
-          throw new HttpsError(
+          throw new functions.https.HttpsError(
             "permission-denied",
             "Only group admins can generate invites."
           );
         }
         if (admins.length === 0) {
-          throw new HttpsError(
+          throw new functions.https.HttpsError(
             "failed-precondition",
             "Group needs at least one admin to send invites."
           );
@@ -667,10 +699,10 @@ export const generateGroupInvite = functions.https.onCall(
       return { code, link }; // Return the standard web link
     } catch (error) {
       console.error("Error in generateGroupInvite:", error);
-      if (error instanceof HttpsError) {
+      if (error instanceof functions.https.HttpsError) {
         throw error;
       }
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "internal",
         "Failed to generate group invite.",
         error
@@ -691,10 +723,13 @@ export const sendGroupInviteEmail = functions.https.onCall(
     const inviterUid = request.auth?.uid;
 
     if (!inviterUid) {
-      throw new HttpsError("unauthenticated", "User must be logged in.");
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be logged in."
+      );
     }
     if (!groupId || !inviteeEmail || !inviteCode) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "invalid-argument",
         "Missing required fields: groupId, inviteeEmail, inviteCode."
       );
@@ -702,7 +737,7 @@ export const sendGroupInviteEmail = functions.https.onCall(
 
     // Basic email validation
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "invalid-argument",
         "Invalid email format provided."
       );
@@ -725,10 +760,10 @@ export const sendGroupInviteEmail = functions.https.onCall(
       ]);
 
       if (!groupSnap.exists) {
-        throw new HttpsError("not-found", "Group not found.");
+        throw new functions.https.HttpsError("not-found", "Group not found.");
       }
       if (inviteSnap.empty) {
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           "not-found",
           `Invite code ${inviteCode} is invalid or does not belong to this group.`
         );
@@ -743,14 +778,14 @@ export const sendGroupInviteEmail = functions.https.onCall(
       if (!admins.includes(inviterUid)) {
         if (admins.length > 0) {
           // Only deny if admins exist
-          throw new HttpsError(
+          throw new functions.https.HttpsError(
             "permission-denied",
             "Only group admins can send invites."
           );
         }
         if (admins.length === 0) {
           // Deny if no admins exist yet
-          throw new HttpsError(
+          throw new functions.https.HttpsError(
             "failed-precondition",
             "Group needs at least one admin to send invites."
           );
@@ -759,7 +794,7 @@ export const sendGroupInviteEmail = functions.https.onCall(
 
       // --- Check Invite Status ---
       if (inviteData.status !== "pending") {
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           "failed-precondition",
           `Invite code ${inviteCode} has already been ${inviteData.status}.`
         );
@@ -767,7 +802,7 @@ export const sendGroupInviteEmail = functions.https.onCall(
       if (inviteData.expiresAt.toDate() < new Date()) {
         // Optionally update status to 'expired' here
         await inviteSnap.docs[0].ref.update({ status: "expired" });
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           "failed-precondition",
           `Invite code ${inviteCode} has expired.`
         );
@@ -821,10 +856,10 @@ export const sendGroupInviteEmail = functions.https.onCall(
       return { success: true };
     } catch (error) {
       console.error("Error in sendGroupInviteEmail:", error);
-      if (error instanceof HttpsError) {
+      if (error instanceof functions.https.HttpsError) {
         throw error;
       }
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "internal",
         "Failed to send group invite email.",
         error
@@ -847,10 +882,16 @@ export const joinGroupByInviteCode = functions.https.onCall(
     const userId = request.auth?.uid;
 
     if (!userId) {
-      throw new HttpsError("unauthenticated", "User must be logged in.");
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be logged in."
+      );
     }
     if (!code || typeof code !== "string" || code.length !== 6) {
-      throw new HttpsError("invalid-argument", "Invalid invite code format.");
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Invalid invite code format."
+      );
     }
 
     const normalizedCode = code.toUpperCase(); // Ensure case-insensitivity
@@ -866,7 +907,7 @@ export const joinGroupByInviteCode = functions.https.onCall(
       const inviteSnap = await inviteQuery.get();
 
       if (inviteSnap.empty) {
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           "not-found",
           `Invite code "${normalizedCode}" not found.`
         );
@@ -878,7 +919,7 @@ export const joinGroupByInviteCode = functions.https.onCall(
 
       // --- Validate Invite Status and Expiry ---
       if (status !== "pending") {
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           "failed-precondition",
           `This invite code has already been ${status}.`
         );
@@ -886,7 +927,7 @@ export const joinGroupByInviteCode = functions.https.onCall(
       if (expiresAt.toDate() < new Date()) {
         // Update status to expired - prevents reuse
         await inviteDoc.ref.update({ status: "expired" });
-        throw new HttpsError(
+        throw new functions.https.HttpsError(
           "failed-precondition",
           "This invite code has expired."
         );
@@ -927,7 +968,10 @@ export const joinGroupByInviteCode = functions.https.onCall(
       // Fetch user data to add to member doc
       const userSnap = await userRef.get();
       if (!userSnap.exists) {
-        throw new HttpsError("not-found", "Invited user profile not found.");
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Invited user profile not found."
+        );
       }
       const userData = userSnap.data();
 
@@ -983,10 +1027,10 @@ export const joinGroupByInviteCode = functions.https.onCall(
       };
     } catch (error) {
       console.error("Error in joinGroupByInviteCode:", error);
-      if (error instanceof HttpsError) {
+      if (error instanceof functions.https.HttpsError) {
         throw error;
       }
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "internal",
         "Failed to join group using invite code.",
         error
@@ -1557,4 +1601,675 @@ export const updateFutureMeetingInstances = functionsV1.firestore
     }
   });
 
-// ... rest of the file ...
+export const createStripeCheckoutSession = functions.https.onCall(
+  async (request, context) => {
+    const { groupId, successUrl, cancelUrl } = request.data;
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be logged in."
+      );
+    }
+    if (!groupId || !successUrl || !cancelUrl) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Missing required parameters: groupId, successUrl, cancelUrl."
+      );
+    }
+    if (!priceIdBase || !priceIdMember) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Stripe price IDs are not configured."
+      );
+    }
+
+    try {
+      const db = admin.firestore();
+      const groupRef = db.collection("groups").doc(groupId);
+      const groupSnap = await groupRef.get();
+
+      if (!groupSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Group not found.");
+      }
+      const groupData = groupSnap.data()!;
+
+      // --- Authorization Check ---
+      const admins = groupData.admins || groupData.adminUids || [];
+      if (!admins.includes(userId)) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "Only group admins can manage subscriptions."
+        );
+      }
+
+      // --- Get or Create Stripe Customer ---
+      let customerId = groupData.stripeCustomerId;
+      if (!customerId) {
+        console.log(`Creating Stripe customer for group ${groupId}`);
+        const customer = await stripe.customers.create({
+          name: groupData.name,
+          metadata: { groupId: groupId },
+          // Add email if available on group admin or group data
+          // email: groupData.adminEmail || context.auth?.token.email,
+        });
+        customerId = customer.id;
+        await groupRef.update({ stripeCustomerId: customerId }); // Save customer ID
+        console.log(
+          `Stripe customer ${customerId} created for group ${groupId}`
+        );
+      } else {
+        console.log(
+          `Using existing Stripe customer ${customerId} for group ${groupId}`
+        );
+      }
+
+      // --- Create Stripe Checkout Session ---
+      console.log(
+        `Creating Checkout session for customer ${customerId}, group ${groupId}`
+      );
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        customer: customerId,
+        line_items: [
+          {
+            price: priceIdBase, // Base flat fee
+            quantity: 1,
+          },
+          {
+            price: priceIdMember, // Per-member metered fee
+            // Quantity for metered price is based on usage reports, not set at checkout
+          },
+        ],
+        mode: "subscription",
+        allow_promotion_codes: true, // Optional
+        success_url: successUrl, // Redirect URL on success
+        cancel_url: cancelUrl, // Redirect URL on cancellation
+        metadata: {
+          // Store our internal IDs for webhook mapping
+          groupId: groupId,
+          userId: userId, // User initiating checkout
+        },
+        // Enable usage reporting for the metered price
+        subscription_data: {
+          metadata: {
+            // Metadata on the subscription itself
+            groupId: groupId,
+          },
+          // Add trial period if desired
+          // trial_period_days: 14,
+        },
+      });
+
+      console.log(
+        `Checkout session ${session.id} created for group ${groupId}`
+      );
+      return { sessionId: session.id };
+    } catch (error: any) {
+      console.error(
+        `Error creating checkout session for group ${groupId}:`,
+        error
+      );
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to create checkout session.",
+        error.message
+      );
+    }
+  }
+);
+
+export const handleStripeWebhook = functions.https.onRequest(
+  async (req, res) => {
+    if (!webhookSecret) {
+      console.error("Stripe webhook secret not configured.");
+      res.status(500).send("Webhook secret not configured.");
+      return;
+    }
+
+    const sig = req.headers["stripe-signature"] as string;
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
+    } catch (err: any) {
+      console.error("Webhook signature verification failed.", err.message);
+      res.status(400).send(`Webhook Error: ${err.message}`);
+      return;
+    }
+
+    console.log(`Received Stripe event: ${event.type}`);
+
+    // Handle the event
+    try {
+      switch (event.type) {
+        case "checkout.session.completed":
+          const session = event.data.object as Stripe.Checkout.Session;
+          console.log(`Checkout session completed: ${session.id}`);
+          await handleCheckoutSessionCompleted(session);
+          break;
+
+        case "invoice.payment_succeeded":
+          const invoiceSucceeded = event.data.object as Stripe.Invoice;
+          console.log(`Invoice payment succeeded: ${invoiceSucceeded.id}`);
+          await handleInvoicePaymentSucceeded(invoiceSucceeded);
+          break;
+
+        case "invoice.payment_failed":
+          const invoiceFailed = event.data.object as Stripe.Invoice;
+          console.warn(`Invoice payment failed: ${invoiceFailed.id}`);
+          await handleInvoicePaymentFailed(invoiceFailed);
+          break;
+
+        case "customer.subscription.updated":
+          const subscriptionUpdated = event.data.object as Stripe.Subscription;
+          console.log(`Subscription updated: ${subscriptionUpdated.id}`);
+          await handleSubscriptionUpdated(subscriptionUpdated);
+          break;
+
+        case "customer.subscription.deleted":
+          const subscriptionDeleted = event.data.object as Stripe.Subscription;
+          console.warn(`Subscription deleted: ${subscriptionDeleted.id}`);
+          await handleSubscriptionDeleted(subscriptionDeleted);
+          break;
+
+        // Add other event types as needed (e.g., subscription trials)
+
+        default:
+          console.log(`Unhandled event type ${event.type}`);
+      }
+
+      // Return a 200 response to acknowledge receipt of the event
+      res.status(200).send({ received: true });
+    } catch (error: any) {
+      console.error(`Error handling webhook ${event.type}:`, error);
+      // Don't send detailed errors back to Stripe, but log them
+      res.status(500).send({ error: "Webhook handler failed." });
+    }
+  }
+);
+
+// --- Webhook Helper Functions ---
+
+async function handleCheckoutSessionCompleted(
+  session: Stripe.Checkout.Session
+) {
+  const db = admin.firestore(); // Define db instance
+  const groupId = session.metadata?.groupId;
+  const subscriptionId = session.subscription;
+  const customerId = session.customer;
+
+  if (!groupId || !subscriptionId || !customerId) {
+    console.error(
+      "Missing metadata (groupId) or data (subscriptionId, customerId) in checkout.session.completed event:",
+      session.id
+    );
+    return; // Or throw? Depending on retry needs
+  }
+
+  // Retrieve the subscription to get details like status and items
+  const subscription = await stripe.subscriptions.retrieve(
+    subscriptionId as string,
+    {
+      expand: ["items"], // Expand items to find the metered item
+    }
+  );
+
+  if (!subscription) {
+    console.error(
+      `Subscription ${subscriptionId} not found after checkout session ${session.id}.`
+    );
+    return;
+  }
+
+  const groupRef = db.collection("groups").doc(groupId);
+  const updateData: any = {
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscriptionId,
+    subscriptionStatus: subscription.status, // e.g., 'active', 'trialing'
+    stripePriceIdBase: priceIdBase, // Store used price IDs
+    stripePriceIdMember: priceIdMember,
+    // Find the ID of the subscription item for the metered price
+    stripeMeteredSubscriptionItemId:
+      findMeteredSubscriptionItemId(subscription),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  console.log(`Updating group ${groupId} with Stripe info:`, updateData);
+  await groupRef.update(updateData);
+
+  // Report initial usage (optional, could also wait for first invoice event)
+  await reportUsage(
+    groupId,
+    subscription.id,
+    updateData.stripeMeteredSubscriptionItemId
+  );
+}
+
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+  const db = admin.firestore(); // Define db instance
+  // Use `as any` for potentially incorrect type defs
+  const subscriptionId = (invoice as any).subscription as string | null;
+  const customerId = invoice.customer as string | null; // Keep this as it might be correct
+
+  if (!subscriptionId || !customerId) {
+    console.error(
+      "Missing subscription or customer ID in invoice.payment_succeeded",
+      invoice.id
+    );
+    return;
+  }
+
+  // Find the group associated with this customer/subscription
+  const groupQuery = admin
+    .firestore()
+    .collection("groups")
+    .where("stripeSubscriptionId", "==", subscriptionId)
+    .limit(1);
+  const groupSnapshot = await groupQuery.get();
+
+  if (groupSnapshot.empty) {
+    console.error(`Could not find group for subscription ${subscriptionId}`);
+    return;
+  }
+  const groupDoc = groupSnapshot.docs[0];
+  const groupId = groupDoc.id;
+  const groupData = groupDoc.data();
+
+  // Update group status to active
+  await groupDoc.ref.update({
+    subscriptionStatus: "active",
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  console.log(`Subscription status for group ${groupId} set to active.`);
+
+  // Report usage for the *next* billing period
+  await reportUsage(
+    groupId,
+    subscriptionId as string,
+    groupData.stripeMeteredSubscriptionItemId
+  );
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  const db = admin.firestore(); // Define db instance
+  // Use `as any` for potentially incorrect type defs
+  const subscriptionId = (invoice as any).subscription as string | null;
+  if (!subscriptionId) return;
+
+  const groupQuery = db
+    .collection("groups")
+    .where("stripeSubscriptionId", "==", subscriptionId)
+    .limit(1);
+  const groupSnapshot = await groupQuery.get();
+
+  if (!groupSnapshot.empty) {
+    const groupDoc = groupSnapshot.docs[0];
+    await groupDoc.ref.update({
+      subscriptionStatus: "past_due", // Or 'inactive' depending on Stripe settings
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.warn(
+      `Subscription status for group ${groupDoc.id} set to past_due.`
+    );
+    // TODO: Notify group admin
+  }
+}
+
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  const db = admin.firestore(); // Define db instance
+  const subscriptionId = subscription.id;
+  const groupQuery = db
+    .collection("groups")
+    .where("stripeSubscriptionId", "==", subscriptionId)
+    .limit(1);
+  const groupSnapshot = await groupQuery.get();
+
+  if (!groupSnapshot.empty) {
+    const groupDoc = groupSnapshot.docs[0];
+    await groupDoc.ref.update({
+      subscriptionStatus: subscription.status, // Reflect current status (active, past_due, canceled, etc.)
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(
+      `Subscription status for group ${groupDoc.id} updated to ${subscription.status}.`
+    );
+
+    // If the subscription was reactivated, report usage
+    if (
+      subscription.status === "active" &&
+      subscription.cancel_at_period_end === false
+    ) {
+      await reportUsage(
+        groupDoc.id,
+        subscriptionId,
+        groupDoc.data()?.stripeMeteredSubscriptionItemId
+      );
+    }
+  }
+}
+
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const db = admin.firestore(); // Define db instance
+  const subscriptionId = subscription.id;
+  const groupQuery = db
+    .collection("groups")
+    .where("stripeSubscriptionId", "==", subscriptionId)
+    .limit(1);
+  const groupSnapshot = await groupQuery.get();
+
+  if (!groupSnapshot.empty) {
+    const groupDoc = groupSnapshot.docs[0];
+    await groupDoc.ref.update({
+      subscriptionStatus: "canceled",
+      stripeSubscriptionId: null, // Clear the subscription ID
+      stripeMeteredSubscriptionItemId: null, // Clear the item ID
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(
+      `Subscription ${subscriptionId} cancelled for group ${groupDoc.id}.`
+    );
+  }
+}
+
+// Helper to find the metered subscription item ID
+function findMeteredSubscriptionItemId(
+  subscription: Stripe.Subscription
+): string | null {
+  if (!subscription.items?.data) return null;
+  const meteredItem = subscription.items.data.find(
+    (item) => item.price.id === priceIdMember
+  );
+  return meteredItem?.id || null;
+}
+
+// Helper function to report usage to Stripe
+async function reportUsage(
+  groupId: string,
+  subscriptionId: string, // Pass subscriptionId
+  meteredItemId: string | null
+) {
+  const db = admin.firestore(); // Define db instance
+  if (!meteredItemId) {
+    console.error(
+      `Cannot report usage for group ${groupId}: Missing metered subscription item ID.`
+    );
+    return;
+  }
+
+  const groupRef = admin.firestore().collection("groups").doc(groupId);
+  const groupSnap = await groupRef.get();
+  if (!groupSnap.exists) {
+    console.error(`Cannot report usage for group ${groupId}: Group not found.`);
+    return;
+  }
+  const groupData = groupSnap.data()!;
+  const memberCount = groupData.memberCount || 0; // Get current member count
+
+  // Report usage to Stripe using stripe.usageRecords.create
+  try {
+    // *** Use the correct top-level stripe.usageRecords.create ***
+    await stripe.usageRecords.create({
+      subscription_item: meteredItemId, // The ID of the subscription item
+      quantity: memberCount,
+      timestamp: "now", // Report usage for the current time
+      action: "set", // Set the usage for the period
+    });
+    console.log(
+      `Reported usage of ${memberCount} members for group ${groupId} (sub_item: ${meteredItemId})`
+    );
+  } catch (error: any) {
+    console.error(
+      `Error reporting usage for group ${groupId} (sub_item: ${meteredItemId}):`,
+      error
+    );
+  }
+}
+
+/**
+ * Creates a Stripe Payment Intent for a donation to a specific group.
+ */
+export const createStripePaymentIntent = functions.https.onCall(
+  async (request: CallableRequest<{ groupId: string; amount: number }>) => {
+    const { groupId, amount } = request.data;
+    const userId = request.auth?.uid;
+    const userEmail = request.auth?.token.email;
+
+    if (!stripeSecretKey) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "Stripe configuration missing on the server."
+      );
+    }
+    if (!userId) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be logged in to donate."
+      );
+    }
+    if (!groupId || typeof amount !== "number" || amount < 50) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Invalid group ID or amount provided."
+      );
+    }
+
+    try {
+      const groupDoc = await admin
+        .firestore()
+        .collection("groups")
+        .doc(groupId)
+        .get();
+      if (!groupDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Group not found.");
+      }
+      const groupName = groupDoc.data()?.name || "Recovery Connect Group";
+
+      const userDoc = await admin
+        .firestore()
+        .collection("users")
+        .doc(userId)
+        .get();
+      let customerId = userDoc.data()?.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: userEmail,
+          name: userDoc.data()?.displayName || undefined,
+          metadata: { firebaseUID: userId },
+        });
+        customerId = customer.id;
+        await admin.firestore().collection("users").doc(userId).update({
+          stripeCustomerId: customerId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Create PaymentIntent with required fields
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount, // Amount in cents
+        currency: "usd",
+        customer: customerId,
+        automatic_payment_methods: { enabled: true },
+        metadata: {
+          groupId: groupId,
+          userId: userId,
+          groupName: groupName,
+          type: "group_donation",
+        },
+        description: `7th Tradition / Donation to ${groupName} (ID: ${groupId})`,
+        // Consider adding receipt_email for Stripe-sent receipts
+        // receipt_email: userEmail,
+      });
+
+      console.log(
+        `Created PaymentIntent ${paymentIntent.id} for group ${groupId}`
+      );
+
+      return {
+        clientSecret: paymentIntent.client_secret,
+      };
+    } catch (error: any) {
+      console.error("Error creating Stripe PaymentIntent:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to initiate payment.",
+        error.message
+      );
+    }
+  }
+);
+
+/**
+ * Stripe Webhook Handler
+ * Listens for events from Stripe (e.g., payment success) and updates Firestore.
+ */
+export const stripeWebhook = functions.https.onRequest(
+  async (request, response) => {
+    if (!stripeSecretKey || !stripeWebhookSecret) {
+      console.error("Stripe keys or webhook secret not configured.");
+      response.status(500).send("Webhook configuration error.");
+      return;
+    }
+
+    const sig = request.headers["stripe-signature"] as string;
+    let event: Stripe.Event;
+
+    try {
+      // Verify the event came from Stripe using the webhook secret
+      event = stripe.webhooks.constructEvent(
+        request.rawBody,
+        sig,
+        stripeWebhookSecret
+      );
+      console.log("Received Stripe event:", event.type);
+    } catch (err: any) {
+      console.error(`Webhook signature verification failed: ${err.message}`);
+      response.status(400).send(`Webhook Error: ${err.message}`);
+      return;
+    }
+
+    // Handle the event
+    try {
+      switch (event.type) {
+        case "payment_intent.succeeded":
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
+          console.log(`PaymentIntent succeeded: ${paymentIntent.id}`);
+
+          // Extract metadata
+          const { groupId, userId, type } = paymentIntent.metadata;
+
+          // Check if this is a donation type we should process
+          if (type === "group_donation" && groupId && userId) {
+            console.log(
+              `Processing group donation for group ${groupId} by user ${userId}`
+            );
+
+            // Create a transaction record in Firestore
+            const transactionRef = admin
+              .firestore()
+              .collection("transactions")
+              .doc(); // Use top-level transaction collection
+            await transactionRef.set({
+              type: "income", // Donations are income for the group
+              amount: paymentIntent.amount / 100, // Convert cents back to dollars
+              description: `Stripe Donation - ${
+                paymentIntent.description || "User Donation"
+              } (ID: ${paymentIntent.id})`,
+              category: "7th Tradition", // Or a specific 'Online Donation' category
+              createdBy: userId, // User who made the donation
+              createdAt: admin.firestore.Timestamp.fromMillis(
+                paymentIntent.created * 1000
+              ),
+              groupId: groupId,
+              stripePaymentIntentId: paymentIntent.id, // Store Stripe reference
+            });
+
+            // Update the group's treasury stats (using the same logic as your model)
+            const overviewRef = admin
+              .firestore()
+              .collection("treasury_overviews")
+              .doc(groupId);
+            await admin.firestore().runTransaction(async (transaction) => {
+              const overviewDoc = await transaction.get(overviewRef);
+              if (!overviewDoc.exists) {
+                // Initialize if it doesn't exist (should ideally exist)
+                transaction.set(overviewRef, {
+                  balance: paymentIntent.amount / 100,
+                  monthlyIncome: paymentIntent.amount / 100,
+                  monthlyExpenses: 0,
+                  prudentReserve: 600, // Default
+                  lastUpdated: admin.firestore.Timestamp.fromMillis(
+                    paymentIntent.created * 1000
+                  ),
+                  lastMonthReset: admin.firestore.Timestamp.fromMillis(
+                    paymentIntent.created * 1000
+                  ),
+                  groupId: groupId,
+                });
+              } else {
+                // Check if monthly stats need reset (simplified check here)
+                const currentData = overviewDoc.data();
+                const lastReset = currentData?.lastMonthReset?.toDate();
+                const paymentDate = new Date(paymentIntent.created * 1000);
+                let monthlyIncomeInc = paymentIntent.amount / 100;
+                let monthlyExpensesInc = 0; // Donation is income
+                let newLastReset = currentData?.lastMonthReset;
+
+                if (
+                  !lastReset ||
+                  paymentDate.getMonth() !== lastReset.getMonth() ||
+                  paymentDate.getFullYear() !== lastReset.getFullYear()
+                ) {
+                  monthlyIncomeInc = paymentIntent.amount / 100; // Reset income for the new month
+                  newLastReset = admin.firestore.Timestamp.fromMillis(
+                    paymentIntent.created * 1000
+                  );
+                } else {
+                  monthlyIncomeInc = admin.firestore.FieldValue.increment(
+                    paymentIntent.amount / 100
+                  ) as any;
+                }
+
+                transaction.update(overviewRef, {
+                  balance: admin.firestore.FieldValue.increment(
+                    paymentIntent.amount / 100
+                  ),
+                  monthlyIncome: monthlyIncomeInc,
+                  lastUpdated: admin.firestore.Timestamp.fromMillis(
+                    paymentIntent.created * 1000
+                  ),
+                  ...(newLastReset && { lastMonthReset: newLastReset }), // Only update if reset
+                });
+              }
+            });
+            console.log(`Updated treasury stats for group ${groupId}`);
+          } else {
+            console.log(
+              "PaymentIntent succeeded, but not a group donation or missing metadata."
+            );
+          }
+          break;
+
+        // Add other event types as needed (e.g., payment_intent.payment_failed)
+        case "payment_intent.payment_failed":
+          const paymentIntentFailed = event.data.object as Stripe.PaymentIntent;
+          console.warn(
+            `PaymentIntent failed: ${paymentIntentFailed.id}`,
+            paymentIntentFailed.last_payment_error
+          );
+          // Optionally notify user or admin
+          break;
+
+        default:
+          console.log(`Unhandled event type ${event.type}`);
+      }
+
+      // Return a 200 response to acknowledge receipt of the event
+      response.status(200).send({ received: true });
+    } catch (error) {
+      console.error("Error handling Stripe webhook event:", error);
+      response.status(500).send({ error: "Webhook handler failed." });
+    }
+  }
+);

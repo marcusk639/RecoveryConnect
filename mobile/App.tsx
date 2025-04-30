@@ -19,6 +19,8 @@ import functions from '@react-native-firebase/functions';
 import messaging from '@react-native-firebase/messaging';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {RootStackParamList} from './src/types/navigation';
+import {StripeProvider} from '@stripe/stripe-react-native';
+require('react-native').LogBox.ignoreLogs(['`GCanvasReady` with no listeners']);
 
 // Define the structure of expected deep link params - Simplified
 type LinkingParams = RootStackParamList & {
@@ -273,9 +275,11 @@ const AppContent: React.FC = () => {
 // Root App component ONLY renders the Provider
 const App = () => {
   return (
-    <Provider store={store}>
-      <AppContent />
-    </Provider>
+    <StripeProvider publishableKey="pk_test_51N0000000000000000000000">
+      <Provider store={store}>
+        <AppContent />
+      </Provider>
+    </StripeProvider>
   );
 };
 

@@ -65,6 +65,9 @@ target 'RecoveryConnect' do
   pod 'SexyTooltip',:git => 'https://github.com/prscX/SexyTooltip.git'
 
   pod 'RNFBStorage', :path => '../node_modules/@react-native-firebase/storage'
+
+  pod "GCanvas", :path => "../node_modules/@flyskywhy/react-native-gcanvas/GCanvas.podspec"
+
   $FirebaseSDKVersion = '10.22.0'
   
   # Google Maps SDK
