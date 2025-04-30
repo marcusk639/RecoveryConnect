@@ -49,6 +49,7 @@ export class UserModel {
       photoUrl: data.photoUrl ?? null,
       phoneNumber: data.phoneNumber ?? null,
       fcmTokens: data.fcmTokens ?? [],
+      stripeCustomerId: data.stripeCustomerId ?? undefined,
     };
   }
 
