@@ -14,7 +14,6 @@ import {
 } from "../entities/Meeting";
 import { AAMeeting } from "../entities/AAMeetingResponse";
 import { daysOfWeek } from "./date";
-import { getMeetings, ratsFirestore } from "../api/firestore";
 import geohash from "ngeohash";
 import { logger } from "firebase-functions/v1";
 import { parseString } from "xml2js";

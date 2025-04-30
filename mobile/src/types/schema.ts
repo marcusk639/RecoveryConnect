@@ -108,6 +108,18 @@ export interface GroupDocument {
   placeName?: string;
   type: string;
   treasury?: Treasury;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  subscriptionStatus?:
+    | 'active'
+    | 'trialing'
+    | 'past_due'
+    | 'cancelled'
+    | 'unpaid'
+    | 'incomplete'
+    | null;
+  subscriptionExpiresAt?: Timestamp | null; // Tracks when the current period ends
+  stripeConnectAccountId?: string | null;
 }
 
 /**

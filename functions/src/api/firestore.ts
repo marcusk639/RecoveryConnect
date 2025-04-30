@@ -1,12 +1,7 @@
-import * as admin from "firebase-admin";
 import { getQueriesForDocumentsAround } from "../utils/meetings";
+import { db } from "../utils/firebase";
 
-export const app = admin.initializeApp();
-
-export const ratsFirestore = app.firestore();
-
-// const point = new GeoPoint()
-export const meetingCollection = ratsFirestore.collection("meetings");
+export const meetingCollection = db.collection("meetings");
 
 /**
  * Gets houses where attribute == value
@@ -27,7 +22,7 @@ export async function getNaMeetings(
   day?: string
 ) {
   const queries = getQueriesForDocumentsAround(
-    ratsFirestore.collection("na-meetings"),
+    db.collection("na-meetings"),
     { lat, lon: lng },
     10,
     day

@@ -663,21 +663,25 @@ const ProfileScreen: React.FC = () => {
           {/* Sobriety Tracker Section */}
           {userData?.sobrietyStartDate && (
             <TouchableOpacity
-              style={styles.sobrietyTrackerButton}
-              onPress={() => navigation.navigate('SobrietyTracker')}>
+              style={[styles.section, styles.sobrietyTrackerCard]}
+              onPress={() => navigation.navigate('SobrietyTracker')}
+              testID="profile-sobriety-tracker-button">
               <View style={styles.sobrietyTrackerContent}>
                 <View style={styles.sobrietyTrackerIconContainer}>
-                  <Icon name="medal" size={32} color="#FFD700" />
+                  <Icon name="medal-outline" size={36} color="#FFB300" />
                 </View>
                 <View style={styles.sobrietyTrackerTextContainer}>
                   <Text style={styles.sobrietyTrackerTitle}>
-                    View Your Sobriety Journey
+                    Sobriety Journey
+                  </Text>
+                  <Text style={styles.sobrietyTrackerTimeValue}>
+                    {calculateSobrietyTime(userData.sobrietyStartDate)}
                   </Text>
                   <Text style={styles.sobrietyTrackerSubtitle}>
-                    Track milestones and celebrate your progress
+                    View milestones & progress
                   </Text>
                 </View>
-                <Icon name="arrow-forward-outline" size={24} color="#2196F3" />
+                <Icon name="chevron-right" size={28} color="#BDBDBD" />
               </View>
             </TouchableOpacity>
           )}
@@ -1132,27 +1136,42 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     marginHorizontal: 8,
   },
-  sobrietyTrackerButton: {
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-    borderRadius: 8,
+  sobrietyTrackerCard: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
     marginTop: 12,
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   sobrietyTrackerContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   sobrietyTrackerIconContainer: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 25,
+    padding: 10,
     marginRight: 16,
   },
   sobrietyTrackerTextContainer: {
     flex: 1,
   },
   sobrietyTrackerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#212121',
+    marginBottom: 4,
+  },
+  sobrietyTrackerTimeValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2196F3',
     marginBottom: 4,
   },
   sobrietyTrackerSubtitle: {

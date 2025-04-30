@@ -1,7 +1,7 @@
 // src/types/index.ts
 
 import {Transaction, TransactionType} from './domain/treasury';
-
+import React from 'react';
 /**
  * Authentication and User Types
  */

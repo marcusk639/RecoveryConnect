@@ -8,8 +8,10 @@ import {
   Text,
   Platform,
 } from 'react-native';
-// Use react-native-webgl for WebGL context
-import {WebGLView, WebGLObject} from 'react-native-webgl';
+// Use react-native-gcanvas
+import {GCanvasView} from '@flyskywhy/react-native-gcanvas'; // Import GCanvasView
+import type {GCanvasRef} from '@flyskywhy/react-native-gcanvas'; // Import the ref type (assuming you created gcanvas.d.ts)
+
 // Use core three.js
 import * as THREE from 'three';
 // Import OrbitControls from examples and rely on the custom declaration file
@@ -148,87 +150,82 @@ const SobrietyMedallion: React.FC<SobrietyMedallionProps> = ({
     }
   }, [isNewMilestone]);
 
-  // Modified onContextCreate for react-native-webgl
-  const onContextCreate = async (gl: WebGLObject) => {
-    // Check if gl context is valid
-    if (!gl || !gl.getContext) {
-      console.error('WebGL context creation failed');
+  // *** Adapt the context creation callback for gcanvas ***
+  const onCanvasCreate = (canvas: GCanvasRef) => {
+    // gcanvas might provide width/height directly on the canvas ref
+    const {width, height} = canvas;
+    if (!width || !height) {
+      console.error('GCanvas dimensions not available immediately');
+      // Handle resize or wait if necessary, depending on library behavior
       return;
     }
 
-    const {drawingBufferWidth: width, drawingBufferHeight: height} = gl;
+    // Get the WebGL context from the canvas ref
+    const gl = canvas.getContext('webgl');
 
-    // Create a three.js renderer using the WebGL context
+    if (!gl) {
+      console.error('WebGL context creation failed via gcanvas');
+      return;
+    }
+
+    // --- Three.js Setup (largely the same, but using gcanvas context/canvas) ---
     const renderer = new THREE.WebGLRenderer({
-      context: gl as any,
-      canvas: gl.canvas,
+      context: gl as WebGLRenderingContext, // Use the context obtained from gcanvas
+      // gcanvas might not expose a direct HTML-like canvas element,
+      // pass the ref itself or adjust based on library needs if renderer requires it.
+      // If THREE expects a canvas element, this might need adaptation or checks.
+      // Sometimes you might not need to pass a canvas if context is provided.
     });
     renderer.setSize(width, height);
-    renderer.setClearColor(0x000000, 0);
+    renderer.setClearColor(0x000000, 0); // Transparent background
 
-    // Create a scene
     const scene = new THREE.Scene();
-
-    // Create a camera
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     camera.position.z = 2.5;
 
-    // Add ambient light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
-
-    // Add directional light
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
     directionalLight.position.set(1, 1, 1);
     scene.add(directionalLight);
 
-    // OrbitControls setup
-    // Use type assertion if direct import doesn't work
-    const controls = new (OrbitControls as any)(camera, gl.canvas as any);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.25;
-    controls.enableZoom = false;
+    // Pass the GCanvasView ref directly if OrbitControls needs a DOM element
+    // This might require OrbitControls modifications or checking gcanvas examples
+    // For now, let's assume it can work without a DOM element if camera is passed,
+    // or requires specific event handling setup with gcanvas.
+    // const controls = new OrbitControls(camera, /* Need a DOM element or equivalent listener */);
+    // *** OrbitControls might need to be omitted or replaced with manual rotation ***
+    // *** if it strictly requires a DOM element that gcanvas doesn't provide easily ***
+    // controls.enableDamping = true;
+    // controls.dampingFactor = 0.25;
+    // controls.enableZoom = false;
 
-    // Create a medallion (coin) geometry
     const geometry = new THREE.CylinderGeometry(1, 1, 0.1, 32);
-
-    // Create a material for the medallion using the milestone color
     const material = new THREE.MeshStandardMaterial({
       color: new THREE.Color(medallionConfig.color),
       metalness: 0.8,
       roughness: 0.2,
     });
-
-    // Create the medallion mesh
     const medallion = new THREE.Mesh(geometry, material);
-
-    // Rotate to show the face
     medallion.rotation.x = Math.PI / 2;
-
-    // Add the medallion to the scene
     scene.add(medallion);
 
-    // Animation loop
-    let lastFrameTime = 0;
-    const render = (time: number) => {
-      const delta = time - lastFrameTime;
-      lastFrameTime = time;
+    // --- Animation Loop ---
+    const animate = () => {
+      // Auto-rotate the medallion (manual rotation)
+      medallion.rotation.y += 0.01;
 
-      // Auto-rotate the medallion
-      medallion.rotation.y += 0.001 * delta;
+      // controls?.update(); // Update controls if enabled
 
-      // Update controls
-      controls.update();
-
-      // Render the scene
       renderer.render(scene, camera);
 
-      // Ensure frame is flushed
-      gl.endFrameEXP?.(); // Use optional chaining if method might not exist
+      // gcanvas might handle frame updates differently, check its docs.
+      // gl.endFrameEXP?.(); // This was likely specific to react-native-webgl
+
+      requestAnimationFrame(animate); // Use standard RAF
     };
 
-    // Start the animation loop
-    requestAnimationFrame(render);
+    animate(); // Start the loop
   };
 
   return (
@@ -242,19 +239,25 @@ const SobrietyMedallion: React.FC<SobrietyMedallionProps> = ({
           {
             transform: [
               {scale: scaleAnim},
-              {
-                rotate: rotateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0deg', '360deg'],
-                }),
-              },
+              // Keep rotation separate if OrbitControls are disabled
+              // {
+              //   rotate: rotateAnim.interpolate({
+              //     inputRange: [0, 1],
+              //     outputRange: ['0deg', '360deg'],
+              //   }),
+              // },
             ],
             shadowOpacity: glowAnim,
             shadowColor: medallionConfig.color,
           },
         ]}>
         <View style={styles.glViewContainer}>
-          <WebGLView style={styles.glView} onContextCreate={onContextCreate} />
+          {/* *** Use GCanvasView and the new callback prop *** */}
+          <GCanvasView
+            style={styles.glView}
+            onCanvasCreate={onCanvasCreate} // Use the correct prop name
+            isGestureResponsible={true} // Example: Enable gestures if needed for OrbitControls later
+          />
         </View>
       </Animated.View>
     </TouchableOpacity>

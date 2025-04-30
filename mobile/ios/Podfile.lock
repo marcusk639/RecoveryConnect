@@ -1092,6 +1092,7 @@ PODS:
     - FirebaseCoreExtension (~> 10.0)
     - GTMSessionFetcher/Core (< 4.0, >= 2.1)
   - fmt (6.2.1)
+  - GCanvas (1.1.1)
   - glog (0.3.5)
   - Google-Maps-iOS-Utils (4.2.2):
     - Google-Maps-iOS-Utils/Clustering (= 4.2.2)
@@ -1173,7 +1174,6 @@ PODS:
   - GoogleUtilities/UserDefaults (7.13.3):
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
-  - GPUImage (0.1.7)
   - "gRPC-C++ (1.62.5)":
     - "gRPC-C++/Implementation (= 1.62.5)"
     - "gRPC-C++/Interface (= 1.62.5)"
@@ -1565,6 +1565,9 @@ PODS:
     - FBSDKGamingServicesKit (~> 18.0)
     - FBSDKShareKit (~> 18.0)
     - React-Core
+  - react-native-gcanvas (6.0.20):
+    - GCanvas
+    - React
   - react-native-geolocation (3.4.0):
     - RCT-Folly (= 2021.07.22.00)
     - React-Core
@@ -1587,9 +1590,6 @@ PODS:
   - react-native-vector-icons (11.0.0):
     - RCT-Folly (= 2021.07.22.00)
     - React-Core
-  - react-native-webgl (0.8.0):
-    - GPUImage
-    - React
   - React-NativeModulesApple (0.72.9):
     - React-callinvoker
     - React-Core
@@ -1766,6 +1766,7 @@ DEPENDENCIES:
   - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - FBReactNativeSpec (from `../node_modules/react-native/React/FBReactNativeSpec`)
+  - "GCanvas (from `../node_modules/@flyskywhy/react-native-gcanvas/GCanvas.podspec`)"
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTRequired (from `../node_modules/react-native/Libraries/RCTRequired`)
@@ -1785,6 +1786,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - react-native-document-picker (from `../node_modules/react-native-document-picker`)
   - react-native-fbsdk-next (from `../node_modules/react-native-fbsdk-next`)
+  - "react-native-gcanvas (from `../node_modules/@flyskywhy/react-native-gcanvas`)"
   - "react-native-geolocation (from `../node_modules/@react-native-community/geolocation`)"
   - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - react-native-google-maps (from `../node_modules/react-native-maps`)
@@ -1793,7 +1795,6 @@ DEPENDENCIES:
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
   - "react-native-vector-icons (from `../node_modules/@react-native-vector-icons/common`)"
-  - react-native-webgl (from `../node_modules/react-native-webgl`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-perflogger (from `../node_modules/react-native/ReactCommon/reactperflogger`)
   - React-RCTActionSheet (from `../node_modules/react-native/Libraries/ActionSheetIOS`)
@@ -1864,7 +1865,6 @@ SPEC REPOS:
     - GoogleMaps
     - GoogleSignIn
     - GoogleUtilities
-    - GPUImage
     - "gRPC-C++"
     - gRPC-Core
     - GTMAppAuth
@@ -1890,6 +1890,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/Libraries/FBLazyVector"
   FBReactNativeSpec:
     :path: "../node_modules/react-native/React/FBReactNativeSpec"
+  GCanvas:
+    :path: "../node_modules/@flyskywhy/react-native-gcanvas/GCanvas.podspec"
   glog:
     :podspec: "../node_modules/react-native/third-party-podspecs/glog.podspec"
   RCT-Folly:
@@ -1926,6 +1928,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-document-picker"
   react-native-fbsdk-next:
     :path: "../node_modules/react-native-fbsdk-next"
+  react-native-gcanvas:
+    :path: "../node_modules/@flyskywhy/react-native-gcanvas"
   react-native-geolocation:
     :path: "../node_modules/@react-native-community/geolocation"
   react-native-get-random-values:
@@ -1942,8 +1946,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-community/slider"
   react-native-vector-icons:
     :path: "../node_modules/@react-native-vector-icons/common"
-  react-native-webgl:
-    :path: "../node_modules/react-native-webgl"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-perflogger:
@@ -2052,6 +2054,7 @@ SPEC CHECKSUMS:
   FirebaseSharedSwift: 20530f495084b8d840f78a100d8c5ee613375f6e
   FirebaseStorage: bc7bddc743548a89cfb896843a77cf4bdde2c231
   fmt: ff9d55029c625d3757ed641535fd4a75fedc7ce9
+  GCanvas: 96414893e6bddf7ce15679bab3b04033cdb5898d
   glog: 04b94705f318337d7ead9e6d17c019bd9b1f6b1b
   Google-Maps-iOS-Utils: f77eab4c4326d7e6a277f8e23a0232402731913a
   GoogleAppMeasurement: ccefe3eac9b0aa27f96066809fb1a7fe4b462626
@@ -2059,7 +2062,6 @@ SPEC CHECKSUMS:
   GoogleMaps: 032f676450ba0779bd8ce16840690915f84e57ac
   GoogleSignIn: d4281ab6cf21542b1cfaff85c191f230b399d2db
   GoogleUtilities: ea963c370a38a8069cc5f7ba4ca849a60b6d7d15
-  GPUImage: 733a5f0fab92df9de1c37ba9df520a833ccb406d
   "gRPC-C++": e725ef63c4475d7cdb7e2cf16eb0fde84bd9ee51
   gRPC-Core: eee4be35df218649fe66d721a05a7f27a28f069b
   GTMAppAuth: f69bd07d68cd3b766125f7e072c45d7340dea0de
@@ -2086,6 +2088,7 @@ SPEC CHECKSUMS:
   React-logger: f42d2f2bc4cbb5d19d7c0ce84b8741b1e54e88c8
   react-native-document-picker: 844beb44fa84b8a8e173a01344dd072c05124ba2
   react-native-fbsdk-next: 1baeeacf0ecdeb839cca16ca75cb16a9bbbf8e03
+  react-native-gcanvas: 116adb11d7deb86020f0800b87d043948ba8926b
   react-native-geolocation: 99e88dbb98e0bc11cadac135a92c67076eee495a
   react-native-get-random-values: 21325b2244dfa6b58878f51f9aa42821e7ba3d06
   react-native-google-maps: 6048177d161552f3e382a43e85e1d13c81e39f15
@@ -2094,7 +2097,6 @@ SPEC CHECKSUMS:
   react-native-safe-area-context: 0ee144a6170530ccc37a0fd9388e28d06f516a89
   react-native-slider: 0ea462c812ba616f774af4d7b1e4b6ed98271528
   react-native-vector-icons: 49240cf0f1ac8aa88f8535ca6afe35c5e0a46208
-  react-native-webgl: 8545122cb714aec77ebf78be8c281435283ec5a0
   React-NativeModulesApple: 3fc17889996e56cff1d5ed2196a981d023d13b4f
   React-perflogger: cb433f318c6667060fc1f62e26eb58d6eb30a627
   React-RCTActionSheet: 0af3f8ac067e8a1dde902810b7ad169d0a0ec31e
@@ -2135,6 +2137,6 @@ SPEC CHECKSUMS:
   SocketRocket: f32cd54efbe0f095c4d7594881e52619cfe80b17
   Yoga: eddf2bbe4a896454c248a8f23b4355891eb720a6
 
-PODFILE CHECKSUM: 6b48f862134ec09940c0436c02c6e8b8353b56b9
+PODFILE CHECKSUM: fe4a4589cc2b48a32e84066ef220586f611918ef
 
 COCOAPODS: 1.16.2
