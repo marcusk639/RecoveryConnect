@@ -39,7 +39,12 @@ const TimePicker: React.FC<TimePickerProps> = ({
     // Initialize tempTime with the selected time if it exists
     if (selectedTime) {
       try {
-        return dateFns.parse(selectedTime, 'h:mm a', new Date());
+        const parsedDate = dateFns.parse(selectedTime, 'h:mm a', new Date());
+        // Validate the parsed date
+        if (isNaN(parsedDate.getTime())) {
+          return new Date();
+        }
+        return parsedDate;
       } catch (e) {
         return new Date();
       }
@@ -156,7 +161,6 @@ const TimePicker: React.FC<TimePickerProps> = ({
                   mode="time"
                   display="spinner"
                   onChange={handleTimeChange}
-                  style={styles.iosTimePicker}
                 />
 
                 <TouchableOpacity

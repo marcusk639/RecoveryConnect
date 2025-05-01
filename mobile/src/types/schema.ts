@@ -184,6 +184,7 @@ export interface EventDocument {
  * Meeting Document
  */
 export interface MeetingDocument {
+  meetingId?: string;
   name: string;
   type: string; // AA, NA, etc.
   day: string;

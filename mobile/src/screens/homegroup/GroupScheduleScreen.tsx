@@ -15,10 +15,11 @@ import {StackNavigationProp} from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import LoadingOverlay from '../../components/common/LoadingOverlay';
 
 // Import types and Redux
-import {GroupStackParamList} from '../../types/navigation'; // Adjust path as needed
-import {Meeting, MeetingInstance} from '../../types'; // Adjust path as needed
+import {GroupStackParamList} from '../../types/navigation';
+import {Meeting} from '../../types';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
   fetchGroupById,
@@ -26,12 +27,10 @@ import {
   selectGroupsStatus,
 } from '../../store/slices/groupsSlice';
 import {
-  fetchUpcomingMeetingInstances,
-  selectUpcomingMeetingInstances,
-  fetchGroupMeetings, // Fetch meeting templates
-  selectGroupMeetingTemplateIds, // Correct selector name
+  fetchGroupMeetings,
+  selectGroupMeetings,
   selectMeetingsStatus,
-  selectMeetingById, // To get data for editing
+  selectMeetingById,
   createMeeting,
   updateMeeting,
 } from '../../store/slices/meetingsSlice';
@@ -56,24 +55,13 @@ const GroupScheduleScreen: React.FC = () => {
 
   // Get data from Redux store
   const group = useAppSelector(state => selectGroupById(state, groupId));
-  const upcomingInstances = useAppSelector(state =>
-    selectUpcomingMeetingInstances(state, groupId),
-  );
-  const meetingTemplateIds = useAppSelector(state =>
-    selectGroupMeetingTemplateIds(state, groupId),
-  );
-  const meetingTemplates = useAppSelector(state =>
-    meetingTemplateIds
-      .map(id => selectMeetingById(state, id))
-      .filter((m): m is Meeting => !!m),
-  );
+  const meetings = useAppSelector(state => selectGroupMeetings(state, groupId));
   const meetingsStatus = useAppSelector(selectMeetingsStatus);
   const groupsStatus = useAppSelector(selectGroupsStatus);
 
   // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [showTemplates, setShowTemplates] = useState(false); // Flag to show templates as fallback
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [errors, setErrors] = useState<{
@@ -83,25 +71,19 @@ const GroupScheduleScreen: React.FC = () => {
     address?: string;
     link?: string;
   }>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Correct admin check using only 'admins' if 'adminUids' doesn't exist on HomeGroup type
   const isCurrentUserAdmin = group?.admins?.includes(currentUser?.uid || '');
 
   const loadScheduleData = useCallback(async () => {
     setIsLoading(true);
     setRefreshing(true);
     try {
-      // Fetch instances first
-      await dispatch(fetchUpcomingMeetingInstances(groupId)).unwrap();
-      // Check if instances were fetched - need access to the result or updated state
-      // For now, we'll check the state *after* the fetch completes in useEffect
-
-      // Fetch group details (needed for admin check)
+      await dispatch(fetchGroupMeetings(groupId)).unwrap();
       await dispatch(fetchGroupById(groupId)).unwrap();
     } catch (error: any) {
       console.error('Error loading group schedule data:', error);
       if (error?.name !== 'ConditionError') {
-        // Avoid duplicate errors if already handled
         Alert.alert(
           'Error',
           'Failed to load schedule data. Please try again later.',
@@ -117,32 +99,6 @@ const GroupScheduleScreen: React.FC = () => {
     loadScheduleData();
   }, [loadScheduleData]);
 
-  // Effect to decide whether to fetch/show templates
-  useEffect(() => {
-    // Only run this check once loading is finished and instances have been fetched (or failed)
-    if (!isLoading && meetingsStatus !== 'loading') {
-      if (upcomingInstances.length === 0) {
-        setShowTemplates(true);
-        // Fetch templates only if no instances are found and templates aren't loaded
-        if (meetingTemplates.length === 0) {
-          console.log(
-            `No instances found for group ${groupId}, fetching templates...`,
-          );
-          dispatch(fetchGroupMeetings(groupId));
-        }
-      } else {
-        setShowTemplates(false);
-      }
-    }
-  }, [
-    isLoading,
-    meetingsStatus,
-    upcomingInstances.length,
-    meetingTemplates.length,
-    groupId,
-    dispatch,
-  ]);
-
   const handleAddMeeting = () => {
     setSelectedMeeting(null);
     setIsModalVisible(true);
@@ -154,17 +110,17 @@ const GroupScheduleScreen: React.FC = () => {
   };
 
   const handleSubmitMeeting = async (meetingData: Partial<Meeting>) => {
+    setIsSubmitting(true);
     try {
-      if (selectedMeeting && selectedMeeting.id) {
+      if (selectedMeeting?.id) {
         await dispatch(
           updateMeeting({meetingId: selectedMeeting.id, meetingData}),
         ).unwrap();
       } else {
-        await dispatch(createMeeting({groupId: groupId, meetingData})).unwrap();
+        await dispatch(createMeeting({groupId, meetingData})).unwrap();
       }
       setIsModalVisible(false);
       setSelectedMeeting(null);
-      // Refresh the data after successful update
       loadScheduleData();
     } catch (error: any) {
       console.error('Error saving meeting:', error);
@@ -172,80 +128,33 @@ const GroupScheduleScreen: React.FC = () => {
         'Error',
         error.message || 'Failed to save meeting. Please try again.',
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const renderMeetingItem = ({item}: {item: MeetingInstance | Meeting}) => {
-    const isInstance = false;
-    const scheduledAt = isInstance
-      ? (item as MeetingInstance).scheduledAt
-      : undefined;
-    const dateStr = scheduledAt
-      ? moment(scheduledAt).format('ddd, MMM D')
-      : (item as Meeting).day;
-    const timeStr = scheduledAt
-      ? moment(scheduledAt).format('h:mm A')
-      : (item as Meeting).time;
-    const isCancelled = isInstance
-      ? (item as MeetingInstance).isCancelled
-      : false;
-    const notice = isInstance
-      ? (item as MeetingInstance).instanceNotice ||
-        (item as MeetingInstance).temporaryNotice
-      : null;
+  const renderMeetingItem = ({item}: {item: Meeting}) => {
     const isOnline = item.online ?? false;
     const locationDisplay = isOnline
       ? 'Online Meeting'
       : item.locationName || item.address || 'Location TBD';
 
     return (
-      <View
-        style={[
-          styles.meetingItemContainer,
-          isCancelled && styles.cancelledItem,
-        ]}>
+      <View style={styles.meetingItemContainer}>
         <View style={styles.dateTimeContainer}>
           <Text style={styles.dayText}>
-            {dateStr ? dateStr.toUpperCase() : 'TBD'}
+            {item.day ? item.day.toUpperCase() : 'TBD'}
           </Text>
-          <Text style={styles.timeText}>{timeStr || 'Time TBD'}</Text>
-          {isCancelled && <Text style={styles.cancelledText}>CANCELLED</Text>}
+          <Text style={styles.timeText}>{item.time || 'Time TBD'}</Text>
         </View>
         <View style={styles.detailsContainer}>
           <Text style={styles.meetingName}>{item.name}</Text>
-          {!isCancelled && (
-            <Text style={styles.locationText}>{locationDisplay}</Text>
-          )}
-          {notice && (
-            <View
-              style={[
-                styles.noticeContainer,
-                isCancelled && styles.cancelledNotice,
-              ]}>
-              <Icon
-                name={isCancelled ? 'cancel' : 'information-outline'}
-                size={14}
-                color={
-                  isCancelled
-                    ? styles.cancelledNoticeText.color
-                    : styles.noticeText.color
-                }
-                style={{marginRight: 4}}
-              />
-              <Text
-                style={[
-                  styles.noticeText,
-                  isCancelled && styles.cancelledNoticeText,
-                ]}>
-                {notice}
-              </Text>
-            </View>
-          )}
+          <Text style={styles.locationText}>{locationDisplay}</Text>
         </View>
-        {!isInstance && isCurrentUserAdmin && (
+        {isCurrentUserAdmin && (
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => handleEditMeeting(item as Meeting)}
+            onPress={() => handleEditMeeting(item)}
             hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
             accessibilityLabel="Edit meeting"
             accessibilityHint="Double tap to edit this meeting">
@@ -274,49 +183,26 @@ const GroupScheduleScreen: React.FC = () => {
       );
     }
 
-    const dataToShow = showTemplates ? meetingTemplates : upcomingInstances;
-    const listTitle = showTemplates ? 'Meeting Schedule' : 'Upcoming Meetings';
-    const emptyText = showTemplates
-      ? 'No meetings found for this group. An admin can add them.'
-      : 'No upcoming meetings scheduled for the next week.';
-
     return (
       <>
         <View style={{paddingVertical: 5}} />
-        {showTemplates && upcomingInstances.length === 0 && (
-          <Text style={styles.fallbackNotice}>
-            Showing recurring schedule as no specific instances were found for
-            the upcoming week.
-          </Text>
-        )}
         <FlatList
-          data={dataToShow}
+          data={meetings}
           renderItem={renderMeetingItem}
-          keyExtractor={(item: MeetingInstance | Meeting, index: number) =>
-            ('instanceId' in item ? item.instanceId : item.id) ??
-            `no-id-${index}`
-          }
+          keyExtractor={(item: Meeting) => item.id ?? `no-id-${item.name}`}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Icon
-                name={showTemplates ? 'calendar-clock' : 'calendar-check'}
+                name="calendar-clock"
                 size={64}
                 color="#BBDEFB"
                 style={styles.emptyIcon}
               />
-              <Text style={styles.emptyTitle}>
-                {showTemplates
-                  ? 'No Recurring Meetings'
-                  : 'No Upcoming Meetings'}
-              </Text>
+              <Text style={styles.emptyTitle}>No Meetings</Text>
               <Text style={styles.emptyText}>
-                {showTemplates
-                  ? isCurrentUserAdmin
-                    ? 'No meetings have been created yet. Press the button below to add meetings.'
-                    : 'No recurring meetings have been set up yet. Check back later or contact a group admin.'
-                  : isCurrentUserAdmin
-                  ? 'Add some upcoming meetings to keep your group members informed about when to meet.'
-                  : 'No upcoming meetings have been scheduled. Check back later or contact a group admin.'}
+                {isCurrentUserAdmin
+                  ? 'No meetings have been created yet. Press the button below to add meetings.'
+                  : 'No meetings have been set up yet. Check back later or contact a group admin.'}
               </Text>
             </View>
           }
@@ -328,6 +214,9 @@ const GroupScheduleScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {isLoading && <LoadingOverlay message="Loading schedule..." />}
+      {isSubmitting && <LoadingOverlay message="Saving meeting..." />}
+
       <ScrollView
         contentContainerStyle={{flexGrow: 1}}
         refreshControl={

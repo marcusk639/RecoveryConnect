@@ -46,41 +46,30 @@ const initialState: MeetingsState = {
 // Constants
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache TTL for meetings
 
-// Helper function to check if data is stale
-const isDataStale = (lastFetched: number | null): boolean => {
+// Helper function to validate meeting data
+const validateMeetingData = (meetingData: Partial<Meeting>): boolean => {
+  if (!meetingData) return false;
+  if (meetingData.name && typeof meetingData.name !== 'string') return false;
+  if (meetingData.day && typeof meetingData.day !== 'string') return false;
+  if (meetingData.time && typeof meetingData.time !== 'string') return false;
+  if (
+    meetingData.online !== undefined &&
+    typeof meetingData.online !== 'boolean'
+  )
+    return false;
+  return true;
+};
+
+// Helper function to check if data needs refreshing
+const shouldRefreshData = (lastFetched: number | null): boolean => {
   if (!lastFetched) return true;
   return Date.now() - lastFetched > CACHE_TTL;
 };
 
-// --- Instance Helper ---
-// Function to convert Firestore Instance Doc to MeetingInstance Type
-function instanceFromFirestore(docId: string, data: any): MeetingInstance {
-  return {
-    instanceId: docId,
-    meetingId: data.meetingId,
-    groupId: data.groupId,
-    scheduledAt: data.scheduledAt.toDate(), // Convert Timestamp to Date
-    name: data.name,
-    type: data.type,
-    format: data.format,
-    location: data.location,
-    address: data.address,
-    city: data.city,
-    state: data.state,
-    zip: data.zip,
-    lat: data.lat,
-    lng: data.lng,
-    locationName: data.locationName,
-    isOnline: data.isOnline,
-    link: data.link,
-    onlineNotes: data.onlineNotes,
-    isCancelled: data.isCancelled ?? false,
-    instanceNotice: data.instanceNotice ?? null,
-    templateUpdatedAt: data.templateUpdatedAt.toDate(), // Convert Timestamp
-    day: data.day ?? '', // Add day, provide default
-    time: data.time ?? '', // Add time, provide default
-  };
-}
+// Helper function to validate group ID
+const validateGroupId = (groupId: string): boolean => {
+  return typeof groupId === 'string' && groupId.length > 0;
+};
 
 // Async thunks
 export const setUserLocation = createAsyncThunk(
@@ -92,19 +81,36 @@ export const setUserLocation = createAsyncThunk(
 );
 
 export const fetchGroupMeetings = createAsyncThunk<
-  {groupId: string; meetings: Meeting[]}, // Return type MUST include groupId
-  string, // Argument is groupId
+  {groupId: string; meetings: Meeting[]},
+  string,
   {state: RootState; rejectValue: string}
 >(
   'meetings/fetchGroupMeetings',
-  async (groupId, {getState, rejectWithValue}) => {
+  async (groupId, {rejectWithValue}) => {
     try {
       const meetings = await MeetingModel.getMeetingsByGroupId(groupId);
-      // Ensure the returned object matches the defined return type
       return {groupId, meetings};
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to fetch group meetings');
     }
+  },
+  {
+    condition: (groupId, {getState}) => {
+      const state = getState() as RootState;
+
+      // Validate group ID
+      if (!validateGroupId(groupId)) {
+        return false;
+      }
+
+      // Check if we need to refresh the data
+      const lastFetched = state.meetings.lastFetchedGroup[groupId];
+      if (!shouldRefreshData(lastFetched)) {
+        return false;
+      }
+
+      return true;
+    },
   },
 );
 
@@ -191,8 +197,8 @@ export const toggleFavoriteMeeting = createAsyncThunk(
 );
 
 export const updateMeeting = createAsyncThunk<
-  Meeting, // Return the updated meeting
-  {meetingId: string; meetingData: Partial<Meeting>}, // Argument
+  Meeting,
+  {meetingId: string; meetingData: Partial<Meeting>},
   {rejectValue: string}
 >(
   'meetings/updateMeeting',
@@ -203,6 +209,15 @@ export const updateMeeting = createAsyncThunk<
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to update meeting');
     }
+  },
+  {
+    condition: ({meetingId, meetingData}) => {
+      // Validate meeting ID and data
+      if (!validateGroupId(meetingId) || !validateMeetingData(meetingData)) {
+        return false;
+      }
+      return true;
+    },
   },
 );
 
@@ -300,24 +315,22 @@ function getNextMeetingDate(dayOfWeek: string, time: string): Date | null {
 
 // Define fetchUpcomingMeetingInstances thunk
 export const fetchUpcomingMeetingInstances = createAsyncThunk<
-  {groupId: string; instances: MeetingInstance[]}, // Return type
-  string, // Argument is groupId
+  {groupId: string; instances: MeetingInstance[]},
+  string,
   {state: RootState; rejectValue: string}
 >(
   'meetings/fetchUpcomingInstances',
-  async (groupId, {getState, rejectWithValue}) => {
+  async (groupId, {rejectWithValue}) => {
     try {
-      // Attempt to fetch pre-generated instances first
       let instances = await MeetingModel.getUpcomingInstancesByGroupId(groupId);
 
-      // --- Fallback Logic ---
+      // Fallback Logic
       if (!instances || instances.length === 0) {
         console.log(
           `No pre-generated instances found for group ${groupId}, attempting fallback from templates.`,
         );
-        // Fetch meeting templates as a fallback
         const meetings = await MeetingModel.getMeetingsByGroupId(groupId);
-        const now = new Date(); // For templateUpdatedAt default
+        const now = new Date();
 
         instances = meetings
           .map(meeting => {
@@ -326,27 +339,23 @@ export const fetchUpcomingMeetingInstances = createAsyncThunk<
               meeting.time,
             );
 
-            // Create a mock instance - essential fields must be present
             const instance: MeetingInstance = {
-              // Inherit most fields from the template
               ...meeting,
-              // Override/Add instance-specific fields
               instanceId: `${meeting.id}-fallback-${
                 scheduledAtDate?.getTime() || Date.now()
-              }`, // Create a unique-ish ID
+              }`,
               meetingId: meeting.id || 'unknown-template',
               groupId: meeting.groupId || groupId,
-              scheduledAt: scheduledAtDate || now, // Use calculated date or fallback to now
-              isCancelled: meeting.isCancelledTemporarily ?? false, // Use template cancellation as instance cancellation
-              instanceNotice: meeting.temporaryNotice ?? null, // Use template notice as instance notice
-              templateUpdatedAt: meeting.updatedAt || now, // Use template update time or now
+              scheduledAt: scheduledAtDate || now,
+              isCancelled: meeting.isCancelledTemporarily ?? false,
+              instanceNotice: meeting.temporaryNotice ?? null,
+              templateUpdatedAt: meeting.updatedAt || now,
             };
             return instance;
           })
-          .filter(instance => instance.scheduledAt >= now) // Filter out any calculated past dates
-          .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime()); // Sort chronologically
+          .filter(instance => instance.scheduledAt >= now)
+          .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
       }
-      // --- End Fallback Logic ---
 
       return {groupId, instances};
     } catch (error: any) {
@@ -355,6 +364,24 @@ export const fetchUpcomingMeetingInstances = createAsyncThunk<
         error.message || 'Failed to fetch upcoming meetings',
       );
     }
+  },
+  {
+    condition: (groupId, {getState}) => {
+      const state = getState() as RootState;
+
+      // Validate group ID
+      if (!validateGroupId(groupId)) {
+        return false;
+      }
+
+      // Check if we need to refresh the data
+      const lastFetched = state.meetings.lastFetchedGroupInstances[groupId];
+      if (!shouldRefreshData(lastFetched)) {
+        return false;
+      }
+
+      return true;
+    },
   },
 );
 
@@ -412,6 +439,15 @@ export const createMeeting = createAsyncThunk<
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to create meeting');
     }
+  },
+  {
+    condition: ({groupId, meetingData}) => {
+      // Validate group ID and meeting data
+      if (!validateGroupId(groupId) || !validateMeetingData(meetingData)) {
+        return false;
+      }
+      return true;
+    },
   },
 );
 
@@ -720,13 +756,25 @@ export const selectMeetingById = (state: RootState, meetingId: string) =>
   state.meetings.items[meetingId];
 export const selectMeetingsStatus = (state: RootState) => state.meetings.status;
 export const selectMeetingsError = (state: RootState) => state.meetings.error;
-export const selectFilteredMeetings = (state: RootState) =>
-  state.meetings.filteredIds.map((id: string) => state.meetings.items[id]);
+
+// Memoize the filtered meetings selector
+export const selectFilteredMeetings = createSelector(
+  [selectAllMeetingTemplates, (state: RootState) => state.meetings.filteredIds],
+  (allMeetings, filteredIds) => {
+    return filteredIds.map((id: string) => allMeetings[id]);
+  },
+);
 
 export const selectUserLocation = (state: RootState) =>
   state.meetings.userLocation;
-export const selectGroupMeetings = (state: RootState, groupId: string) =>
-  state.meetings.items[groupId] || [];
+
+// Memoize the group meetings selector
+export const selectGroupMeetings = createSelector(
+  [selectAllMeetingTemplates, selectGroupMeetingTemplateIds],
+  (allMeetings, meetingIds) => {
+    return meetingIds.map(id => allMeetings[id]).filter(Boolean);
+  },
+);
 
 // NEW: Selector for a single meeting instance by ID
 export const selectMeetingInstanceById = (

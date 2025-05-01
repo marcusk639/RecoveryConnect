@@ -38,20 +38,25 @@ const MeetingForm: React.FC<MeetingFormProps> = ({
   containerStyle = {},
 }) => {
   const [meeting, setMeeting] = useState<Partial<Meeting>>(
-    initialMeeting || {
-      name: '',
-      day: '',
-      time: '',
-      format: 'Open Discussion',
-      online: false,
-      location: '',
-      address: '',
-      city: '',
-      state: '',
-      zip: '',
-      link: '',
-      type: 'AA',
-    },
+    initialMeeting
+      ? {
+          ...initialMeeting,
+          id: initialMeeting.id,
+        }
+      : {
+          name: '',
+          day: '',
+          time: '',
+          format: 'Open Discussion',
+          online: false,
+          location: '',
+          address: '',
+          city: '',
+          state: '',
+          zip: '',
+          link: '',
+          type: 'AA',
+        },
   );
 
   const handleSubmit = () => {

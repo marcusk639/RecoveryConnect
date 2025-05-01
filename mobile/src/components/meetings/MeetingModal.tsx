@@ -1,4 +1,4 @@
-import React, {useCallback} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   StyleSheet,
@@ -16,13 +16,14 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {Meeting} from '../../types';
 import MeetingForm from './MeetingForm';
+import LoadingOverlay from '../common/LoadingOverlay';
 
 const {height: SCREEN_HEIGHT} = Dimensions.get('window');
 
 interface MeetingModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (meeting: Partial<Meeting>) => void;
+  onSubmit: (meetingData: any) => Promise<void>;
   initialMeeting?: Meeting;
   formContainerStyle?: StyleProp<ViewStyle>;
   errors?: {
@@ -42,10 +43,21 @@ const MeetingModal: React.FC<MeetingModalProps> = ({
   errors,
   formContainerStyle,
 }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleBackdropPress = useCallback(() => {
     Keyboard.dismiss();
     onClose();
   }, [onClose]);
+
+  const handleSubmit = async (meetingData: any) => {
+    setIsSubmitting(true);
+    try {
+      await onSubmit(meetingData);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Modal
@@ -77,13 +89,16 @@ const MeetingModal: React.FC<MeetingModalProps> = ({
               bounces={false}>
               <MeetingForm
                 initialMeeting={initialMeeting}
-                onSubmit={onSubmit}
+                onSubmit={handleSubmit}
                 onCancel={onClose}
                 errors={errors}
                 containerStyle={formContainerStyle}
               />
             </ScrollView>
           </View>
+          {isSubmitting && (
+            <LoadingOverlay message="Saving meeting..." fullScreen={false} />
+          )}
         </View>
       </View>
     </Modal>
