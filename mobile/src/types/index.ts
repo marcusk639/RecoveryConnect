@@ -2,6 +2,7 @@
 
 import {Transaction, TransactionType} from './domain/treasury';
 import React from 'react';
+import {SponsorSettings} from './sponsorship';
 /**
  * Authentication and User Types
  */
@@ -23,6 +24,7 @@ export interface User {
   phoneNumber?: string | null;
   fcmTokens?: string[];
   stripeCustomerId?: string;
+  sponsorSettings?: SponsorSettings;
 }
 
 export interface NotificationSettings {

@@ -7,217 +7,185 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
-  TouchableOpacityProps,
+  Animated,
 } from 'react-native';
-import theme from '../../theme';
+import {theme} from '../../theme/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'text';
 type ButtonSize = 'small' | 'medium' | 'large';
 
-interface ButtonProps extends TouchableOpacityProps {
+interface ButtonProps {
   title: string;
+  onPress: () => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
-  loading?: boolean;
   disabled?: boolean;
-  fullWidth?: boolean;
+  loading?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
-  leftIcon?: React.ReactNode;
-  rightIcon?: React.ReactNode;
+  testID?: string;
 }
 
-const Button: React.FC<ButtonProps> = ({
+export const Button: React.FC<ButtonProps> = ({
   title,
+  onPress,
   variant = 'primary',
   size = 'medium',
-  loading = false,
   disabled = false,
-  fullWidth = false,
+  loading = false,
   style,
   textStyle,
-  leftIcon,
-  rightIcon,
-  ...rest
+  testID,
 }) => {
-  const getButtonStyle = () => {
-    let buttonStyle: ViewStyle = styles.button;
+  const scaleValue = React.useRef(new Animated.Value(1)).current;
 
-    // Variant styles
-    switch (variant) {
-      case 'primary':
-        buttonStyle = {...buttonStyle, ...styles.primaryButton};
-        break;
-      case 'secondary':
-        buttonStyle = {...buttonStyle, ...styles.secondaryButton};
-        break;
-      case 'outline':
-        buttonStyle = {...buttonStyle, ...styles.outlineButton};
-        break;
-      case 'text':
-        buttonStyle = {...buttonStyle, ...styles.textButton};
-        break;
-    }
-
-    // Size styles
-    switch (size) {
-      case 'small':
-        buttonStyle = {...buttonStyle, ...styles.smallButton};
-        break;
-      case 'medium':
-        buttonStyle = {...buttonStyle, ...styles.mediumButton};
-        break;
-      case 'large':
-        buttonStyle = {...buttonStyle, ...styles.largeButton};
-        break;
-    }
-
-    // Full width
-    if (fullWidth) {
-      buttonStyle = {...buttonStyle, ...styles.fullWidth};
-    }
-
-    // Disabled
-    if (disabled) {
-      buttonStyle = {...buttonStyle, ...styles.disabledButton};
-    }
-
-    return buttonStyle;
+  const handlePressIn = () => {
+    Animated.spring(scaleValue, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
   };
 
-  const getTextStyle = () => {
-    let textStyleFinal: TextStyle = styles.buttonText;
+  const handlePressOut = () => {
+    Animated.spring(scaleValue, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
 
-    // Variant text styles
+  const getVariantStyles = () => {
     switch (variant) {
       case 'primary':
-        textStyleFinal = {...textStyleFinal, ...styles.primaryButtonText};
-        break;
+        return {
+          backgroundColor: theme.colors.primary.main,
+          borderColor: theme.colors.primary.main,
+        };
       case 'secondary':
-        textStyleFinal = {...textStyleFinal, ...styles.secondaryButtonText};
-        break;
+        return {
+          backgroundColor: theme.colors.secondary.main,
+          borderColor: theme.colors.secondary.main,
+        };
       case 'outline':
-        textStyleFinal = {...textStyleFinal, ...styles.outlineButtonText};
-        break;
+        return {
+          backgroundColor: 'transparent',
+          borderColor: theme.colors.primary.main,
+          borderWidth: 1,
+        };
       case 'text':
-        textStyleFinal = {...textStyleFinal, ...styles.textButtonText};
-        break;
+        return {
+          backgroundColor: 'transparent',
+          borderColor: 'transparent',
+        };
+      default:
+        return {
+          backgroundColor: theme.colors.primary.main,
+          borderColor: theme.colors.primary.main,
+        };
     }
+  };
 
-    // Size text styles
+  const getSizeStyles = () => {
     switch (size) {
       case 'small':
-        textStyleFinal = {...textStyleFinal, ...styles.smallButtonText};
-        break;
+        return {
+          paddingVertical: theme.spacing.xs,
+          paddingHorizontal: theme.spacing.md,
+        };
       case 'medium':
-        textStyleFinal = {...textStyleFinal, ...styles.mediumButtonText};
-        break;
+        return {
+          paddingVertical: theme.spacing.sm,
+          paddingHorizontal: theme.spacing.lg,
+        };
       case 'large':
-        textStyleFinal = {...textStyleFinal, ...styles.largeButtonText};
-        break;
+        return {
+          paddingVertical: theme.spacing.md,
+          paddingHorizontal: theme.spacing.xl,
+        };
+      default:
+        return {
+          paddingVertical: theme.spacing.sm,
+          paddingHorizontal: theme.spacing.lg,
+        };
     }
+  };
 
-    // Disabled
-    if (disabled) {
-      textStyleFinal = {...textStyleFinal, ...styles.disabledButtonText};
+  const getTextColor = () => {
+    if (disabled) return theme.colors.neutral.grey400;
+    if (variant === 'outline' || variant === 'text') {
+      return theme.colors.primary.main;
     }
+    return theme.colors.primary.contrast;
+  };
 
-    return textStyleFinal;
+  const getFontSize = () => {
+    switch (size) {
+      case 'small':
+        return theme.typography.fontSize.sm;
+      case 'medium':
+        return theme.typography.fontSize.md;
+      case 'large':
+        return theme.typography.fontSize.lg;
+      default:
+        return theme.typography.fontSize.md;
+    }
   };
 
   return (
-    <TouchableOpacity
-      style={[getButtonStyle(), style]}
-      disabled={disabled || loading}
-      {...rest}>
-      {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={
-            variant === 'outline' || variant === 'text'
-              ? theme.colors.primary.main
-              : theme.colors.primary.contrastText
-          }
-        />
-      ) : (
-        <>
-          {leftIcon && leftIcon}
-          <Text style={[getTextStyle(), textStyle]}>{title}</Text>
-          {rightIcon && rightIcon}
-        </>
-      )}
-    </TouchableOpacity>
+    <Animated.View
+      style={[
+        styles.container,
+        getVariantStyles(),
+        getSizeStyles(),
+        style,
+        {transform: [{scale: scaleValue}]},
+      ]}>
+      <TouchableOpacity
+        onPress={onPress}
+        disabled={disabled || loading}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={styles.touchable}
+        testID={testID}>
+        {loading ? (
+          <ActivityIndicator
+            color={getTextColor()}
+            size={getFontSize()}
+            style={styles.loading}
+          />
+        ) : (
+          <Text
+            style={[
+              styles.text,
+              {
+                color: getTextColor(),
+                fontSize: getFontSize(),
+              },
+              textStyle,
+            ]}>
+            {title}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  container: {
+    borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
+    ...theme.shadows.sm,
+  },
+  touchable: {
+    flex: 1,
     justifyContent: 'center',
-    borderRadius: theme.roundness,
+    alignItems: 'center',
   },
-  primaryButton: {
-    backgroundColor: theme.colors.primary.main,
-  },
-  secondaryButton: {
-    backgroundColor: theme.colors.secondary.main,
-  },
-  outlineButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: theme.colors.primary.main,
-  },
-  textButton: {
-    backgroundColor: 'transparent',
-  },
-  smallButton: {
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.md,
-  },
-  mediumButton: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  largeButton: {
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-  },
-  fullWidth: {
-    width: '100%',
-  },
-  disabledButton: {
-    backgroundColor: theme.colors.grey[300],
-    borderColor: theme.colors.grey[300],
-  },
-  buttonText: {
+  text: {
+    fontWeight: '600',
     textAlign: 'center',
-    fontWeight: 'bold',
   },
-  primaryButtonText: {
-    color: theme.colors.primary.contrastText,
-  },
-  secondaryButtonText: {
-    color: theme.colors.secondary.contrastText,
-  },
-  outlineButtonText: {
-    color: theme.colors.primary.main,
-  },
-  textButtonText: {
-    color: theme.colors.primary.main,
-  },
-  smallButtonText: {
-    fontSize: theme.fontSizes.sm,
-  },
-  mediumButtonText: {
-    fontSize: theme.fontSizes.md,
-  },
-  largeButtonText: {
-    fontSize: theme.fontSizes.lg,
-  },
-  disabledButtonText: {
-    color: theme.colors.grey[600],
+  loading: {
+    marginVertical: 2,
   },
 });
-
-export default Button;

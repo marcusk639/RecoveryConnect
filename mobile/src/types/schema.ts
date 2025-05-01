@@ -3,6 +3,7 @@
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
 import {Meeting, MeetingType, Treasury} from '.';
 import firestore from '@react-native-firebase/firestore';
+import {SponsorSettings} from './sponsorship';
 
 export type Timestamp = FirebaseFirestoreTypes.Timestamp;
 
@@ -76,6 +77,7 @@ export interface UserDocument {
   subscriptionTier?: 'free' | 'plus'; // For premium features
   subscriptionValidUntil?: Timestamp;
   stripeCustomerId?: string | null;
+  sponsorSettings?: SponsorSettings;
 }
 
 /**

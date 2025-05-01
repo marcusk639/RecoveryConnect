@@ -44,6 +44,7 @@ import {
 } from '../../store/slices/meetingsSlice';
 import {upperFirst} from 'lodash';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import {RecoveryCelebration} from '../../types/domain';
 
 type GroupOverviewScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -161,6 +162,13 @@ const GroupOverviewScreen: React.FC = () => {
 
   const navigateToGroupChat = () => {
     navigation.navigate('GroupChat', {
+      groupId,
+      groupName,
+    });
+  };
+
+  const navigateToGroupSponsors = () => {
+    navigation.navigate('GroupSponsors', {
       groupId,
       groupName,
     });
@@ -445,6 +453,16 @@ const GroupOverviewScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.navTile}
+          onPress={navigateToGroupSponsors}
+          testID="group-overview-sponsors-tile">
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>🤝</Text>
+          </View>
+          <Text style={styles.navTileText}>Sponsors</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTile}
           onPress={() =>
             navigation.navigate('GroupServicePositions', {groupId, groupName})
           }>
@@ -630,25 +648,27 @@ const GroupOverviewScreen: React.FC = () => {
         </View>
 
         {celebrations.length > 0 ? (
-          celebrations.map((celebration, index) => (
-            <View
-              key={index}
-              style={styles.celebrationItem}
-              testID={`group-overview-celebration-${index}`}>
-              <View style={styles.celebrationIcon}>
-                <Text style={styles.celebrationIconText}>🎉</Text>
+          celebrations.map(
+            (celebration: RecoveryCelebration, index: number) => (
+              <View
+                key={index}
+                style={styles.celebrationItem}
+                testID={`group-overview-celebration-${index}`}>
+                <View style={styles.celebrationIcon}>
+                  <Text style={styles.celebrationIconText}>🎉</Text>
+                </View>
+                <View style={styles.celebrationInfo}>
+                  <Text style={styles.celebrationName}>
+                    {celebration.userName} - {celebration.years}{' '}
+                    {celebration.years === 1 ? 'Year' : 'Years'}
+                  </Text>
+                  <Text style={styles.celebrationDate}>
+                    {formatDate(celebration.date)}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.celebrationInfo}>
-                <Text style={styles.celebrationName}>
-                  {celebration.memberName} - {celebration.years}{' '}
-                  {celebration.years === 1 ? 'Year' : 'Years'}
-                </Text>
-                <Text style={styles.celebrationDate}>
-                  {formatDate(celebration.date)}
-                </Text>
-              </View>
-            </View>
-          ))
+            ),
+          )
         ) : (
           <Text
             style={styles.emptyStateText}

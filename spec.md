@@ -151,12 +151,3 @@ Whether you release immediately after implementing the above or later, start the
 **In Summary:**
 
 The app is _close_ to being technically functional for release, but launching without basic moderation and at least one core engagement feature like a sobriety tracker significantly hinders its potential for user attraction and retention. Addressing the **Critical** and **Highly Recommended** points above will make for a much stronger, safer, and more appealing initial launch.
-
-TODO:
-
-Populate groups from AA meeting guide meetings
-Sobriety tracker with chip visuals
-Sponsorship functions
-notifications
-
-    keytool -list -v -keystore your_release_keystore.jks -alias marcusk639 -storepass 159753 -keypass 159753

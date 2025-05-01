@@ -1,56 +1,96 @@
 // src/components/common/Input.tsx
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   TextInput,
   Text,
   StyleSheet,
+  TextInputProps,
   ViewStyle,
   TextStyle,
-  TextInputProps,
+  Animated,
 } from 'react-native';
-import theme from '../../theme';
+import {theme} from '../../theme/theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   containerStyle?: ViewStyle;
-  labelStyle?: TextStyle;
   inputStyle?: TextStyle;
+  labelStyle?: TextStyle;
   errorStyle?: TextStyle;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
 }
 
-const Input: React.FC<InputProps> = ({
+export const Input: React.FC<InputProps> = ({
   label,
   error,
   containerStyle,
-  labelStyle,
   inputStyle,
+  labelStyle,
   errorStyle,
   leftIcon,
   rightIcon,
-  ...rest
+  onFocus,
+  onBlur,
+  ...props
 }) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const scaleValue = React.useRef(new Animated.Value(1)).current;
+
+  const handleFocus = (e: any) => {
+    setIsFocused(true);
+    Animated.spring(scaleValue, {
+      toValue: 1.02,
+      useNativeDriver: true,
+    }).start();
+    onFocus?.(e);
+  };
+
+  const handleBlur = (e: any) => {
+    setIsFocused(false);
+    Animated.spring(scaleValue, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+    onBlur?.(e);
+  };
+
   return (
     <View style={[styles.container, containerStyle]}>
-      {label && <Text style={[styles.label, labelStyle]}>{label}</Text>}
-      <View style={[styles.inputContainer, error ? styles.inputError : null]}>
+      {label && (
+        <Text style={[styles.label, labelStyle]} testID="input-label">
+          {label}
+        </Text>
+      )}
+      <Animated.View
+        style={[
+          styles.inputContainer,
+          isFocused ? styles.focusedInput : undefined,
+          error ? styles.errorInput : undefined,
+          {transform: [{scale: scaleValue}]},
+        ]}>
         {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
         <TextInput
           style={[
             styles.input,
-            leftIcon ? styles.inputWithLeftIcon : null,
-            rightIcon ? styles.inputWithRightIcon : null,
+            leftIcon ? styles.inputWithLeftIcon : undefined,
+            rightIcon ? styles.inputWithRightIcon : undefined,
             inputStyle,
           ]}
-          placeholderTextColor={theme.colors.grey[500]}
-          {...rest}
+          placeholderTextColor={theme.colors.neutral.grey400}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          {...props}
         />
         {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
-      </View>
-      {error && <Text style={[styles.errorText, errorStyle]}>{error}</Text>}
+      </Animated.View>
+      {error && (
+        <Text style={[styles.error, errorStyle]} testID="input-error">
+          {error}
+        </Text>
+      )}
     </View>
   );
 };
@@ -60,24 +100,33 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   label: {
-    fontSize: theme.fontSizes.sm,
-    color: theme.colors.text.secondary,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.neutral.grey700,
     marginBottom: theme.spacing.xs,
+    fontWeight: '500',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: theme.colors.background.primary,
     borderWidth: 1,
-    borderColor: theme.colors.grey[300],
-    borderRadius: theme.roundness,
-    backgroundColor: theme.colors.background.paper,
+    borderColor: theme.colors.neutral.grey300,
+    borderRadius: theme.borderRadius.md,
+    ...theme.shadows.sm,
+  },
+  focusedInput: {
+    borderColor: theme.colors.primary.main,
+    ...theme.shadows.md,
+  },
+  errorInput: {
+    borderColor: theme.colors.status.error,
   },
   input: {
     flex: 1,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
-    fontSize: theme.fontSizes.md,
-    color: theme.colors.text.primary,
+    fontSize: theme.typography.fontSize.md,
+    color: theme.colors.neutral.grey900,
   },
   inputWithLeftIcon: {
     paddingLeft: theme.spacing.xs,
@@ -91,14 +140,9 @@ const styles = StyleSheet.create({
   rightIcon: {
     paddingRight: theme.spacing.md,
   },
-  inputError: {
-    borderColor: theme.colors.error,
-  },
-  errorText: {
-    fontSize: theme.fontSizes.xs,
-    color: theme.colors.error,
+  error: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.status.error,
     marginTop: theme.spacing.xs,
   },
 });
-
-export default Input;

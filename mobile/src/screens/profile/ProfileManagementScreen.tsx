@@ -21,8 +21,8 @@ import auth from '@react-native-firebase/auth';
 import storage from '@react-native-firebase/storage';
 import {launchImageLibrary} from 'react-native-image-picker';
 import {RootStackParamList} from '../../types';
-import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
+import {Button} from '../../components/common/Button';
+import {Input} from '../../components/common/Input';
 import DatePicker from '../../components/common/DatePicker';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {

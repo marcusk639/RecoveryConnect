@@ -1092,7 +1092,6 @@ PODS:
     - FirebaseCoreExtension (~> 10.0)
     - GTMSessionFetcher/Core (< 4.0, >= 2.1)
   - fmt (6.2.1)
-  - GCanvas (1.1.1)
   - glog (0.3.5)
   - Google-Maps-iOS-Utils (4.2.2):
     - Google-Maps-iOS-Utils/Clustering (= 4.2.2)
@@ -1565,9 +1564,6 @@ PODS:
     - FBSDKGamingServicesKit (~> 18.0)
     - FBSDKShareKit (~> 18.0)
     - React-Core
-  - react-native-gcanvas (6.0.20):
-    - GCanvas
-    - React
   - react-native-geolocation (3.4.0):
     - RCT-Folly (= 2021.07.22.00)
     - React-Core
@@ -1737,7 +1733,7 @@ PODS:
     - Firebase/Storage (= 10.22.0)
     - React-Core
     - RNFBApp
-  - RNGestureHandler (2.25.0):
+  - RNGestureHandler (2.14.0):
     - RCT-Folly (= 2021.07.22.00)
     - React-Core
   - RNGoogleSignin (13.2.0):
@@ -1802,7 +1798,6 @@ DEPENDENCIES:
   - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - FBReactNativeSpec (from `../node_modules/react-native/React/FBReactNativeSpec`)
-  - "GCanvas (from `../node_modules/@flyskywhy/react-native-gcanvas/GCanvas.podspec`)"
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTRequired (from `../node_modules/react-native/Libraries/RCTRequired`)
@@ -1822,7 +1817,6 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - react-native-document-picker (from `../node_modules/react-native-document-picker`)
   - react-native-fbsdk-next (from `../node_modules/react-native-fbsdk-next`)
-  - "react-native-gcanvas (from `../node_modules/@flyskywhy/react-native-gcanvas`)"
   - "react-native-geolocation (from `../node_modules/@react-native-community/geolocation`)"
   - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - react-native-google-maps (from `../node_modules/react-native-maps`)
@@ -1865,7 +1859,9 @@ DEPENDENCIES:
   - RNPermissions (from `../node_modules/react-native-permissions`)
   - RNScreens (from `../node_modules/react-native-screens`)
   - SexyTooltip (from `https://github.com/prscX/SexyTooltip.git`)
+  - Stripe (~> 24.12.0)
   - "stripe-react-native (from `../node_modules/@stripe/stripe-react-native`)"
+  - StripePaymentSheet (~> 24.12.0)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -1935,8 +1931,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/Libraries/FBLazyVector"
   FBReactNativeSpec:
     :path: "../node_modules/react-native/React/FBReactNativeSpec"
-  GCanvas:
-    :path: "../node_modules/@flyskywhy/react-native-gcanvas/GCanvas.podspec"
   glog:
     :podspec: "../node_modules/react-native/third-party-podspecs/glog.podspec"
   RCT-Folly:
@@ -1973,8 +1967,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-document-picker"
   react-native-fbsdk-next:
     :path: "../node_modules/react-native-fbsdk-next"
-  react-native-gcanvas:
-    :path: "../node_modules/@flyskywhy/react-native-gcanvas"
   react-native-geolocation:
     :path: "../node_modules/@react-native-community/geolocation"
   react-native-get-random-values:
@@ -2101,7 +2093,6 @@ SPEC CHECKSUMS:
   FirebaseSharedSwift: 20530f495084b8d840f78a100d8c5ee613375f6e
   FirebaseStorage: bc7bddc743548a89cfb896843a77cf4bdde2c231
   fmt: ff9d55029c625d3757ed641535fd4a75fedc7ce9
-  GCanvas: 96414893e6bddf7ce15679bab3b04033cdb5898d
   glog: 04b94705f318337d7ead9e6d17c019bd9b1f6b1b
   Google-Maps-iOS-Utils: f77eab4c4326d7e6a277f8e23a0232402731913a
   GoogleAppMeasurement: ccefe3eac9b0aa27f96066809fb1a7fe4b462626
@@ -2135,7 +2126,6 @@ SPEC CHECKSUMS:
   React-logger: f42d2f2bc4cbb5d19d7c0ce84b8741b1e54e88c8
   react-native-document-picker: 844beb44fa84b8a8e173a01344dd072c05124ba2
   react-native-fbsdk-next: 1baeeacf0ecdeb839cca16ca75cb16a9bbbf8e03
-  react-native-gcanvas: 116adb11d7deb86020f0800b87d043948ba8926b
   react-native-geolocation: 99e88dbb98e0bc11cadac135a92c67076eee495a
   react-native-get-random-values: 21325b2244dfa6b58878f51f9aa42821e7ba3d06
   react-native-google-maps: 6048177d161552f3e382a43e85e1d13c81e39f15
@@ -2174,7 +2164,7 @@ SPEC CHECKSUMS:
   RNFBFunctions: e7f11a02bfa61bbd32a6c5accb717e47fa4d3f2d
   RNFBMessaging: 941f0f3716c4ab4603dc19f364d37d8f77f275f4
   RNFBStorage: 4fa2cf0d581aeca9313e1a83ff8c43fbf50fec12
-  RNGestureHandler: 7e046cb2ab2e4a7e0161c7665cfeee9e49e27c0f
+  RNGestureHandler: a5039da2ac028b073ae801289476060b34d559b1
   RNGoogleSignin: ee2938633d996756819e3212c8e0f7f696b380d0
   RNPermissions: 919287485b8fdff22c1aac01f6ba9e6009d784ee
   RNScreens: 38a8b0651c2c4430dab18602b2a117b70f7ba3ba
@@ -2193,6 +2183,6 @@ SPEC CHECKSUMS:
   StripeUICore: 0e0f3005fd3027dad3d3d77927f371d5fe4eb9ac
   Yoga: eddf2bbe4a896454c248a8f23b4355891eb720a6
 
-PODFILE CHECKSUM: fe4a4589cc2b48a32e84066ef220586f611918ef
+PODFILE CHECKSUM: e46631d61f6c5f6460c8c53f837b9f23373253ff
 
 COCOAPODS: 1.16.2

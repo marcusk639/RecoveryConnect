@@ -1,6 +1,6 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
-import {RootState, AppDispatch} from '../index';
+import {RootState} from '../types';
 import {UserModel} from '../../models/UserModel';
 import {MemberModel} from '../../models/MemberModel';
 import {UserDocument, Timestamp} from '../../types/schema';
@@ -10,6 +10,7 @@ import {
   NotificationSettings,
   PrivacySettings,
 } from '../../types';
+import {Sponsorship, SponsorSettings} from '../../types/sponsorship';
 
 interface UserData {
   uid: string;
@@ -31,15 +32,19 @@ interface UserData {
     meetings?: boolean;
     announcements?: boolean;
     celebrations?: boolean;
+    sponsorship?: boolean;
   } | null;
   privacySettings?: {
     allowDirectMessages?: boolean;
+    sponsorship?: boolean;
   } | null;
   fcmTokens?: string[];
+  sponsorship?: Sponsorship;
   customerId?: string;
+  sponsorSettings?: SponsorSettings;
 }
 
-interface AuthState {
+export interface AuthState {
   user: FirebaseAuthTypes.User | null;
   userData: UserData | null;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
@@ -121,6 +126,12 @@ const mapUserToSliceData = (
       allowDirectMessages: privacySettingsData.allowDirectMessages ?? true,
     },
     fcmTokens: fcmTokens,
+    sponsorSettings: user.sponsorSettings ?? {
+      isAvailable: false,
+      maxSponsees: 3,
+      requirements: ['30 days sober', 'Working the steps'],
+      bio: '',
+    },
   };
 };
 
@@ -432,6 +443,33 @@ export const updateFcmToken = createAsyncThunk<
   }
 });
 
+export const updateSponsorSettings = createAsyncThunk<
+  {sponsorSettings: SponsorSettings},
+  SponsorSettings,
+  {state: RootState; rejectValue: string}
+>(
+  'auth/updateSponsorSettings',
+  async (settings, {getState, rejectWithValue}) => {
+    const state = getState();
+    const currentUser = state.auth.user;
+    if (!currentUser) return rejectWithValue('User not logged in');
+
+    try {
+      const userUpdatePayload: Partial<User> = {
+        sponsorSettings: settings,
+      };
+
+      await UserModel.update(currentUser.uid, userUpdatePayload);
+      return {sponsorSettings: settings};
+    } catch (error: any) {
+      console.error('Error updating sponsor settings:', error);
+      return rejectWithValue(
+        error.message || 'Failed to update sponsor settings',
+      );
+    }
+  },
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -606,6 +644,18 @@ const authSlice = createSlice({
       })
       .addCase(updateFcmToken.rejected, (state, action) => {
         console.error('FCM Token update failed (reducer):', action.payload);
+      })
+
+      .addCase(updateSponsorSettings.fulfilled, (state, action) => {
+        if (state.userData) {
+          state.userData.sponsorSettings = action.payload.sponsorSettings;
+        }
+        state.status = 'succeeded';
+        state.error = null;
+      })
+      .addCase(updateSponsorSettings.rejected, (state, action) => {
+        state.error = action.payload as string;
+        state.status = 'failed';
       });
   },
 });
