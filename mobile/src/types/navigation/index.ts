@@ -15,7 +15,7 @@ export type GroupStackParamList = {
   GroupEventDetails: {groupId: string; eventId: string};
   GroupBusinessMeeting: {groupId: string; meetingId?: string};
   GroupEditDetails: {groupId: string; groupName: string};
-  GroupDetails: {groupId: string};
+  GroupDetails: {groupId: string; groupName: string};
   CreateGroup: {meeting?: Meeting};
   GroupSchedule: {groupId: string; groupName: string};
   AddTransaction: {groupId: string; groupName: string};
@@ -31,6 +31,16 @@ export type GroupStackParamList = {
     scheduledAt: number;
   };
   GroupDonation: {groupId: string; groupName: string};
+  GroupSponsors: {groupId: string; groupName: string};
+  SponsorChat: {
+    groupId: string;
+    groupName: string;
+    sponsorId: string;
+    sponseeId: string;
+    sponsorName: string;
+    sponseeName: string;
+  };
+  SponsorshipAnalytics: {groupId: string; groupName: string};
 };
 
 // Profile Stack Navigation Params (assuming it exists)

@@ -1,12 +1,12 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
-import {RootState} from '../index';
+import {RootState} from '../types';
 import auth from '@react-native-firebase/auth';
 import {TreasuryModel} from '../../models/TreasuryModel';
 import {Transaction, TransactionType} from '../../types/domain/treasury';
 import {createSelector} from 'reselect';
 
 // Define State Type
-interface TransactionsState {
+export interface TransactionsState {
   items: Record<string, Transaction>; // Store transactions by ID
   groupTransactionIds: Record<string, string[]>; // Map groupId -> [transactionId]
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
@@ -185,7 +185,7 @@ export const selectGroupTransactionIds = (state: RootState, groupId: string) =>
 export const selectGroupTransactions = createSelector(
   [selectAllTransactions, selectGroupTransactionIds],
   (allItems, groupIds) => {
-    return groupIds.map(id => allItems[id]).filter(Boolean);
+    return groupIds.map((id: string) => allItems[id]).filter(Boolean);
   },
 );
 

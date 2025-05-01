@@ -15,7 +15,7 @@ export interface GroupMilestone {
 }
 
 // State interface
-interface MembersState {
+export interface MembersState {
   items: Record<string, GroupMember>;
   groupMembers: Record<string, string[]>;
   milestones: Record<string, GroupMilestone[]>; // By groupId

@@ -5,13 +5,13 @@ import {
   createSelector,
 } from '@reduxjs/toolkit';
 import auth from '@react-native-firebase/auth';
-import {RootState} from '../index';
+import {RootState} from '../types';
 import {HomeGroup, Meeting} from '../../types';
 import {GroupModel} from '../../models/GroupModel';
 import firestore from '@react-native-firebase/firestore';
 
 // Define types
-interface GroupsState {
+export interface GroupsState {
   items: Record<string, HomeGroup>;
   memberGroups: string[];
   adminGroups: string[];

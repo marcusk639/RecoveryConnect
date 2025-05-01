@@ -1,5 +1,5 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
-import {RootState} from '../index';
+import {RootState} from '../types';
 import functions from '@react-native-firebase/functions';
 import firestore, {
   FirebaseFirestoreTypes,
@@ -20,8 +20,7 @@ import {COLLECTION_PATHS} from '../../types/schema'; // Import paths
 import moment from 'moment-timezone'; // Import moment-timezone
 import {DayOfWeek, DAYS_OF_WEEK} from '../../types/utils';
 
-// Define state type
-interface MeetingsState {
+export interface MeetingsState {
   items: Record<string, Meeting>; // Keep for meeting templates if needed elsewhere
   instanceItems: Record<string, MeetingInstance>; // NEW: Store instances by instanceId
   groupMeetingIds: Record<string, string[]>; // Keep for templates
@@ -677,8 +676,7 @@ export const selectGroupMeetingInstanceIds = (
 export const selectUpcomingMeetingInstances = createSelector(
   [selectAllMeetingInstances, selectGroupMeetingInstanceIds],
   (allInstances, instanceIds) => {
-    // Map IDs to instances and filter out any potential undefined results
-    return instanceIds.map(id => allInstances[id]).filter(Boolean);
+    return instanceIds.map((id: string) => allInstances[id]).filter(Boolean);
   },
 );
 
@@ -687,7 +685,7 @@ export const selectMeetingById = (state: RootState, meetingId: string) =>
 export const selectMeetingsStatus = (state: RootState) => state.meetings.status;
 export const selectMeetingsError = (state: RootState) => state.meetings.error;
 export const selectFilteredMeetings = (state: RootState) =>
-  state.meetings.filteredIds.map(id => state.meetings.items[id]);
+  state.meetings.filteredIds.map((id: string) => state.meetings.items[id]);
 
 export const selectUserLocation = (state: RootState) =>
   state.meetings.userLocation;

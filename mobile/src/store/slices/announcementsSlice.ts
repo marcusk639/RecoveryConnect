@@ -1,11 +1,10 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
-import {RootState} from '../index';
 import {Announcement} from '../../types';
 import {AnnouncementModel} from '../../models/AnnouncementModel';
 import {createSelector} from 'reselect';
-
+import {RootState} from '../types';
 // State interface
-interface AnnouncementsState {
+export interface AnnouncementsState {
   items: Record<string, Announcement>;
   groupAnnouncementIds: Record<string, string[]>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';

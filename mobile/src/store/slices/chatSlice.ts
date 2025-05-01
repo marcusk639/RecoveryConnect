@@ -5,11 +5,11 @@ import {
   createSelector,
 } from '@reduxjs/toolkit';
 import auth from '@react-native-firebase/auth';
-import {RootState} from '../index';
-import {ChatModel, ChatMessage, GroupChat} from '../../models/ChatModel';
+import {RootState} from '../types';
+import {ChatModel, GroupChat, ChatMessage} from '../../models/ChatModel';
 
 // Define types
-interface ChatState {
+export interface ChatState {
   messages: Record<string, Record<string, ChatMessage>>;
   chats: Record<string, GroupChat>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';

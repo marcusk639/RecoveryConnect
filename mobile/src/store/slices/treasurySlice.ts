@@ -1,11 +1,9 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
-import {RootState} from '../index';
+import {RootState} from '../types';
 import {TreasuryStats} from '../../types/domain/treasury';
 import {TreasuryModel} from '../../models/TreasuryModel';
-import auth from '@react-native-firebase/auth';
 
-// Define state type
-interface TreasuryState {
+export interface TreasuryState {
   groupStats: Record<string, TreasuryStats>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;

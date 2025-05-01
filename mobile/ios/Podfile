@@ -66,7 +66,8 @@ target 'RecoveryConnect' do
 
   pod 'RNFBStorage', :path => '../node_modules/@react-native-firebase/storage'
 
-  pod "GCanvas", :path => "../node_modules/@flyskywhy/react-native-gcanvas/GCanvas.podspec"
+  pod 'Stripe', '~> 24.12.0'
+  pod 'StripePaymentSheet', '~> 24.12.0'
 
   $FirebaseSDKVersion = '10.22.0'
   
@@ -96,7 +97,7 @@ target 'RecoveryConnect' do
   end
 
   post_install do |installer|
-    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    # https://github.com/facebook/react-native/blob/main/packages/react-native/scr ipts/react_native_pods.rb#L197-L202
     react_native_post_install(
       installer,
       config[:reactNativePath],
@@ -107,7 +108,7 @@ target 'RecoveryConnect' do
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['SWIFT_VERSION'] = '5.0'
-        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.4'
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
       end
     end
     installer.pods_project.targets.each do |target|

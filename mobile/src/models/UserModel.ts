@@ -5,13 +5,42 @@ import {
   FirestoreDocument,
 } from '../types';
 import {UserDocument} from '../types/schema';
-import {firestore, auth} from '../services/firebase/config';
-import Firestore from '@react-native-firebase/firestore';
+import {firebase} from '@react-native-firebase/auth';
+import firestore, {
+  FirebaseFirestoreTypes,
+} from '@react-native-firebase/firestore';
 import Auth from '@react-native-firebase/auth';
 /**
  * User model for managing user data
  */
 export class UserModel {
+  private static instance: UserModel;
+
+  private constructor() {}
+
+  static getInstance(): UserModel {
+    if (!UserModel.instance) {
+      UserModel.instance = new UserModel();
+    }
+    return UserModel.instance;
+  }
+
+  static async getCurrentUser() {
+    const currentUser = firebase.auth().currentUser;
+    if (!currentUser) return null;
+
+    const userDoc = await firestore()
+      .collection('users')
+      .doc(currentUser.uid)
+      .get();
+    if (!userDoc.exists) return null;
+
+    return {
+      uid: currentUser.uid,
+      ...userDoc.data(),
+    };
+  }
+
   /**
    * Convert a Firestore user document to a User object
    */
@@ -20,6 +49,12 @@ export class UserModel {
     // Default to empty objects if nested settings are undefined in Firestore
     const notificationSettingsData = data.notificationSettings ?? {};
     const privacySettingsData = data.privacySettings ?? {};
+    const sponsorSettingsData = data.sponsorSettings ?? {
+      isAvailable: false,
+      maxSponsees: 3,
+      requirements: ['30 days sober', 'Working the steps'],
+      bio: '',
+    };
 
     return {
       uid: doc.id,
@@ -42,6 +77,15 @@ export class UserModel {
         allowDirectMessages: privacySettingsData.allowDirectMessages ?? true,
         // Map showPhoneNumber from nested privacy settings in schema
         showPhoneNumber: privacySettingsData.showPhoneNumber ?? false,
+      },
+      sponsorSettings: {
+        isAvailable: sponsorSettingsData.isAvailable ?? false,
+        maxSponsees: sponsorSettingsData.maxSponsees ?? 3,
+        requirements: sponsorSettingsData.requirements ?? [
+          '30 days sober',
+          'Working the steps',
+        ],
+        bio: sponsorSettingsData.bio ?? '',
       },
       homeGroups: data.homeGroups ?? [],
       role: data.role ?? 'user',
@@ -77,7 +121,7 @@ export class UserModel {
     // Map dates (use sobrietyStartDate for Firestore)
     if (user.recoveryDate) {
       try {
-        firestoreData.sobrietyStartDate = Firestore.Timestamp.fromDate(
+        firestoreData.sobrietyStartDate = firestore.Timestamp.fromDate(
           new Date(user.recoveryDate),
         );
       } catch (e) {
@@ -86,7 +130,7 @@ export class UserModel {
     }
     if (user.createdAt) {
       try {
-        firestoreData.createdAt = Firestore.Timestamp.fromDate(
+        firestoreData.createdAt = firestore.Timestamp.fromDate(
           new Date(user.createdAt),
         );
       } catch (e) {
@@ -95,7 +139,7 @@ export class UserModel {
     }
     if (user.updatedAt) {
       try {
-        firestoreData.updatedAt = Firestore.Timestamp.fromDate(
+        firestoreData.updatedAt = firestore.Timestamp.fromDate(
           new Date(user.updatedAt),
         );
       } catch (e) {
@@ -104,7 +148,7 @@ export class UserModel {
     }
     if (user.lastLogin) {
       try {
-        firestoreData.lastLogin = Firestore.Timestamp.fromDate(
+        firestoreData.lastLogin = firestore.Timestamp.fromDate(
           new Date(user.lastLogin),
         );
       } catch (e) {
@@ -118,6 +162,9 @@ export class UserModel {
     }
     if (user.privacySettings !== undefined) {
       firestoreData.privacySettings = user.privacySettings; // Pass the whole object
+    }
+    if (user.sponsorSettings !== undefined) {
+      firestoreData.sponsorSettings = user.sponsorSettings;
     }
 
     return firestoreData;
@@ -149,7 +196,7 @@ export class UserModel {
    */
   static async getById(uid: string): Promise<User | null> {
     try {
-      const doc = await firestore.collection('users').doc(uid).get();
+      const doc = await firestore().collection('users').doc(uid).get();
 
       if (!doc.exists) {
         return null;
@@ -170,7 +217,7 @@ export class UserModel {
    */
   static async create(userData: Partial<User>): Promise<User> {
     try {
-      const currentUser = auth.currentUser;
+      const currentUser = firebase.auth().currentUser;
 
       if (!currentUser) {
         throw new Error('No authenticated user');
@@ -208,7 +255,7 @@ export class UserModel {
 
       const newUser = {...defaultUser, ...userData};
 
-      await firestore
+      await firestore()
         .collection('users')
         .doc(newUser.uid)
         .set(UserModel.toFirestore(newUser));
@@ -225,7 +272,7 @@ export class UserModel {
    */
   static async update(uid: string, userData: Partial<User>): Promise<User> {
     try {
-      const userRef = firestore.collection('users').doc(uid);
+      const userRef = firestore().collection('users').doc(uid);
       const userDoc = await userRef.get();
 
       if (!userDoc.exists) {
@@ -259,12 +306,12 @@ export class UserModel {
         // Handles null or string
         try {
           updatePayload.sobrietyStartDate = userData.recoveryDate
-            ? Firestore.Timestamp.fromDate(new Date(userData.recoveryDate))
+            ? firestore.Timestamp.fromDate(new Date(userData.recoveryDate))
             : null;
         } catch (e) {}
       }
       // Always update updatedAt
-      updatePayload.updatedAt = Firestore.Timestamp.fromDate(new Date());
+      updatePayload.updatedAt = firestore.Timestamp.fromDate(new Date());
       // Don't update createdAt or lastLogin here usually
 
       // Merge nested notification settings
@@ -307,11 +354,11 @@ export class UserModel {
     meetingId: string,
   ): Promise<string[]> {
     try {
-      const userRef = firestore.collection('users').doc(uid);
+      const userRef = firestore().collection('users').doc(uid);
 
       await userRef.update({
-        favoriteMeetings: Firestore.FieldValue.arrayUnion(meetingId),
-        updatedAt: Firestore.FieldValue.serverTimestamp(),
+        favoriteMeetings: firestore.FieldValue.arrayUnion(meetingId),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
       });
 
       const updatedDoc = await userRef.get();
@@ -332,11 +379,11 @@ export class UserModel {
     meetingId: string,
   ): Promise<string[]> {
     try {
-      const userRef = firestore.collection('users').doc(uid);
+      const userRef = firestore().collection('users').doc(uid);
 
       await userRef.update({
-        favoriteMeetings: Firestore.FieldValue.arrayRemove(meetingId),
-        updatedAt: Firestore.FieldValue.serverTimestamp(),
+        favoriteMeetings: firestore.FieldValue.arrayRemove(meetingId),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
       });
 
       const updatedDoc = await userRef.get();
@@ -356,13 +403,13 @@ export class UserModel {
    */
   static async syncUserProfileFromAuth(uid: string): Promise<User | null> {
     try {
-      const currentUser = auth.currentUser;
+      const currentUser = firebase.auth().currentUser;
 
       if (!currentUser || currentUser.uid !== uid) {
         throw new Error('User not authenticated or ID mismatch');
       }
 
-      const userRef = firestore.collection('users').doc(uid);
+      const userRef = firestore().collection('users').doc(uid);
       const userDoc = await userRef.get();
 
       if (!userDoc.exists) {
@@ -412,7 +459,7 @@ export class UserModel {
     photoUrl: string,
   ): Promise<User | null> {
     try {
-      const currentUser = auth.currentUser;
+      const currentUser = firebase.auth().currentUser;
 
       if (!currentUser || currentUser.uid !== uid) {
         throw new Error('User not authenticated or ID mismatch');
@@ -424,7 +471,7 @@ export class UserModel {
       });
 
       // Then update Firestore document
-      const userRef = firestore.collection('users').doc(uid);
+      const userRef = firestore().collection('users').doc(uid);
       const userDoc = await userRef.get();
 
       if (!userDoc.exists) {
@@ -456,12 +503,12 @@ export class UserModel {
    */
   static async addFcmToken(uid: string, token: string): Promise<void> {
     try {
-      const userRef = firestore.collection('users').doc(uid);
+      const userRef = firestore().collection('users').doc(uid);
 
       // Update using arrayUnion to avoid duplicates
       await userRef.update({
-        fcmTokens: Firestore.FieldValue.arrayUnion(token),
-        updatedAt: Firestore.FieldValue.serverTimestamp(),
+        fcmTokens: firestore.FieldValue.arrayUnion(token),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
       });
       console.log(`FCM token added/updated for user ${uid}`);
     } catch (error) {
@@ -473,3 +520,5 @@ export class UserModel {
     }
   }
 }
+
+export default UserModel;

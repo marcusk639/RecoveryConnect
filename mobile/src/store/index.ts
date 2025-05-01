@@ -9,8 +9,10 @@ import announcementsReducer from './slices/announcementsSlice';
 import membersReducer from './slices/membersSlice';
 import chatReducer from './slices/chatSlice';
 import servicePositionsReducer from './slices/servicePositionsSlice';
+import sponsorshipReducer from './slices/sponsorshipSlice';
+import {RootState} from './types';
 
-const store = configureStore({
+export const store = configureStore({
   reducer: {
     auth: authReducer,
     groups: groupsReducer,
@@ -21,6 +23,7 @@ const store = configureStore({
     members: membersReducer,
     chat: chatReducer,
     servicePositions: servicePositionsReducer,
+    sponsorship: sponsorshipReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
@@ -29,7 +32,6 @@ const store = configureStore({
 });
 
 // Export types for TypeScript
-export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
 // Hooks for typed dispatch and selector

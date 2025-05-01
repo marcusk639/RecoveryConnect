@@ -14,7 +14,7 @@ import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp} from '@react-navigation/native';
 import {GroupStackParamList} from '../../types/navigation';
 import {GroupModel} from '../../models/GroupModel';
-import Button from '../../components/common/Button';
+import {Button} from '../../components/common/Button';
 import {auth} from '../../services/firebase/config';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import LocationPicker, {

@@ -3,12 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   SafeAreaView,
   ScrollView,
+  Image,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {theme} from '../../theme/theme';
+import {Button} from '../../components/common/Button';
+import {Card} from '../../components/common/Card';
 
 type RootStackParamList = {
   Login: undefined;
@@ -24,16 +27,19 @@ const LandingScreen = () => {
   return (
     <SafeAreaView style={styles.container} testID="landing-screen">
       <View style={styles.header}>
-        <View style={styles.logoSmall}>
-          <Text style={styles.logoText}>RC</Text>
+        <View style={styles.logoContainer}>
+          <View style={styles.logo}>
+            <Text style={styles.logoText}>RC</Text>
+          </View>
+          <Text style={styles.headerTitle}>Recovery Connect</Text>
         </View>
-        <Text style={styles.headerTitle}>Recovery Connect</Text>
-        <TouchableOpacity
-          style={styles.signInButton}
+        <Button
+          title="Sign In"
+          variant="outline"
+          size="small"
           onPress={() => navigation.navigate('Login')}
-          testID="landing-signin-button">
-          <Text style={styles.signInButtonText}>Sign In</Text>
-        </TouchableOpacity>
+          testID="landing-signin-button"
+        />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -48,60 +54,73 @@ const LandingScreen = () => {
           </Text>
 
           <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => {
-                navigation.navigate('Meetings');
-              }}
-              testID="landing-find-meeting-button">
-              <Text style={styles.primaryButtonText}>Find a Meeting</Text>
-            </TouchableOpacity>
+            <Button
+              title="Find a Meeting"
+              variant="primary"
+              size="large"
+              onPress={() => navigation.navigate('Meetings')}
+              testID="landing-find-meeting-button"
+            />
 
-            <TouchableOpacity
-              style={styles.secondaryButton}
+            <Button
+              title="Register"
+              variant="secondary"
+              size="large"
               onPress={() => navigation.navigate('Register')}
-              testID="landing-register-button">
-              <Text style={styles.secondaryButtonText}>Register</Text>
-            </TouchableOpacity>
+              testID="landing-register-button"
+            />
           </View>
 
-          <View style={styles.privacyNote}>
+          <Card variant="filled" style={styles.privacyCard}>
             <Text style={styles.privacyNoteText}>
               <Text style={styles.privacyNoteBold}>Privacy First:</Text> We
               respect anonymity. First names only, encrypted messages, and no
               social media integration.
             </Text>
-          </View>
+          </Card>
         </View>
 
         <View style={styles.featuresSection}>
-          <View style={styles.featureCard}>
+          <Card variant="elevated" style={styles.featureCard}>
             <View style={styles.featureIconContainer}>
-              {/* Calendar Icon */}
+              {/* <Image
+                source={require('../../assets/icons/calendar.png')}
+                style={styles.featureIcon}
+              /> */}
             </View>
             <Text style={styles.featureTitle}>Meeting Directory</Text>
             <Text style={styles.featureDescription}>
               Find meetings, save your schedule, and get reminders for your
               homegroup.
             </Text>
-          </View>
+          </Card>
 
-          <View style={styles.featureCard}>
-            <View style={styles.featureIconContainer}>{/* Chat Icon */}</View>
+          <Card variant="elevated" style={styles.featureCard}>
+            <View style={styles.featureIconContainer}>
+              {/* <Image
+                source={require('../../assets/icons/chat.png')}
+                style={styles.featureIcon}
+              /> */}
+            </View>
             <Text style={styles.featureTitle}>Group Communication</Text>
             <Text style={styles.featureDescription}>
               Secure announcements and messaging for your recovery community.
             </Text>
-          </View>
+          </Card>
 
-          <View style={styles.featureCard}>
-            <View style={styles.featureIconContainer}>{/* Money Icon */}</View>
+          <Card variant="elevated" style={styles.featureCard}>
+            <View style={styles.featureIconContainer}>
+              {/* <Image
+                source={require('../../assets/icons/money.png')}
+                style={styles.featureIcon}
+              /> */}
+            </View>
             <Text style={styles.featureTitle}>Treasury Management</Text>
             <Text style={styles.featureDescription}>
               Track 7th Tradition contributions and expenses with easy handoff
               between treasurers.
             </Text>
-          </View>
+          </Card>
         </View>
       </ScrollView>
 
@@ -120,163 +139,128 @@ const LandingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.background.primary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: theme.colors.neutral.grey200,
   },
-  logoSmall: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#E3F2FD',
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary.light,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: theme.spacing.sm,
   },
   logoText: {
-    fontSize: 16,
+    fontSize: theme.typography.fontSize.lg,
     fontWeight: 'bold',
-    color: '#2196F3',
+    color: theme.colors.primary.main,
   },
   headerTitle: {
-    flex: 1,
-    fontSize: 18,
+    fontSize: theme.typography.fontSize.lg,
     fontWeight: '600',
-    color: '#1976D2',
-  },
-  signInButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#2196F3',
-    borderRadius: 4,
-  },
-  signInButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFFFFF',
+    color: theme.colors.primary.main,
   },
   content: {
-    padding: 16,
+    padding: theme.spacing.lg,
   },
   heroSection: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: theme.spacing.xxl,
   },
   heroTitle: {
-    fontSize: 24,
+    fontSize: theme.typography.fontSize.xxl,
     fontWeight: 'bold',
-    color: '#212121',
+    color: theme.colors.neutral.grey900,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: theme.spacing.md,
   },
   heroSubtitle: {
-    fontSize: 16,
-    color: '#616161',
+    fontSize: theme.typography.fontSize.md,
+    color: theme.colors.neutral.grey600,
     textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 16,
+    marginBottom: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.lg,
   },
   actionButtons: {
     flexDirection: 'column',
     width: '100%',
-    marginBottom: 24,
+    marginBottom: theme.spacing.xl,
   },
-  primaryButton: {
-    backgroundColor: '#2196F3',
-    borderRadius: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2196F3',
-  },
-  secondaryButtonText: {
-    color: '#2196F3',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  privacyNote: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-    padding: 16,
+  privacyCard: {
+    padding: theme.spacing.lg,
     width: '100%',
   },
   privacyNoteText: {
-    fontSize: 14,
-    color: '#424242',
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.neutral.grey700,
   },
   privacyNoteBold: {
     fontWeight: 'bold',
   },
   featuresSection: {
-    marginTop: 16,
-    marginBottom: 32,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.xxl,
   },
   featureCard: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
+    padding: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
   },
   featureIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E3F2FD',
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary.light,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
+  },
+  featureIcon: {
+    width: 24,
+    height: 24,
+    tintColor: theme.colors.primary.main,
   },
   featureTitle: {
-    fontSize: 18,
+    fontSize: theme.typography.fontSize.lg,
     fontWeight: '600',
-    color: '#212121',
-    marginBottom: 8,
+    color: theme.colors.neutral.grey900,
+    marginBottom: theme.spacing.xs,
   },
   featureDescription: {
-    fontSize: 14,
-    color: '#616161',
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.neutral.grey600,
   },
   footer: {
+    padding: theme.spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    padding: 16,
-    alignItems: 'center',
+    borderTopColor: theme.colors.neutral.grey200,
   },
   footerText: {
-    fontSize: 12,
-    color: '#9E9E9E',
-    marginBottom: 8,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.neutral.grey500,
+    textAlign: 'center',
+    marginBottom: theme.spacing.xs,
   },
   footerLinks: {
     flexDirection: 'row',
     justifyContent: 'center',
   },
   footerLink: {
-    fontSize: 12,
-    color: '#2196F3',
-    marginHorizontal: 8,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.primary.main,
+    marginHorizontal: theme.spacing.sm,
   },
 });
 

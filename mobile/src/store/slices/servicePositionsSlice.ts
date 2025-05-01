@@ -1,11 +1,11 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
-import {RootState} from '../index';
+import {RootState} from '../types';
 import {ServicePosition} from '../../types';
 import {ServicePositionModel} from '../../models/ServicePositionModel';
 import {createSelector} from 'reselect';
 
 // Define State Type
-interface ServicePositionsState {
+export interface ServicePositionsState {
   items: Record<string, ServicePosition>; // Store positions by positionId
   groupPositionIds: Record<string, string[]>; // Map groupId -> [positionId]
   status: 'idle' | 'loading' | 'succeeded' | 'failed';

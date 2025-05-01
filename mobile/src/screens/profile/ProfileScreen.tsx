@@ -16,10 +16,8 @@ import {
   Platform,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import {launchImageLibrary} from 'react-native-image-picker';
-import {MainStackParamList} from '../../types';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {useAppDispatch, useAppSelector} from '../../store';
@@ -36,12 +34,11 @@ import {
   updateUserPhoneNumber,
   updateUserPhoto,
   updateUserNotificationSettings,
+  updateSponsorSettings,
 } from '../../store/slices/authSlice';
-import {UserModel} from '../../models/UserModel';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {Sponsorship, SponsorSettings} from '../../types/sponsorship';
 
 // Define the navigation param list for the Profile stack
 type ProfileStackParamList = {
@@ -64,12 +61,15 @@ interface UserProfile {
     meetings: boolean;
     announcements: boolean;
     celebrations: boolean;
+    sponsorship: boolean;
   };
   privacySettings: {
     showRecoveryDate: boolean;
     showPhoneNumber: boolean;
     allowDirectMessages: boolean;
+    sponsorship: boolean;
   };
+  sponsorSettings: SponsorSettings;
 }
 
 const ProfileScreen: React.FC = () => {
@@ -111,12 +111,27 @@ const ProfileScreen: React.FC = () => {
       meetings: true,
       announcements: true,
       celebrations: true,
+      sponsorship: true,
     },
     privacySettings: {
       showRecoveryDate: false,
       showPhoneNumber: false,
       allowDirectMessages: true,
+      sponsorship: true,
     },
+    sponsorSettings: {
+      isAvailable: false,
+      maxSponsees: 3,
+      requirements: ['30 days sober', 'Working the steps'],
+      bio: '',
+    },
+  });
+
+  const [sponsorshipSettings, setSponsorshipSettings] = useState({
+    isAvailable: false,
+    maxSponsees: 3,
+    requirements: ['30 days sober', 'Working the steps'],
+    bio: '',
   });
 
   // Load user data from Redux or fetch if needed
@@ -135,12 +150,23 @@ const ProfileScreen: React.FC = () => {
           meetings: userData.notificationSettings?.meetings ?? true,
           announcements: userData.notificationSettings?.announcements ?? true,
           celebrations: userData.notificationSettings?.celebrations ?? true,
+          sponsorship: userData.notificationSettings?.sponsorship ?? true,
         },
         privacySettings: {
           showRecoveryDate: userData.showSobrietyDate ?? false,
           showPhoneNumber: userData.showPhoneNumber ?? false,
           allowDirectMessages:
             userData.privacySettings?.allowDirectMessages ?? true,
+          sponsorship: userData.privacySettings?.sponsorship ?? true,
+        },
+        sponsorSettings: {
+          isAvailable: userData.sponsorSettings?.isAvailable ?? false,
+          maxSponsees: userData.sponsorSettings?.maxSponsees ?? 3,
+          requirements: userData.sponsorSettings?.requirements ?? [
+            '30 days sober',
+            'Working the steps',
+          ],
+          bio: userData.sponsorSettings?.bio ?? '',
         },
       });
 
@@ -450,6 +476,20 @@ const ProfileScreen: React.FC = () => {
 
     // International number or other format
     return phone;
+  };
+
+  const saveSponsorshipSettings = async () => {
+    try {
+      await dispatch(updateSponsorSettings(sponsorshipSettings)).unwrap();
+      setEditingSection(null);
+    } catch (error: any) {
+      console.error('Error updating sponsorship settings:', error);
+      Alert.alert(
+        'Error',
+        error.message ||
+          'Failed to update sponsorship settings. Please try again.',
+      );
+    }
   };
 
   return (
@@ -829,6 +869,138 @@ const ProfileScreen: React.FC = () => {
             )}
           </View>
 
+          {/* Sponsorship Settings Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Sponsorship</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  setEditingSection(
+                    editingSection === 'sponsorship' ? null : 'sponsorship',
+                  )
+                }
+                style={styles.editButton}>
+                <Text style={styles.editButtonText}>
+                  {editingSection === 'sponsorship' ? 'Cancel' : 'Edit'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {editingSection === 'sponsorship' ? (
+              <View style={styles.editContainer}>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.switchLabel}>Available to Sponsor</Text>
+                  <Switch
+                    value={sponsorshipSettings.isAvailable}
+                    onValueChange={value =>
+                      setSponsorshipSettings(prev => ({
+                        ...prev,
+                        isAvailable: value,
+                      }))
+                    }
+                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                    thumbColor={
+                      sponsorshipSettings.isAvailable ? '#2196F3' : '#FFFFFF'
+                    }
+                  />
+                </View>
+
+                {sponsorshipSettings.isAvailable && (
+                  <>
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.inputLabel}>Maximum Sponsees</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        keyboardType="numeric"
+                        value={sponsorshipSettings.maxSponsees.toString()}
+                        onChangeText={value =>
+                          setSponsorshipSettings(prev => ({
+                            ...prev,
+                            maxSponsees: parseInt(value) || 0,
+                          }))
+                        }
+                      />
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.inputLabel}>Requirements</Text>
+                      <TextInput
+                        style={[styles.textInput, styles.multilineInput]}
+                        multiline
+                        value={sponsorshipSettings.requirements.join(', ')}
+                        onChangeText={value =>
+                          setSponsorshipSettings(prev => ({
+                            ...prev,
+                            requirements: value.split(',').map(r => r.trim()),
+                          }))
+                        }
+                        placeholder="Enter requirements separated by commas"
+                      />
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.inputLabel}>Sponsorship Bio</Text>
+                      <TextInput
+                        style={[styles.textInput, styles.multilineInput]}
+                        multiline
+                        value={sponsorshipSettings.bio}
+                        onChangeText={value =>
+                          setSponsorshipSettings(prev => ({
+                            ...prev,
+                            bio: value,
+                          }))
+                        }
+                        placeholder="Tell potential sponsees about your sponsorship style"
+                      />
+                    </View>
+                  </>
+                )}
+
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={saveSponsorshipSettings}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View>
+                <View style={styles.settingItem}>
+                  <Text style={styles.settingLabel}>Available to Sponsor</Text>
+                  <Text style={styles.settingValue}>
+                    {userData?.sponsorSettings?.isAvailable ? 'Yes' : 'No'}
+                  </Text>
+                </View>
+
+                {userData?.sponsorSettings?.isAvailable && (
+                  <>
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>Maximum Sponsees</Text>
+                      <Text style={styles.settingValue}>
+                        {userData.sponsorSettings.maxSponsees}
+                      </Text>
+                    </View>
+
+                    <View style={styles.settingItem}>
+                      <Text style={styles.settingLabel}>Requirements</Text>
+                      <Text style={styles.settingValue}>
+                        {userData.sponsorSettings.requirements.join(', ')}
+                      </Text>
+                    </View>
+
+                    {userData.sponsorSettings.bio && (
+                      <View style={styles.settingItem}>
+                        <Text style={styles.settingLabel}>Bio</Text>
+                        <Text style={styles.settingValue}>
+                          {userData.sponsorSettings.bio}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+            )}
+          </View>
+
           {/* Account Actions - Simplified for clarity */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Account</Text>
@@ -1182,6 +1354,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#2196F3',
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: '#424242',
+    marginBottom: 8,
+  },
+  multilineInput: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  settingValue: {
+    fontSize: 16,
+    color: '#212121',
   },
 });
 

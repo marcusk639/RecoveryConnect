@@ -22,6 +22,9 @@ import GroupChatMediaPickerScreen from '../screens/homegroup/GroupChatMediaPicke
 import GroupServicePositionsScreen from '../screens/homegroup/GroupServicePositionsScreen';
 import AssignChairpersonScreen from '../screens/homegroup/AssignChairpersonScreen';
 import GroupDonationScreen from '../screens/homegroup/GroupDonationScreen';
+import GroupSponsorsScreen from '../screens/homegroup/GroupSponsorsScreen';
+import SponsorChatScreen from '../screens/homegroup/SponsorChatScreen';
+import SponsorshipAnalyticsScreen from '../screens/homegroup/SponsorshipAnalyticsScreen';
 // import GroupEventDetailsScreen from '../screens/groups/GroupEventDetailsScreen';
 // import GroupBusinessMeetingScreen from '../screens/groups/GroupBusinessMeetingScreen';
 
@@ -163,6 +166,27 @@ const GroupStackNavigator: React.FC = () => {
           title: 'Donate to Group',
           presentation: 'modal',
         }}
+      />
+      <Stack.Screen
+        name="GroupSponsors"
+        component={GroupSponsorsScreen}
+        options={({route}) => ({
+          title: `${route.params.groupName} - Sponsors`,
+        })}
+      />
+      <Stack.Screen
+        name="SponsorChat"
+        component={SponsorChatScreen}
+        options={({route}) => ({
+          title: 'Chat',
+        })}
+      />
+      <Stack.Screen
+        name="SponsorshipAnalytics"
+        component={SponsorshipAnalyticsScreen}
+        options={({route}) => ({
+          title: `${route.params.groupName} - Sponsorship Analytics`,
+        })}
       />
     </Stack.Navigator>
   );

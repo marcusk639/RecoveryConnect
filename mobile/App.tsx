@@ -19,7 +19,7 @@ import functions from '@react-native-firebase/functions';
 import messaging from '@react-native-firebase/messaging';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {RootStackParamList} from './src/types/navigation';
-import {StripeProvider} from '@stripe/stripe-react-native';
+import {initStripe, StripeProvider} from '@stripe/stripe-react-native';
 
 require('react-native').LogBox.ignoreLogs(['`GCanvasReady` with no listeners']);
 
@@ -275,19 +275,24 @@ const AppContent: React.FC = () => {
 
 // Root App component wraps everything in Providers
 const App = () => {
+  useEffect(() => {
+    initStripe({
+      publishableKey: process.env.STRIPE_TEST_PUBLISHABLE_KEY as string,
+    });
+  }, []);
   // !! REPLACE WITH YOUR ACTUAL STRIPE PUBLISHABLE KEY !!
   // Consider using react-native-dotenv for better key management
   const stripePublishableKey = process.env
     .STRIPE_TEST_PUBLISHABLE_KEY as string;
   return (
     <Provider store={store}>
-      <StripeProvider
+      {/* <StripeProvider
         publishableKey={stripePublishableKey}
         // merchantIdentifier="merchant.com.your-app-identifier" // Required for Apple Pay
         // urlScheme="your-url-scheme" // Required for some payment methods
-      >
-        <AppContent />
-      </StripeProvider>
+      > */}
+      <AppContent />
+      {/* </StripeProvider> */}
     </Provider>
   );
 };
