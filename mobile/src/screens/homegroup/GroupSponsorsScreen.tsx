@@ -23,6 +23,8 @@ import {
   selectSponsorshipRequests,
 } from '../../store/slices/sponsorshipSlice';
 import {GroupStackParamList} from '../../types/navigation';
+import {Timestamp} from '../../types/schema';
+import moment from 'moment';
 
 interface Sponsor {
   id: string;
@@ -40,7 +42,7 @@ interface SponsorshipRequest {
   sponseeName: string;
   message: string;
   status: 'pending' | 'accepted' | 'rejected';
-  createdAt: string;
+  createdAt: Timestamp;
 }
 
 type ScreenRouteProp = RouteProp<GroupStackParamList, 'GroupSponsors'>;
@@ -51,7 +53,6 @@ type ScreenNavigationProp = StackNavigationProp<
 
 const GroupSponsorsScreen: React.FC = () => {
   const route = useRoute<ScreenRouteProp>();
-  const navigation = useNavigation<ScreenNavigationProp>();
   const dispatch = useAppDispatch();
   const {groupId} = route.params;
 
@@ -126,11 +127,38 @@ const GroupSponsorsScreen: React.FC = () => {
     }
   };
 
+  const getTimeSober = (sobrietyDate: string) => {
+    // example result: 1 year, 2 months, 3 days
+    const now = moment();
+    const soberDate = moment(sobrietyDate);
+    const diff = now.diff(sobrietyDate);
+    const duration = moment.duration(diff);
+    const years = duration.years();
+    const months = duration.months();
+    const days = duration.days();
+    let result = '';
+    if (years > 0) {
+      result += `${years} year${years > 1 ? 's' : ''}`;
+    }
+    if (months > 0) {
+      result += ' ';
+      result += `${months} month${months > 1 ? 's' : ''}`;
+    }
+    if (days > 0) {
+      result += ' ';
+      result += `${days} day${days > 1 ? 's' : ''}`;
+    }
+    return result;
+  };
+
   const renderSponsor = ({item}: {item: Sponsor}) => (
     <View style={styles.sponsorCard}>
       <View style={styles.sponsorHeader}>
         <Text style={styles.sponsorName}>{item.displayName}</Text>
-        <Text style={styles.sponsorSobriety}>{item.sobrietyDate} sober</Text>
+        {/* Format sobriety date */}
+        <Text style={styles.sponsorSobriety}>
+          {getTimeSober(item.sobrietyDate)} sober
+        </Text>
       </View>
 
       {item.bio && <Text style={styles.sponsorBio}>{item.bio}</Text>}
@@ -160,7 +188,9 @@ const GroupSponsorsScreen: React.FC = () => {
       <View style={styles.requestHeader}>
         <Text style={styles.requestName}>{item.sponseeName}</Text>
         <Text style={styles.requestDate}>
-          {new Date(item.createdAt).toLocaleDateString()}
+          {item.createdAt instanceof Date
+            ? item.createdAt.toLocaleDateString()
+            : item.createdAt.toDate().toLocaleDateString()}
         </Text>
       </View>
 
@@ -211,6 +241,11 @@ const GroupSponsorsScreen: React.FC = () => {
               />
             </View>
           ) : null
+        }
+        ListEmptyComponent={
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>No pending requests</Text>
+          </View>
         }
       />
 

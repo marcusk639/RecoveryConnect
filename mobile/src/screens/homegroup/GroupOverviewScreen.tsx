@@ -648,27 +648,25 @@ const GroupOverviewScreen: React.FC = () => {
         </View>
 
         {celebrations.length > 0 ? (
-          celebrations.map(
-            (celebration: RecoveryCelebration, index: number) => (
-              <View
-                key={index}
-                style={styles.celebrationItem}
-                testID={`group-overview-celebration-${index}`}>
-                <View style={styles.celebrationIcon}>
-                  <Text style={styles.celebrationIconText}>🎉</Text>
-                </View>
-                <View style={styles.celebrationInfo}>
-                  <Text style={styles.celebrationName}>
-                    {celebration.userName} - {celebration.years}{' '}
-                    {celebration.years === 1 ? 'Year' : 'Years'}
-                  </Text>
-                  <Text style={styles.celebrationDate}>
-                    {formatDate(celebration.date)}
-                  </Text>
-                </View>
+          celebrations.map((celebration: GroupMilestone, index: number) => (
+            <View
+              key={index}
+              style={styles.celebrationItem}
+              testID={`group-overview-celebration-${index}`}>
+              <View style={styles.celebrationIcon}>
+                <Text style={styles.celebrationIconText}>🎉</Text>
               </View>
-            ),
-          )
+              <View style={styles.celebrationInfo}>
+                <Text style={styles.celebrationName}>
+                  {celebration.memberName} - {celebration.years}{' '}
+                  {celebration.years === 1 ? 'Year' : 'Years'}
+                </Text>
+                <Text style={styles.celebrationDate}>
+                  {formatDate(celebration.date)}
+                </Text>
+              </View>
+            </View>
+          ))
         ) : (
           <Text
             style={styles.emptyStateText}

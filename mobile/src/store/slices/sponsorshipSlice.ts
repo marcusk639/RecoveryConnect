@@ -7,6 +7,7 @@ import {
   SponsorSettings,
 } from '../../types/sponsorship';
 import {RootState} from '../types';
+import {Timestamp} from '../../types/schema';
 
 export interface SponsorshipState {
   sponsorships: Sponsorship[];
@@ -34,7 +35,7 @@ export interface SponsorshipState {
       sponseeName: string;
       message: string;
       status: 'pending' | 'accepted' | 'rejected';
-      createdAt: string;
+      createdAt: Timestamp;
     }[]
   >;
 }
@@ -322,13 +323,18 @@ const sponsorshipSlice = createSlice({
       .addCase(requestSponsorship.fulfilled, (state, action) => {
         state.loading = false;
         const {groupId, request} = action.payload;
+        if (!request) return;
+
         if (!state.sponsorshipRequests[groupId]) {
           state.sponsorshipRequests[groupId] = [];
         }
         state.sponsorshipRequests[groupId].push({
-          ...request,
+          id: request.id,
+          sponseeId: request.sponseeId,
+          sponseeName: request.sponseeName,
+          message: request.message,
           status: 'pending' as const,
-          createdAt: new Date().toISOString(),
+          createdAt: request.createdAt,
         });
       })
       .addCase(requestSponsorship.rejected, (state, action) => {

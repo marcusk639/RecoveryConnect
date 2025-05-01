@@ -6,11 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   ActivityIndicator,
   FlatList,
+  Alert,
 } from 'react-native';
-import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
+import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
@@ -39,8 +39,10 @@ type GroupScheduleScreenRouteProp = RouteProp<
   GroupStackParamList,
   'GroupSchedule'
 >;
-type GroupScheduleScreenNavigationProp =
-  StackNavigationProp<GroupStackParamList>;
+type GroupScheduleScreenNavigationProp = StackNavigationProp<
+  GroupStackParamList,
+  'GroupSchedule'
+>;
 
 const GroupScheduleScreen: React.FC = () => {
   const route = useRoute<GroupScheduleScreenRouteProp>();
@@ -237,11 +239,9 @@ const GroupScheduleScreen: React.FC = () => {
     }
 
     const dataToShow = showTemplates ? meetingTemplates : upcomingInstances;
-    const listTitle = showTemplates
-      ? 'Recurring Meeting Schedule'
-      : 'Upcoming Meeting Instances';
+    const listTitle = showTemplates ? 'Meeting Schedule' : 'Upcoming Meetings';
     const emptyText = showTemplates
-      ? 'No recurring meeting templates found for this group. An admin can add them.'
+      ? 'No meetings found for this group. An admin can add them.'
       : 'No upcoming meetings scheduled for the next week.';
 
     return (
@@ -260,7 +260,39 @@ const GroupScheduleScreen: React.FC = () => {
             ('instanceId' in item ? item.instanceId : item.id) ??
             `no-id-${index}`
           }
-          ListEmptyComponent={<Text style={styles.emptyText}>{emptyText}</Text>}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Icon
+                name={showTemplates ? 'calendar-clock' : 'calendar-check'}
+                size={64}
+                color="#BBDEFB"
+                style={styles.emptyIcon}
+              />
+              <Text style={styles.emptyTitle}>
+                {showTemplates
+                  ? 'No Recurring Meetings'
+                  : 'No Upcoming Meetings'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {showTemplates
+                  ? isCurrentUserAdmin
+                    ? 'No meetings have been created yet. Press the button below to add meetings.'
+                    : 'No recurring meetings have been set up yet. Check back later or contact a group admin.'
+                  : isCurrentUserAdmin
+                  ? 'Add some upcoming meetings to keep your group members informed about when to meet.'
+                  : 'No upcoming meetings have been scheduled. Check back later or contact a group admin.'}
+              </Text>
+              {isCurrentUserAdmin && (
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() =>
+                    navigation.navigate('GroupSchedule', {groupId, groupName})
+                  }>
+                  <Text style={styles.addButtonText}>Add Meeting</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          }
           contentContainerStyle={{paddingBottom: 20}}
         />
       </>
@@ -308,6 +340,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
+    textAlign: 'center',
   },
   fallbackNotice: {
     fontSize: 13,
@@ -403,12 +436,40 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: '#2196F3', // Consistent blue color
   },
-  emptyText: {
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  emptyIcon: {
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 8,
     textAlign: 'center',
-    marginTop: 40,
-    fontSize: 15,
+  },
+  emptyText: {
+    fontSize: 16,
     color: '#757575',
-    paddingHorizontal: 20,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  addButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 4,
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

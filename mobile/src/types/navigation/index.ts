@@ -41,6 +41,12 @@ export type GroupStackParamList = {
     sponseeName: string;
   };
   SponsorshipAnalytics: {groupId: string; groupName: string};
+  AddEditServicePosition: {
+    groupId: string;
+    groupName: string;
+    positionId?: string;
+    position?: ServicePosition;
+  };
 };
 
 // Profile Stack Navigation Params (assuming it exists)

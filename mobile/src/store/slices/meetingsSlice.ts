@@ -1,22 +1,16 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
 import {RootState} from '../types';
 import functions from '@react-native-firebase/functions';
-import firestore, {
-  FirebaseFirestoreTypes,
-} from '@react-native-firebase/firestore'; // Import firestore and Timestamp type
 import * as hashUtils from '../../utils/hashUtils';
 import {
   Meeting,
   MeetingInstance, // Import MeetingInstance
-  MeetingSearchInput,
   MeetingFilters,
   Location,
   MeetingSearchCriteria,
-  MeetingType, // Import MeetingType
 } from '../../types';
 import {MeetingModel} from '../../models'; // Keep for potential template interactions
 import {createSelector} from 'reselect';
-import {COLLECTION_PATHS} from '../../types/schema'; // Import paths
 import moment from 'moment-timezone'; // Import moment-timezone
 import {DayOfWeek, DAYS_OF_WEEK} from '../../types/utils';
 

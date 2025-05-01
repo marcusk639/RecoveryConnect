@@ -18,7 +18,7 @@ import {differenceInDays, format, parseISO} from 'date-fns';
 import auth from '@react-native-firebase/auth';
 import {GroupModel} from '../../models/GroupModel';
 import {GroupMember} from '../../types';
-import Button from '../../components/common/Button';
+import {Button} from '../../components/common/Button';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {

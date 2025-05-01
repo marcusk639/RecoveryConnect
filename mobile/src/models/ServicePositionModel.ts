@@ -43,13 +43,19 @@ export class ServicePositionModel {
         .orderBy('name', 'asc') // Order alphabetically by name
         .get();
 
+      if (!snapshot) {
+        console.warn(`No snapshot returned for group ${groupId}`);
+        return [];
+      }
+
       return snapshot.docs.map(doc => this.fromFirestore(doc));
     } catch (error) {
       console.error(
         `Error getting service positions for group ${groupId}:`,
         error,
       );
-      throw new Error('Failed to load service positions.');
+      // Return empty array instead of throwing to prevent loading state from hanging
+      return [];
     }
   }
 
@@ -58,7 +64,13 @@ export class ServicePositionModel {
    */
   static async createPosition(
     groupId: string,
-    data: {name: string; description?: string; commitmentLength?: number},
+    data: {
+      name: string;
+      description?: string;
+      commitmentLength?: number;
+      termStartDate?: Date;
+      termEndDate?: Date;
+    },
   ): Promise<ServicePosition> {
     const currentUser = auth().currentUser;
     if (
@@ -80,8 +92,12 @@ export class ServicePositionModel {
       commitmentLength: data.commitmentLength ?? null,
       currentHolderId: null,
       currentHolderName: null,
-      termStartDate: null,
-      termEndDate: null,
+      termStartDate: data.termStartDate
+        ? firestore.Timestamp.fromDate(data.termStartDate)
+        : null,
+      termEndDate: data.termEndDate
+        ? firestore.Timestamp.fromDate(data.termEndDate)
+        : null,
       createdAt: firestore.Timestamp.fromDate(now),
       updatedAt: firestore.Timestamp.fromDate(now),
     };

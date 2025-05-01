@@ -1,4 +1,4 @@
-import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
+import {createSlice, createAsyncThunk} from '@reduxjs/toolkit';
 import {RootState} from '../types';
 import {ServicePosition} from '../../types';
 import {ServicePositionModel} from '../../models/ServicePositionModel';
@@ -24,72 +24,67 @@ const initialState: ServicePositionsState = {
 
 // --- Async Thunks ---
 
-export const fetchServicePositionsForGroup = createAsyncThunk<
-  {groupId: string; positions: ServicePosition[]},
-  string, // groupId
-  {state: RootState; rejectValue: string}
->(
+export const fetchServicePositionsForGroup = createAsyncThunk(
   'servicePositions/fetchForGroup',
-  async (groupId, {getState, rejectWithValue}) => {
-    // TODO: Add caching logic
+  async (groupId: string) => {
     try {
-      const positions = await ServicePositionModel.getPositionsForGroup(
-        groupId,
-      );
-      return {groupId, positions};
+      return await ServicePositionModel.getPositionsForGroup(groupId);
     } catch (error: any) {
-      return rejectWithValue(
-        error.message || 'Failed to fetch service positions',
-      );
+      throw new Error(error.message || 'Failed to fetch service positions');
     }
   },
 );
 
-export const createServicePosition = createAsyncThunk<
-  ServicePosition,
-  {
+export const createServicePosition = createAsyncThunk(
+  'servicePositions/create',
+  async ({
+    groupId,
+    name,
+    description,
+    commitmentLength,
+    termStartDate,
+    termEndDate,
+  }: {
     groupId: string;
     name: string;
     description?: string;
     commitmentLength?: number;
+    termStartDate?: Date;
+    termEndDate?: Date;
+  }) => {
+    try {
+      return await ServicePositionModel.createPosition(groupId, {
+        name,
+        description,
+        commitmentLength,
+        termStartDate,
+        termEndDate,
+      });
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to create service position');
+    }
   },
-  {rejectValue: string}
->('servicePositions/create', async (data, {rejectWithValue}) => {
-  try {
-    const newPosition = await ServicePositionModel.createPosition(
-      data.groupId,
-      {
-        name: data.name,
-        description: data.description,
-        commitmentLength: data.commitmentLength,
-      },
-    );
-    return newPosition;
-  } catch (error: any) {
-    return rejectWithValue(error.message || 'Failed to create position');
-  }
-});
+);
 
-export const updateServicePosition = createAsyncThunk<
-  ServicePosition,
-  {
+export const updateServicePosition = createAsyncThunk(
+  'servicePositions/update',
+  async ({
+    groupId,
+    positionId,
+    updateData,
+  }: {
     groupId: string;
     positionId: string;
     updateData: Partial<Omit<ServicePosition, 'id' | 'groupId' | 'createdAt'>>;
-  },
-  {rejectValue: string}
->(
-  'servicePositions/update',
-  async ({groupId, positionId, updateData}, {rejectWithValue}) => {
+  }) => {
     try {
-      const updatedPosition = await ServicePositionModel.updatePosition(
+      return await ServicePositionModel.updatePosition(
         groupId,
         positionId,
         updateData,
       );
-      return updatedPosition;
     } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to update position');
+      throw new Error(error.message || 'Failed to update service position');
     }
   },
 );
@@ -128,19 +123,28 @@ const servicePositionsSlice = createSlice({
       })
       .addCase(fetchServicePositionsForGroup.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        const {groupId, positions} = action.payload;
+        const positions = action.payload;
         const positionIds: string[] = [];
-        positions.forEach(pos => {
-          state.items[pos.id] = pos;
-          positionIds.push(pos.id);
-        });
-        state.groupPositionIds[groupId] = positionIds;
-        state.lastFetchedGroup[groupId] = Date.now();
+
+        if (positions.length > 0) {
+          positions.forEach(pos => {
+            state.items[pos.id] = pos;
+            positionIds.push(pos.id);
+          });
+          state.groupPositionIds[positions[0].groupId] = positionIds;
+          state.lastFetchedGroup[positions[0].groupId] = Date.now();
+        } else {
+          // Handle empty positions array
+          state.groupPositionIds[action.meta.arg] = [];
+          state.lastFetchedGroup[action.meta.arg] = Date.now();
+        }
+
         state.error = null;
       })
       .addCase(fetchServicePositionsForGroup.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload as string;
+        state.error =
+          action.error.message || 'Failed to fetch service positions';
       })
       // Create Position
       .addCase(createServicePosition.pending, state => {
@@ -153,12 +157,13 @@ const servicePositionsSlice = createSlice({
         if (!state.groupPositionIds[newPosition.groupId]) {
           state.groupPositionIds[newPosition.groupId] = [];
         }
-        state.groupPositionIds[newPosition.groupId].push(newPosition.id); // Add to list
+        state.groupPositionIds[newPosition.groupId].push(newPosition.id);
         state.error = null;
       })
       .addCase(createServicePosition.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload as string;
+        state.error =
+          action.error.message || 'Failed to create service position';
       })
       // Update Position
       .addCase(updateServicePosition.pending, state => {
@@ -172,7 +177,8 @@ const servicePositionsSlice = createSlice({
       })
       .addCase(updateServicePosition.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload as string;
+        state.error =
+          action.error.message || 'Failed to update service position';
       })
       // Delete Position
       .addCase(deleteServicePosition.pending, state => {
@@ -217,8 +223,10 @@ export const selectServicePositionById = (
   state: RootState,
   positionId: string,
 ) => state.servicePositions.items[positionId];
+
 export const selectServicePositionsStatus = (state: RootState) =>
   state.servicePositions.status;
+
 export const selectServicePositionsError = (state: RootState) =>
   state.servicePositions.error;
 
