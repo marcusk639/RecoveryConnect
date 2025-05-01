@@ -5,11 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import {useRoute, RouteProp} from '@react-navigation/native';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {fetchSponsorshipAnalytics} from '../../store/slices/sponsorshipSlice';
 import {GroupStackParamList} from '../../types/navigation';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 type SponsorshipAnalyticsScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -39,9 +41,24 @@ const SponsorshipAnalyticsScreen: React.FC = () => {
   if (error || !analytics) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>
-          {error || 'Failed to load analytics data'}
-        </Text>
+        <View style={styles.emptyContainer}>
+          <Icon
+            name="chart-line"
+            size={64}
+            color="#BBDEFB"
+            style={styles.emptyIcon}
+          />
+          <Text style={styles.emptyTitle}>No Analytics Data</Text>
+          <Text style={styles.emptyText}>
+            {error ||
+              'There is no sponsorship data available yet. Analytics will appear once sponsorships are created and completed.'}
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => dispatch(fetchSponsorshipAnalytics(groupId))}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -162,6 +179,42 @@ const styles = StyleSheet.create({
     color: '#F44336',
     textAlign: 'center',
     margin: 16,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    margin: 16,
+  },
+  emptyIcon: {
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#757575',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 4,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

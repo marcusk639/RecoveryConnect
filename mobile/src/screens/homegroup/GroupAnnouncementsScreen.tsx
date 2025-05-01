@@ -16,7 +16,7 @@ import {RouteProp, useRoute, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import Icon from 'react-native-vector-icons/Ionicons';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import {GroupStackParamList} from '../../types/navigation';
 import {useAppDispatch, useAppSelector} from '../../store';
@@ -30,7 +30,6 @@ import {
 } from '../../store/slices/announcementsSlice';
 import {Announcement} from '../../types';
 import {selectGroupById} from '../../store/slices/groupsSlice';
-import Button from '../../components/common/Button';
 
 type GroupAnnouncementsScreenRouteProp = RouteProp<
   GroupStackParamList,

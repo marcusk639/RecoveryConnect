@@ -1,5 +1,5 @@
 import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
-import {RootState} from '../index';
+import {RootState} from '../types';
 import auth from '@react-native-firebase/auth';
 import {GroupModel} from '../../models/GroupModel';
 import {UserModel} from '../../models/UserModel';
@@ -417,7 +417,7 @@ export const selectAllMembers = (state: RootState) =>
 
 export const selectMembersByGroupId = (state: RootState, groupId: string) => {
   const memberIds = state.members.groupMembers[groupId] || [];
-  return memberIds.map(id => state.members.items[id]).filter(Boolean);
+  return memberIds.map((id: string) => state.members.items[id]).filter(Boolean);
 };
 
 export const selectMemberById = (state: RootState, id: string) =>
@@ -426,8 +426,8 @@ export const selectMemberById = (state: RootState, id: string) =>
 export const selectGroupAdmins = (state: RootState, groupId: string) => {
   const memberIds = state.members.groupMembers[groupId] || [];
   return memberIds
-    .map(id => state.members.items[id])
-    .filter(member => member && member.isAdmin);
+    .map((id: string) => state.members.items[id])
+    .filter((member: GroupMember | undefined) => member && member.isAdmin);
 };
 
 export const selectGroupMilestones = (state: RootState, groupId: string) =>

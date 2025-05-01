@@ -21,7 +21,6 @@ import {GroupStackParamList} from '../../types/navigation';
 
 // Import components
 import GroupInviteModal from '../../components/groups/GroupInviteModal';
-import {getAnonymizedName} from '../../utils/anonymous';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
   fetchGroupMembers,
@@ -216,7 +215,9 @@ const GroupMembersScreen: React.FC = () => {
   );
 
   const renderServicePositions = () => {
-    const serviceMembers = members.filter(member => member.position);
+    const serviceMembers = members.filter(
+      (member: GroupMember) => member.position,
+    );
 
     if (serviceMembers.length === 0) {
       return null;
@@ -226,7 +227,7 @@ const GroupMembersScreen: React.FC = () => {
       <View style={styles.servicePositionsContainer}>
         <Text style={styles.sectionTitle}>Service Positions</Text>
 
-        {serviceMembers.map(member => (
+        {serviceMembers.map((member: GroupMember) => (
           <View key={member.id} style={styles.servicePositionItem}>
             <View style={styles.positionNameContainer}>
               <Text style={styles.positionName}>{member.position}</Text>
@@ -286,7 +287,26 @@ const GroupMembersScreen: React.FC = () => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No members found</Text>
+            <Icon
+              name="account-group-outline"
+              size={64}
+              color="#BBDEFB"
+              style={styles.emptyIcon}
+            />
+            <Text style={styles.emptyTitle}>No Members Yet</Text>
+            <Text style={styles.emptyText}>
+              {isAdmin
+                ? 'Start building your group by inviting members. You can invite them via email or share an invite link.'
+                : 'No members have joined this group yet. Check back later or contact a group admin.'}
+            </Text>
+            {isAdmin && (
+              <TouchableOpacity
+                style={styles.inviteButton}
+                onPress={() => setInviteModalVisible(true)}
+                testID="empty-state-invite-button">
+                <Text style={styles.inviteButtonText}>Invite Members</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
         testID="group-members-list"
@@ -450,14 +470,30 @@ const styles = StyleSheet.create({
     color: '#2196F3',
   },
   emptyContainer: {
-    padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    margin: 16,
+    marginTop: 32,
+  },
+  emptyIcon: {
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 8,
+    textAlign: 'center',
   },
   emptyText: {
     fontSize: 16,
-    color: '#9E9E9E',
+    color: '#757575',
     textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 24,
   },
   adminActions: {
     flexDirection: 'row',

@@ -126,7 +126,7 @@ export class MemberModel {
 
       // Add member to top-level members collection
       const memberDoc: GroupMember = {
-        id: userId,
+        id: `${groupId}_${userId}`,
         userId: userId,
         groupId: groupId,
         name: userData?.displayName || authUser?.displayName || 'Anonymous',

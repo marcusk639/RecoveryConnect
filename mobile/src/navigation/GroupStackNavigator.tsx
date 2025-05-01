@@ -25,6 +25,7 @@ import GroupDonationScreen from '../screens/homegroup/GroupDonationScreen';
 import GroupSponsorsScreen from '../screens/homegroup/GroupSponsorsScreen';
 import SponsorChatScreen from '../screens/homegroup/SponsorChatScreen';
 import SponsorshipAnalyticsScreen from '../screens/homegroup/SponsorshipAnalyticsScreen';
+import AddEditServicePositionScreen from '../screens/homegroup/AddEditServicePositionScreen';
 // import GroupEventDetailsScreen from '../screens/groups/GroupEventDetailsScreen';
 // import GroupBusinessMeetingScreen from '../screens/groups/GroupBusinessMeetingScreen';
 
@@ -187,6 +188,13 @@ const GroupStackNavigator: React.FC = () => {
         options={({route}) => ({
           title: `${route.params.groupName} - Sponsorship Analytics`,
         })}
+      />
+      <Stack.Screen
+        name="AddEditServicePosition"
+        component={AddEditServicePositionScreen}
+        options={{
+          title: 'Add Service Position',
+        }}
       />
     </Stack.Navigator>
   );

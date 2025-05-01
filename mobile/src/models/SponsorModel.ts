@@ -1,10 +1,65 @@
-import firestore from '@react-native-firebase/firestore';
+import firestore, {
+  FirebaseFirestoreTypes,
+} from '@react-native-firebase/firestore';
 import {
   Sponsorship,
   SponsorshipAnalytics,
   SponsorSettings,
 } from '../types/sponsorship';
 import {UserModel} from './UserModel';
+import {Timestamp, UserDocument} from '../types/schema';
+import {GroupModel} from './GroupModel';
+import {FirestoreDocument} from '../types';
+
+interface SponsorDocument {
+  id: string;
+  displayName: string;
+  sobrietyStartDate: string;
+  sponsorSettings?: {
+    requirements: string[];
+    bio: string;
+    maxSponsees: number;
+    isAvailable: boolean;
+  };
+}
+
+interface SponsorshipRequestDocument {
+  id: string;
+  sponseeId: string;
+  sponseeName: string;
+  message: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: Timestamp;
+}
+
+interface SponsorshipDocument {
+  sponsorId: string;
+  sponseeId: string;
+  status: 'active' | 'completed' | 'terminated';
+  startDate: Timestamp;
+  endDate?: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+interface Sponsor {
+  id: string;
+  displayName: string;
+  sobrietyDate: string;
+  requirements: string[];
+  bio: string;
+  currentSponsees: number;
+  maxSponsees: number;
+}
+
+interface SponsorshipRequest {
+  id: string;
+  sponseeId: string;
+  sponseeName: string;
+  message: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: Timestamp;
+}
 
 class SponsorModel {
   private static instance: SponsorModel;
@@ -18,6 +73,57 @@ class SponsorModel {
     return SponsorModel.instance;
   }
 
+  static sponsorshipFromFirestore(
+    doc: FirebaseFirestoreTypes.DocumentSnapshot<SponsorshipDocument>,
+  ): Sponsorship {
+    const data = doc.data();
+    if (!data) throw new Error('Sponsorship document not found');
+
+    return {
+      id: doc.id,
+      sponsorId: data.sponsorId,
+      sponseeId: data.sponseeId,
+      status: data.status,
+      startDate: data.startDate.toDate(),
+      endDate: data.endDate?.toDate(),
+      createdAt: data.createdAt.toDate(),
+      updatedAt: data.updatedAt.toDate(),
+    };
+  }
+
+  static sponsorFromFirestore(
+    doc: FirebaseFirestoreTypes.DocumentSnapshot<SponsorDocument>,
+  ): Sponsor {
+    const data = doc.data();
+    if (!data) throw new Error('Sponsor document not found');
+
+    return {
+      id: doc.id,
+      displayName: data.displayName,
+      sobrietyDate: data.sobrietyStartDate,
+      requirements: data.sponsorSettings?.requirements || [],
+      bio: data.sponsorSettings?.bio || '',
+      currentSponsees: 0, // This will be updated in getGroupSponsors
+      maxSponsees: data.sponsorSettings?.maxSponsees || 0,
+    };
+  }
+
+  static requestFromFirestore(
+    doc: FirebaseFirestoreTypes.DocumentSnapshot<SponsorshipRequestDocument>,
+  ): SponsorshipRequest {
+    const data = doc.data();
+    if (!data) throw new Error('Request document not found');
+
+    return {
+      id: doc.id,
+      sponseeId: data.sponseeId,
+      sponseeName: data.sponseeName,
+      message: data.message,
+      status: data.status,
+      createdAt: data.createdAt,
+    };
+  }
+
   async getGroupSponsorships(groupId: string): Promise<Sponsorship[]> {
     try {
       const snapshot = await firestore()
@@ -26,10 +132,11 @@ class SponsorModel {
         .collection('sponsorships')
         .get();
 
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Sponsorship[];
+      return snapshot.docs.map(doc =>
+        SponsorModel.sponsorshipFromFirestore(
+          doc as FirebaseFirestoreTypes.DocumentSnapshot<SponsorshipDocument>,
+        ),
+      );
     } catch (error) {
       console.error('Error fetching group sponsorships:', error);
       throw error;
@@ -47,24 +154,34 @@ class SponsorModel {
 
       // Get all sponsorships
       const sponsorshipsSnapshot = await sponsorshipsRef.get();
-      const sponsorships = sponsorshipsSnapshot.docs.map(doc => doc.data());
+      const sponsorships = sponsorshipsSnapshot.docs.map(doc =>
+        SponsorModel.sponsorshipFromFirestore(
+          doc as FirebaseFirestoreTypes.DocumentSnapshot<SponsorshipDocument>,
+        ),
+      );
 
       // Calculate success rate
       const successfulSponsorships = sponsorships.filter(
         s => s.status === 'completed',
       ).length;
-      const successRate = (successfulSponsorships / sponsorships.length) * 100;
+      const successRate =
+        sponsorships.length > 0
+          ? (successfulSponsorships / sponsorships.length) * 100
+          : 0;
 
-      // Calculate average duration
-      const durations = sponsorships
-        .filter(s => s.endDate)
-        .map(s => {
-          const start = s.startDate.toDate();
-          const end = s.endDate.toDate();
-          return (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24); // Duration in days
-        });
+      // Calculate average duration for completed sponsorships only
+      const completedSponsorships = sponsorships.filter(
+        s => s.status === 'completed' && s.endDate,
+      );
+      const durations = completedSponsorships.map(s => {
+        const start = s.startDate.getTime();
+        const end = s.endDate!.getTime();
+        return (end - start) / (1000 * 60 * 60 * 24); // Duration in days
+      });
       const averageDuration =
-        durations.reduce((a, b) => a + b, 0) / durations.length;
+        durations.length > 0
+          ? durations.reduce((a, b) => a + b, 0) / durations.length
+          : 0;
 
       // Get common challenges
       const challengesRef = firestore()
@@ -209,39 +326,69 @@ class SponsorModel {
     }
   }
 
-  async getGroupSponsors(groupId: string) {
+  async getGroupSponsors(groupId: string): Promise<Sponsor[]> {
     try {
-      const groupRef = firestore().collection('groups').doc(groupId);
-      const groupDoc = await groupRef.get();
-      const groupData = groupDoc.data();
+      const groupMembers = await GroupModel.getMembers(groupId);
 
-      if (!groupData?.members) return [];
+      if (!groupMembers || !groupMembers.length) return [];
 
-      const sponsors = await Promise.all(
-        groupData.members.map(async (memberId: string) => {
-          const userDoc = await firestore()
-            .collection('users')
-            .doc(memberId)
-            .get();
-          const userData = userDoc.data();
+      // Get all active sponsorships for the group
+      const [activeSponsorshipsSnapshot] = await Promise.all([
+        firestore()
+          .collection('groups')
+          .doc(groupId)
+          .collection('sponsorships')
+          .where('status', '==', 'active')
+          .get(),
+      ]);
 
-          if (!userData?.sponsorSettings?.isAvailable) return null;
-
-          const activeSponsorships = await this.getActiveSponsorships(memberId);
-
-          return {
-            id: memberId,
-            displayName: userData.displayName,
-            sobrietyDate: userData.sobrietyStartDate,
-            requirements: userData.sponsorSettings?.requirements || [],
-            bio: userData.sponsorSettings?.bio || '',
-            currentSponsees: activeSponsorships.length,
-            maxSponsees: userData.sponsorSettings?.maxSponsees || 3,
-          };
-        }),
+      // Create a map of sponsorId to number of active sponsees
+      const sponsorSponseeCount = activeSponsorshipsSnapshot.docs.reduce(
+        (acc, doc) => {
+          const data = doc.data();
+          acc[data.sponsorId] = (acc[data.sponsorId] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
       );
 
-      return sponsors.filter(Boolean);
+      // Get all potential sponsors (users with sponsorSettings.isAvailable = true)
+      const sponsorsSnapshot = await firestore()
+        .collection('users')
+        .where('sponsorSettings.isAvailable', '==', true)
+        .where(
+          'id',
+          'in',
+          groupMembers.map(member => member.id),
+        )
+        .get();
+
+      const sponsorUsers = sponsorsSnapshot.docs.map(doc =>
+        UserModel.fromFirestore(
+          doc as unknown as FirestoreDocument<UserDocument>,
+        ),
+      );
+
+      return sponsorUsers
+        .map(sponsor => {
+          const currentSponsees = sponsorSponseeCount[sponsor.uid] || 0;
+          const maxSponsees = sponsor.sponsorSettings?.maxSponsees || 0;
+
+          if (currentSponsees >= maxSponsees) return null;
+
+          return {
+            id: sponsor.uid,
+            displayName: sponsor.displayName,
+            sobrietyDate: sponsor.recoveryDate!,
+            requirements: sponsor.sponsorSettings?.requirements || [],
+            bio: sponsor.sponsorSettings?.bio || '',
+            currentSponsees,
+            maxSponsees,
+          } as Sponsor;
+        })
+        .filter(
+          (sponsor): sponsor is NonNullable<typeof sponsor> => sponsor !== null,
+        );
     } catch (error) {
       console.error('Error fetching group sponsors:', error);
       throw error;
@@ -252,10 +399,47 @@ class SponsorModel {
     groupId: string,
     sponsorId: string,
     message: string,
-  ) {
+  ): Promise<{groupId: string; request: SponsorshipRequest}> {
     try {
       const currentUser = await UserModel.getCurrentUser();
       if (!currentUser) throw new Error('User not authenticated');
+
+      // Check if user already has an active sponsor or pending request
+      const [activeSponsorship, pendingRequest] = await Promise.all([
+        firestore()
+          .collection('groups')
+          .doc(groupId)
+          .collection('sponsorships')
+          .where('sponseeId', '==', currentUser.uid)
+          .where('status', '==', 'active')
+          .get(),
+        firestore()
+          .collection('groups')
+          .doc(groupId)
+          .collection('sponsorshipRequests')
+          .where('sponseeId', '==', currentUser.uid)
+          .where('status', '==', 'pending')
+          .get(),
+      ]);
+
+      if (!activeSponsorship.empty) {
+        throw new Error('You already have an active sponsor');
+      }
+
+      if (!pendingRequest.empty) {
+        throw new Error('You already have a pending sponsorship request');
+      }
+
+      // Check if the requested sponsor is available
+      const sponsorDoc = await firestore()
+        .collection('users')
+        .doc(sponsorId)
+        .get();
+
+      const sponsorData = sponsorDoc.data();
+      if (!sponsorData?.sponsorSettings?.isAvailable) {
+        throw new Error('This sponsor is not currently available');
+      }
 
       const requestRef = firestore()
         .collection('groups')
@@ -273,7 +457,15 @@ class SponsorModel {
       };
 
       await requestRef.set(request);
-      return {groupId, request};
+
+      // Get the created document to get the actual Timestamp
+      const createdDoc = await requestRef.get();
+      return {
+        groupId,
+        request: SponsorModel.requestFromFirestore(
+          createdDoc as FirebaseFirestoreTypes.DocumentSnapshot<SponsorshipRequestDocument>,
+        ),
+      };
     } catch (error) {
       console.error('Error requesting sponsorship:', error);
       throw error;

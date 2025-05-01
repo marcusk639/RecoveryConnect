@@ -25,7 +25,7 @@ export class UserModel {
     return UserModel.instance;
   }
 
-  static async getCurrentUser() {
+  static async getCurrentUser(): Promise<User | null> {
     const currentUser = firebase.auth().currentUser;
     if (!currentUser) return null;
 
@@ -37,7 +37,7 @@ export class UserModel {
 
     return {
       uid: currentUser.uid,
-      ...userDoc.data(),
+      ...(userDoc.data() as Omit<User, 'uid'>),
     };
   }
 

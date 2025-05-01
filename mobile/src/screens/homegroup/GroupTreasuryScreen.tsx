@@ -11,16 +11,14 @@ import {
   RefreshControl,
   FlatList,
 } from 'react-native';
-import {useRoute, RouteProp} from '@react-navigation/native';
-import {useNavigation} from '@react-navigation/native';
+import {useRoute, RouteProp, useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+
 import {GroupStackParamList} from '../../types/navigation';
-import {GroupModel} from '../../models/GroupModel';
 import {HomeGroup} from '../../types';
 import {Transaction} from '../../types/domain/treasury';
-import {TreasuryModel} from '../../models/TreasuryModel';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
   fetchGroupById,
@@ -40,7 +38,6 @@ import {
   selectTreasuryStatus,
   selectTreasuryError,
 } from '../../store/slices/treasurySlice';
-import Icon from 'react-native-vector-icons/Ionicons';
 
 type GroupTreasuryScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -262,23 +259,6 @@ const GroupTreasuryScreen: React.FC = () => {
               <Text style={styles.actionButtonText}>Add Transaction</Text>
             </TouchableOpacity>
           )}
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.donateButton]}
-            onPress={() =>
-              navigation.navigate('GroupDonation', {groupId, groupName})
-            }
-            testID="treasury-donate-button">
-            <Icon
-              name="gift-outline"
-              size={20}
-              color="#4CAF50"
-              style={styles.actionIcon}
-            />
-            <Text style={[styles.actionButtonText, styles.donateButtonText]}>
-              Make 7th Tradition
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.transactionsContainer}>
@@ -292,9 +272,31 @@ const GroupTreasuryScreen: React.FC = () => {
               testID="treasury-transactions-list"
             />
           ) : (
-            <Text style={styles.emptyText} testID="treasury-no-transactions">
-              No transactions found
-            </Text>
+            <View
+              style={styles.emptyContainer}
+              testID="treasury-no-transactions">
+              <Icon
+                name="cash-multiple"
+                size={64}
+                color="#BBDEFB"
+                style={styles.emptyIcon}
+              />
+              <Text style={styles.emptyTitle}>No Transactions Yet</Text>
+              <Text style={styles.emptyText}>
+                {isAdmin || isTreasurer
+                  ? "Start tracking your group's finances by adding a new transaction."
+                  : 'No transactions have been recorded for this group yet.'}
+              </Text>
+              {(isAdmin || isTreasurer) && (
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() =>
+                    navigation.navigate('AddTransaction', {groupId, groupName})
+                  }>
+                  <Text style={styles.addButtonText}>Add Transaction</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
       </ScrollView>
@@ -452,12 +454,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#757575',
   },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  emptyIcon: {
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
   emptyText: {
     fontSize: 16,
-    color: '#9E9E9E',
-    fontStyle: 'italic',
+    color: '#757575',
     textAlign: 'center',
-    padding: 16,
+    marginBottom: 16,
+  },
+  addButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 4,
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

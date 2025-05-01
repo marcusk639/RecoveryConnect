@@ -64,21 +64,19 @@ const GroupServicePositionsScreen: React.FC = () => {
   }, [loadPositions, navigation, groupName]);
 
   const handleAddPosition = () => {
-    // Navigate to a screen/modal to add a new position definition
-    Alert.alert(
-      'Add Position',
-      'Navigate to Add/Edit Position Screen (Not Implemented)',
-    );
-    // navigation.navigate('AddEditServicePosition', { groupId });
+    navigation.navigate('AddEditServicePosition', {
+      groupId,
+      groupName,
+    });
   };
 
   const handleEditPosition = (position: ServicePosition) => {
-    // Navigate to a screen/modal to edit position (assign member, dates)
-    Alert.alert(
-      'Edit Position',
-      `Navigate to Edit Position Screen for ${position.name} (Not Implemented)`,
-    );
-    // navigation.navigate('AddEditServicePosition', { groupId, positionId: position.id });
+    navigation.navigate('AddEditServicePosition', {
+      groupId,
+      groupName,
+      positionId: position.id,
+      position,
+    });
   };
 
   const handleDeletePosition = (positionId: string) => {
@@ -141,26 +139,29 @@ const GroupServicePositionsScreen: React.FC = () => {
             : 'Open Position'}
         </Text>
       </View>
-      {(item.termStartDate || item.commitmentLength) && (
-        <View style={styles.termInfo}>
-          <Icon
-            name="calendar-range"
-            size={18}
-            color="#757575"
-            style={styles.holderIcon}
-          />
-          <Text style={styles.termText}>
-            {item.termStartDate
-              ? `Term: ${item.termStartDate.toLocaleDateString()}`
-              : 'Term: Not Set'}
-            {item.termEndDate
-              ? ` - ${item.termEndDate.toLocaleDateString()}`
-              : item.commitmentLength
-              ? ` (${item.commitmentLength} mo)`
-              : ''}
-          </Text>
-        </View>
-      )}
+      <View style={styles.termInfo}>
+        <Icon
+          name="calendar-range"
+          size={18}
+          color="#757575"
+          style={styles.holderIcon}
+        />
+        <Text style={styles.termText}>
+          {item.termStartDate || item.commitmentLength
+            ? `Term: ${
+                item.termStartDate instanceof Date
+                  ? item.termStartDate.toLocaleDateString()
+                  : 'Not Set'
+              }${
+                item.termEndDate instanceof Date
+                  ? ` - ${item.termEndDate.toLocaleDateString()}`
+                  : item.commitmentLength
+                  ? ` (${item.commitmentLength} mo)`
+                  : ''
+              }`
+            : 'No term set'}
+        </Text>
+      </View>
       {!item.currentHolderId && isAdmin && (
         <TouchableOpacity
           style={styles.assignButton}
@@ -186,16 +187,27 @@ const GroupServicePositionsScreen: React.FC = () => {
         </TouchableOpacity>
       )}
       {status === 'loading' && positions.length === 0 ? (
-        <ActivityIndicator
-          size="large"
-          color="#2196F3"
-          style={styles.loader}
-          testID="service-pos-loader"
-        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator
+            size="large"
+            color="#2196F3"
+            style={styles.loader}
+            testID="service-pos-loader"
+          />
+          <Text style={styles.loadingText}>Loading service positions...</Text>
+        </View>
       ) : error ? (
-        <Text style={styles.errorText} testID="service-pos-error">
-          Error: {error}
-        </Text>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText} testID="service-pos-error">
+            Error: {error}
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={loadPositions}
+            testID="service-pos-retry-button">
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
           data={positions}
@@ -210,9 +222,29 @@ const GroupServicePositionsScreen: React.FC = () => {
             />
           }
           ListEmptyComponent={
-            <Text style={styles.emptyText} testID="service-pos-empty-list">
-              No service positions defined for this group yet.
-            </Text>
+            <View style={styles.emptyContainer} testID="service-pos-empty-list">
+              <View style={styles.emptyIconContainer}>
+                <Icon
+                  name="account-group-outline"
+                  size={64}
+                  color="#BBDEFB"
+                  style={styles.emptyIcon}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>No Service Positions</Text>
+              <Text style={styles.emptyText}>
+                {isAdmin
+                  ? 'Start organizing your group by adding service positions. This helps members know what roles are available and who is responsible for what.'
+                  : 'No service positions have been defined for this group yet. Check back later or contact a group admin.'}
+              </Text>
+              {isAdmin && (
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={handleAddPosition}>
+                  <Text style={styles.addButtonText}>Add Position</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           }
         />
       )}
@@ -314,16 +346,64 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  emptyText: {
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  emptyIconContainer: {
+    marginBottom: 16,
+  },
+  emptyIcon: {
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212121',
+    marginBottom: 8,
     textAlign: 'center',
-    marginTop: 40,
-    color: '#757575',
+  },
+  emptyText: {
     fontSize: 16,
+    color: '#757575',
+    textAlign: 'center',
+    marginBottom: 16,
   },
   errorText: {
     textAlign: 'center',
     marginTop: 40,
     color: '#F44336',
+    fontSize: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  retryButton: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#2196F3',
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
   },
 });

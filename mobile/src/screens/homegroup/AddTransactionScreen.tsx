@@ -18,9 +18,6 @@ import {StackNavigationProp} from '@react-navigation/stack';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import {GroupStackParamList} from '../../types/navigation';
-import {GroupModel} from '../../models/GroupModel';
-import {Transaction} from '../../types/domain';
-import {TreasuryModel} from '../../models/TreasuryModel';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
   addTransaction,
