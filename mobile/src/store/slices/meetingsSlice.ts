@@ -396,6 +396,25 @@ export const updateMeetingInstance = createAsyncThunk<
   },
 );
 
+export const createMeeting = createAsyncThunk<
+  Meeting,
+  {groupId: string; meetingData: Partial<Meeting>},
+  {rejectValue: string}
+>(
+  'meetings/createMeeting',
+  async ({groupId, meetingData}, {rejectWithValue}) => {
+    try {
+      const newMeeting = await MeetingModel.create({
+        ...meetingData,
+        groupId,
+      });
+      return newMeeting;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to create meeting');
+    }
+  },
+);
+
 // Create the slice
 const meetingsSlice = createSlice({
   name: 'meetings',
@@ -643,6 +662,29 @@ const meetingsSlice = createSlice({
         state.error = null;
       })
       .addCase(updateMeetingInstance.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload as string;
+      })
+
+      // Create meeting
+      .addCase(createMeeting.pending, state => {
+        state.status = 'loading';
+      })
+      .addCase(createMeeting.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const newMeeting = action.payload;
+        if (newMeeting.id) {
+          state.items[newMeeting.id] = newMeeting;
+          if (newMeeting.groupId) {
+            if (!state.groupMeetingIds[newMeeting.groupId]) {
+              state.groupMeetingIds[newMeeting.groupId] = [];
+            }
+            state.groupMeetingIds[newMeeting.groupId].push(newMeeting.id);
+          }
+        }
+        state.error = null;
+      })
+      .addCase(createMeeting.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload as string;
       });

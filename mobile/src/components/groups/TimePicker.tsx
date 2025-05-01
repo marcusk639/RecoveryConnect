@@ -35,7 +35,17 @@ const TimePicker: React.FC<TimePickerProps> = ({
   onSelectTime,
 }) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [tempTime, setTempTime] = useState(new Date());
+  const [tempTime, setTempTime] = useState(() => {
+    // Initialize tempTime with the selected time if it exists
+    if (selectedTime) {
+      try {
+        return dateFns.parse(selectedTime, 'h:mm a', new Date());
+      } catch (e) {
+        return new Date();
+      }
+    }
+    return new Date();
+  });
 
   // Common time slots for meetings
   const commonTimes = [
@@ -49,23 +59,42 @@ const TimePicker: React.FC<TimePickerProps> = ({
   ];
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
-    const currentDate = selectedDate || tempTime;
+    if (event.type === 'set' && selectedDate) {
+      setTempTime(selectedDate);
+
+      // Format time
+      const hours = selectedDate.getHours();
+      const minutes = selectedDate.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const formattedHours = hours % 12 || 12;
+      const formattedMinutes = minutes.toString().padStart(2, '0');
+      const formattedTime = `${formattedHours}:${formattedMinutes} ${ampm}`;
+
+      onSelectTime(formattedTime);
+    }
 
     if (Platform.OS === 'android') {
       setShowTimePicker(false);
     }
+  };
 
-    setTempTime(currentDate);
+  const handleCommonTimeSelect = (time: string) => {
+    try {
+      const parsedTime = dateFns.parse(time, 'h:mm a', new Date());
+      setTempTime(parsedTime);
+      onSelectTime(time);
+    } catch (e) {
+      onSelectTime(time);
+    }
+  };
 
-    // Format time
-    const hours = currentDate.getHours();
-    const minutes = currentDate.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const formattedHours = hours % 12 || 12;
-    const formattedMinutes = minutes.toString().padStart(2, '0');
-    const formattedTime = `${formattedHours}:${formattedMinutes} ${ampm}`;
-
-    onSelectTime(formattedTime);
+  const formatDisplayTime = (time: string) => {
+    try {
+      const parsedTime = dateFns.parse(time, 'h:mm a', new Date());
+      return dateFns.format(parsedTime, 'h:mm a');
+    } catch (e) {
+      return time;
+    }
   };
 
   return (
@@ -80,7 +109,7 @@ const TimePicker: React.FC<TimePickerProps> = ({
               standardizeTime(selectedTime) === standardizeTime(time) &&
                 styles.selectedTimeButton,
             ]}
-            onPress={() => onSelectTime(time)}>
+            onPress={() => handleCommonTimeSelect(time)}>
             <Text
               style={[
                 styles.timeText,
@@ -98,7 +127,9 @@ const TimePicker: React.FC<TimePickerProps> = ({
         style={styles.customTimeButton}
         onPress={() => setShowTimePicker(true)}>
         <Text style={styles.customTimeText}>
-          {selectedTime ? `Selected: ${selectedTime}` : 'Choose Custom Time'}
+          {selectedTime
+            ? `Selected: ${formatDisplayTime(selectedTime)}`
+            : 'Choose Custom Time'}
         </Text>
       </TouchableOpacity>
 

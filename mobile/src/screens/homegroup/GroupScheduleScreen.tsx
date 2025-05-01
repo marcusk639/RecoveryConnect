@@ -32,8 +32,10 @@ import {
   selectGroupMeetingTemplateIds, // Correct selector name
   selectMeetingsStatus,
   selectMeetingById, // To get data for editing
+  createMeeting,
+  updateMeeting,
 } from '../../store/slices/meetingsSlice';
-// import MeetingEditModal from '../../components/meetings/MeetingEditModal'; // Comment out for now
+import MeetingModal from '../../components/meetings/MeetingModal';
 
 type GroupScheduleScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -57,11 +59,13 @@ const GroupScheduleScreen: React.FC = () => {
   const upcomingInstances = useAppSelector(state =>
     selectUpcomingMeetingInstances(state, groupId),
   );
-  const meetingTemplates = useAppSelector(
-    state =>
-      selectGroupMeetingTemplateIds(state, groupId)
-        .map(id => useAppSelector(state => selectMeetingById(state, id)))
-        .filter((m): m is Meeting => !!m), // Get full template objects
+  const meetingTemplateIds = useAppSelector(state =>
+    selectGroupMeetingTemplateIds(state, groupId),
+  );
+  const meetingTemplates = useAppSelector(state =>
+    meetingTemplateIds
+      .map(id => selectMeetingById(state, id))
+      .filter((m): m is Meeting => !!m),
   );
   const meetingsStatus = useAppSelector(selectMeetingsStatus);
   const groupsStatus = useAppSelector(selectGroupsStatus);
@@ -70,9 +74,15 @@ const GroupScheduleScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showTemplates, setShowTemplates] = useState(false); // Flag to show templates as fallback
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-  const [selectedMeetingToEdit, setSelectedMeetingToEdit] =
-    useState<Meeting | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+  const [errors, setErrors] = useState<{
+    day?: string;
+    time?: string;
+    location?: string;
+    address?: string;
+    link?: string;
+  }>({});
 
   // Correct admin check using only 'admins' if 'adminUids' doesn't exist on HomeGroup type
   const isCurrentUserAdmin = group?.admins?.includes(currentUser?.uid || '');
@@ -127,25 +137,46 @@ const GroupScheduleScreen: React.FC = () => {
   }, [
     isLoading,
     meetingsStatus,
-    upcomingInstances,
-    meetingTemplates,
+    upcomingInstances.length,
+    meetingTemplates.length,
     groupId,
     dispatch,
   ]);
 
-  const handleEditMeeting = (meetingId: string) => {
-    // Explicitly type the parameter in find callback
-    const meetingToEdit = meetingTemplates.find(
-      (m: Meeting) => m.id === meetingId,
-    );
-    if (meetingToEdit) {
-      setSelectedMeetingToEdit(meetingToEdit);
-      // setIsEditModalVisible(true); // Comment out modal usage for now
+  const handleAddMeeting = () => {
+    setSelectedMeeting(null);
+    setIsModalVisible(true);
+  };
+
+  const handleEditMeeting = (meeting: Meeting) => {
+    setSelectedMeeting(meeting);
+    setIsModalVisible(true);
+  };
+
+  const handleSubmitMeeting = async (meetingData: Partial<Meeting>) => {
+    try {
+      if (selectedMeeting && selectedMeeting.id) {
+        await dispatch(
+          updateMeeting({meetingId: selectedMeeting.id, meetingData}),
+        ).unwrap();
+      } else {
+        await dispatch(createMeeting({groupId: groupId, meetingData})).unwrap();
+      }
+      setIsModalVisible(false);
+      setSelectedMeeting(null);
+      // Refresh the data after successful update
+      loadScheduleData();
+    } catch (error: any) {
+      console.error('Error saving meeting:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to save meeting. Please try again.',
+      );
     }
   };
 
   const renderMeetingItem = ({item}: {item: MeetingInstance | Meeting}) => {
-    const isInstance = 'instanceId' in item;
+    const isInstance = false;
     const scheduledAt = isInstance
       ? (item as MeetingInstance).scheduledAt
       : undefined;
@@ -162,7 +193,6 @@ const GroupScheduleScreen: React.FC = () => {
       ? (item as MeetingInstance).instanceNotice ||
         (item as MeetingInstance).temporaryNotice
       : null;
-    // Use 'online' property which exists on both types (adjusting for boolean value)
     const isOnline = item.online ?? false;
     const locationDisplay = isOnline
       ? 'Online Meeting'
@@ -215,12 +245,18 @@ const GroupScheduleScreen: React.FC = () => {
         {!isInstance && isCurrentUserAdmin && (
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => handleEditMeeting(item.id!)}>
-            <Icon
-              name="pencil-outline"
-              size={20}
-              color={styles.editButtonText.color}
-            />
+            onPress={() => handleEditMeeting(item as Meeting)}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+            accessibilityLabel="Edit meeting"
+            accessibilityHint="Double tap to edit this meeting">
+            <View style={styles.editButtonContent}>
+              <Icon
+                name="pencil-outline"
+                size={20}
+                color={styles.editButtonText.color}
+              />
+              <Text style={styles.editButtonLabel}>Edit</Text>
+            </View>
           </TouchableOpacity>
         )}
       </View>
@@ -246,7 +282,7 @@ const GroupScheduleScreen: React.FC = () => {
 
     return (
       <>
-        <Text style={styles.listTitle}>{listTitle}</Text>
+        <View style={{paddingVertical: 5}} />
         {showTemplates && upcomingInstances.length === 0 && (
           <Text style={styles.fallbackNotice}>
             Showing recurring schedule as no specific instances were found for
@@ -282,15 +318,6 @@ const GroupScheduleScreen: React.FC = () => {
                   ? 'Add some upcoming meetings to keep your group members informed about when to meet.'
                   : 'No upcoming meetings have been scheduled. Check back later or contact a group admin.'}
               </Text>
-              {isCurrentUserAdmin && (
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() =>
-                    navigation.navigate('GroupSchedule', {groupId, groupName})
-                  }>
-                  <Text style={styles.addButtonText}>Add Meeting</Text>
-                </TouchableOpacity>
-              )}
             </View>
           }
           contentContainerStyle={{paddingBottom: 20}}
@@ -312,18 +339,28 @@ const GroupScheduleScreen: React.FC = () => {
         {renderContent()}
       </ScrollView>
 
-      {/* Keep Modal commented out */}
-      {/* {selectedMeetingToEdit && (
-        <MeetingEditModal
-          visible={isEditModalVisible}
-          onClose={() => {
-            setIsEditModalVisible(false);
-            setSelectedMeetingToEdit(null);
-          }}
-          meeting={selectedMeetingToEdit}
-          groupId={groupId}
-        />
-      )} */}
+      {isCurrentUserAdmin && (
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleAddMeeting}
+          activeOpacity={0.8}>
+          <Icon name="plus" size={24} color="#FFFFFF" />
+          <Text style={styles.addButtonText}>Add Meeting</Text>
+        </TouchableOpacity>
+      )}
+
+      <MeetingModal
+        formContainerStyle={{backgroundColor: 'white'}}
+        visible={isModalVisible}
+        onClose={() => {
+          setIsModalVisible(false);
+          setSelectedMeeting(null);
+          setErrors({});
+        }}
+        onSubmit={handleSubmitMeeting}
+        initialMeeting={selectedMeeting || undefined}
+        errors={errors}
+      />
     </View>
   );
 };
@@ -430,11 +467,27 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
   },
   editButton: {
-    padding: 8, // Make touch target larger
+    padding: 8,
     marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   editButtonText: {
-    color: '#2196F3', // Consistent blue color
+    color: '#2196F3',
+  },
+  editButtonLabel: {
+    color: '#2196F3',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -461,15 +514,26 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   addButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
     backgroundColor: '#2196F3',
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 4,
+    borderRadius: 28,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   addButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
 

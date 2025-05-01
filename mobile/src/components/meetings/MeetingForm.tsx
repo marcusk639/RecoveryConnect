@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  StyleProp,
+  ViewStyle,
 } from 'react-native';
 import {Meeting} from '../../types';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -25,6 +27,7 @@ interface MeetingFormProps {
     address?: string;
     link?: string;
   };
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
 const MeetingForm: React.FC<MeetingFormProps> = ({
@@ -32,6 +35,7 @@ const MeetingForm: React.FC<MeetingFormProps> = ({
   onSubmit,
   onCancel,
   errors,
+  containerStyle = {},
 }) => {
   const [meeting, setMeeting] = useState<Partial<Meeting>>(
     initialMeeting || {
@@ -78,7 +82,7 @@ const MeetingForm: React.FC<MeetingFormProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, containerStyle]}>
       <View style={styles.form}>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Meeting Name</Text>
@@ -93,7 +97,7 @@ const MeetingForm: React.FC<MeetingFormProps> = ({
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Day</Text>
           <DayPicker
-            selectedDay={meeting.day}
+            selectedDay={meeting.day || ''}
             onSelectDay={day => setMeeting(prev => ({...prev, day}))}
           />
           {errors?.day && <Text style={styles.errorText}>{errors.day}</Text>}
@@ -102,7 +106,7 @@ const MeetingForm: React.FC<MeetingFormProps> = ({
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Time</Text>
           <TimePicker
-            selectedTime={meeting.time}
+            selectedTime={meeting.time || ''}
             onSelectTime={time => setMeeting(prev => ({...prev, time}))}
           />
           {errors?.time && <Text style={styles.errorText}>{errors.time}</Text>}
@@ -135,7 +139,7 @@ const MeetingForm: React.FC<MeetingFormProps> = ({
             <Text style={styles.label}>Online Meeting Link</Text>
             <TextInput
               style={styles.input}
-              value={meeting.link}
+              value={meeting.link || ''}
               onChangeText={text => setMeeting(prev => ({...prev, link: text}))}
               placeholder="Enter online meeting link"
             />
