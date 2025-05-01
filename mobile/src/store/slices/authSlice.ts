@@ -1,4 +1,10 @@
-import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+  createEntityAdapter,
+  createSelector,
+} from '@reduxjs/toolkit';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {RootState} from '../types';
 import {UserModel} from '../../models/UserModel';
@@ -44,9 +50,38 @@ interface UserData {
   sponsorSettings?: SponsorSettings;
 }
 
+// Define entity types
+interface UserEntity extends UserData {
+  id: string;
+}
+
+// Create entity adapter
+const usersAdapter = createEntityAdapter<UserEntity>();
+
+// Update action payload types
+interface UpdateDisplayNamePayload {
+  id: string;
+  displayName: string;
+}
+
+interface UpdateSobrietyDatePayload {
+  id: string;
+  sobrietyStartDate: string | null;
+}
+
+interface UpdateUserPhotoPayload {
+  id: string;
+  photoURL: string | null;
+}
+
+interface UpdateUserPhoneNumberPayload {
+  id: string;
+  phoneNumber: string | null;
+}
+
 export interface AuthState {
   user: FirebaseAuthTypes.User | null;
-  userData: UserData | null;
+  users: ReturnType<typeof usersAdapter.getInitialState>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   isAuthenticated: boolean;
@@ -57,7 +92,7 @@ export interface AuthState {
 
 const initialState: AuthState = {
   user: null,
-  userData: null,
+  users: usersAdapter.getInitialState(),
   status: 'idle',
   error: null,
   isAuthenticated: false,
@@ -171,7 +206,7 @@ export const fetchUserData = createAsyncThunk<
 });
 
 export const updateDisplayName = createAsyncThunk<
-  {displayName: string},
+  {id: string; displayName: string},
   {displayName: string; useInitialOnly: boolean},
   {state: RootState; rejectValue: string}
 >(
@@ -192,16 +227,15 @@ export const updateDisplayName = createAsyncThunk<
         displayName: formattedName,
       });
 
-      return {displayName: formattedName};
+      return {id: currentUser.uid, displayName: formattedName};
     } catch (error: any) {
-      console.error('Error updating display name (UserModel):', error);
       return rejectWithValue(error.message || 'Failed to update display name');
     }
   },
 );
 
 export const updateSobrietyDate = createAsyncThunk<
-  {sobrietyStartDate: string | null},
+  {id: string; sobrietyStartDate: string | null},
   {date: Date | null},
   {state: RootState; rejectValue: string}
 >('auth/updateSobrietyDate', async ({date}, {getState, rejectWithValue}) => {
@@ -215,9 +249,8 @@ export const updateSobrietyDate = createAsyncThunk<
       recoveryDate: dateISO || undefined,
     });
 
-    return {sobrietyStartDate: dateISO};
+    return {id: currentUser.uid, sobrietyStartDate: dateISO};
   } catch (error: any) {
-    console.error('Error updating sobriety date (UserModel):', error);
     return rejectWithValue(error.message || 'Failed to update sobriety date');
   }
 });
@@ -313,9 +346,9 @@ export const updateUserNotificationSettings = createAsyncThunk<
 );
 
 export const updateUserPhoto = createAsyncThunk<
-  {photoURL: string | null},
+  {id: string; photoURL: string | null},
   string,
-  {state: RootState}
+  {state: RootState; rejectValue: string}
 >('auth/updateUserPhoto', async (photoUrl, {getState, rejectWithValue}) => {
   const state = getState();
   const currentUser = state.auth.user;
@@ -323,14 +356,12 @@ export const updateUserPhoto = createAsyncThunk<
 
   try {
     await UserModel.updatePhotoURL(currentUser.uid, photoUrl);
-
     await MemberModel.updateUserAcrossMemberships(currentUser.uid, {
       photoURL: photoUrl,
     });
 
-    return {photoURL: photoUrl};
+    return {id: currentUser.uid, photoURL: photoUrl};
   } catch (error: any) {
-    console.error('Error updating photo URL:', error);
     return rejectWithValue(error.message || 'Failed to update profile photo');
   }
 });
@@ -402,7 +433,7 @@ export const signOut = createAsyncThunk(
 );
 
 export const updateUserPhoneNumber = createAsyncThunk<
-  {phoneNumber: string | null},
+  {id: string; phoneNumber: string | null},
   string | null,
   {state: RootState; rejectValue: string}
 >(
@@ -410,41 +441,32 @@ export const updateUserPhoneNumber = createAsyncThunk<
   async (phoneNumber, {getState, rejectWithValue}) => {
     const state = getState();
     const currentUser = state.auth.user;
-    if (!currentUser) {
-      return rejectWithValue('No authenticated user found');
-    }
+    if (!currentUser) return rejectWithValue('User not logged in');
 
     try {
       await UserModel.update(currentUser.uid, {phoneNumber});
-
-      return {phoneNumber};
+      return {id: currentUser.uid, phoneNumber};
     } catch (error: any) {
-      console.error('Error updating phone number (UserModel):', error);
       return rejectWithValue(error.message || 'Failed to update phone number');
     }
   },
 );
 
 export const updateFcmToken = createAsyncThunk<
-  {fcmToken: string},
+  {id: string; fcmToken: string},
   {userId: string; token: string},
   {rejectValue: string}
 >('auth/updateFcmToken', async ({userId, token}, {rejectWithValue}) => {
   try {
-    console.log(`Dispatching addFcmToken for user ${userId}`);
     await UserModel.addFcmToken(userId, token);
-    console.log(`FCM Token update successful via UserModel for user ${userId}`);
-    return {fcmToken: token};
+    return {id: userId, fcmToken: token};
   } catch (error: any) {
-    console.error('Error in updateFcmToken thunk calling UserModel:', error);
-    return rejectWithValue(
-      error.message || 'Failed to update FCM token via UserModel',
-    );
+    return rejectWithValue(error.message || 'Failed to update FCM token');
   }
 });
 
 export const updateSponsorSettings = createAsyncThunk<
-  {sponsorSettings: SponsorSettings},
+  {id: string; sponsorSettings: SponsorSettings},
   SponsorSettings,
   {state: RootState; rejectValue: string}
 >(
@@ -455,14 +477,11 @@ export const updateSponsorSettings = createAsyncThunk<
     if (!currentUser) return rejectWithValue('User not logged in');
 
     try {
-      const userUpdatePayload: Partial<User> = {
+      await UserModel.update(currentUser.uid, {
         sponsorSettings: settings,
-      };
-
-      await UserModel.update(currentUser.uid, userUpdatePayload);
-      return {sponsorSettings: settings};
+      });
+      return {id: currentUser.uid, sponsorSettings: settings};
     } catch (error: any) {
-      console.error('Error updating sponsor settings:', error);
       return rejectWithValue(
         error.message || 'Failed to update sponsor settings',
       );
@@ -503,36 +522,49 @@ const authSlice = createSlice({
         fetchUserData.fulfilled,
         (state, action: PayloadAction<UserData | null>) => {
           state.status = 'succeeded';
-          state.userData = action.payload;
+          if (action.payload) {
+            usersAdapter.upsertOne(state.users, action.payload);
+          }
           state.lastFetched = Date.now();
           state.error = null;
         },
       )
       .addCase(fetchUserData.rejected, (state, action) => {
         state.status = 'failed';
-        state.userData = null;
         state.error = action.payload as string;
       })
 
-      .addCase(updateDisplayName.fulfilled, (state, action) => {
-        if (state.userData) {
-          state.userData.displayName = action.payload.displayName;
-        }
-        state.status = 'succeeded';
-        state.error = null;
-      })
+      .addCase(
+        updateDisplayName.fulfilled,
+        (state, action: PayloadAction<UpdateDisplayNamePayload>) => {
+          if (state.users.entities[action.payload.id]) {
+            usersAdapter.updateOne(state.users, {
+              id: action.payload.id,
+              changes: {displayName: action.payload.displayName},
+            });
+          }
+          state.status = 'succeeded';
+          state.error = null;
+        },
+      )
       .addCase(updateDisplayName.rejected, (state, action) => {
         state.error = action.payload as string;
         state.status = 'failed';
       })
 
-      .addCase(updateSobrietyDate.fulfilled, (state, action) => {
-        if (state.userData) {
-          state.userData.sobrietyStartDate = action.payload.sobrietyStartDate;
-        }
-        state.status = 'succeeded';
-        state.error = null;
-      })
+      .addCase(
+        updateSobrietyDate.fulfilled,
+        (state, action: PayloadAction<UpdateSobrietyDatePayload>) => {
+          if (state.users.entities[action.payload.id]) {
+            usersAdapter.updateOne(state.users, {
+              id: action.payload.id,
+              changes: {sobrietyStartDate: action.payload.sobrietyStartDate},
+            });
+          }
+          state.status = 'succeeded';
+          state.error = null;
+        },
+      )
       .addCase(updateSobrietyDate.rejected, (state, action) => {
         state.error = action.payload as string;
         state.status = 'failed';
@@ -540,7 +572,7 @@ const authSlice = createSlice({
 
       .addCase(updateUserPrivacySettings.fulfilled, (state, action) => {
         if (action.payload.userData) {
-          state.userData = action.payload.userData;
+          usersAdapter.upsertOne(state.users, action.payload.userData);
         }
         state.status = 'succeeded';
         state.error = null;
@@ -552,7 +584,7 @@ const authSlice = createSlice({
 
       .addCase(updateUserNotificationSettings.fulfilled, (state, action) => {
         if (action.payload.userData) {
-          state.userData = action.payload.userData;
+          usersAdapter.upsertOne(state.users, action.payload.userData);
         }
         state.status = 'succeeded';
         state.error = null;
@@ -564,9 +596,12 @@ const authSlice = createSlice({
 
       .addCase(
         updateUserPhoto.fulfilled,
-        (state, action: PayloadAction<{photoURL: string | null}>) => {
-          if (state.userData) {
-            state.userData.photoURL = action.payload.photoURL;
+        (state, action: PayloadAction<UpdateUserPhotoPayload>) => {
+          if (state.users.entities[action.payload.id]) {
+            usersAdapter.updateOne(state.users, {
+              id: action.payload.id,
+              changes: {photoURL: action.payload.photoURL},
+            });
           }
           state.status = 'succeeded';
           state.error = null;
@@ -618,13 +653,19 @@ const authSlice = createSlice({
       .addCase(updateUserPhoneNumber.pending, state => {
         state.status = 'loading';
       })
-      .addCase(updateUserPhoneNumber.fulfilled, (state, action) => {
-        if (state.userData) {
-          state.userData.phoneNumber = action.payload.phoneNumber;
-        }
-        state.status = 'succeeded';
-        state.error = null;
-      })
+      .addCase(
+        updateUserPhoneNumber.fulfilled,
+        (state, action: PayloadAction<UpdateUserPhoneNumberPayload>) => {
+          if (state.users.entities[action.payload.id]) {
+            usersAdapter.updateOne(state.users, {
+              id: action.payload.id,
+              changes: {phoneNumber: action.payload.phoneNumber},
+            });
+          }
+          state.status = 'succeeded';
+          state.error = null;
+        },
+      )
       .addCase(updateUserPhoneNumber.rejected, (state, action) => {
         state.status = 'failed';
         state.error =
@@ -632,10 +673,11 @@ const authSlice = createSlice({
       })
 
       .addCase(updateFcmToken.fulfilled, (state, action) => {
-        if (state.userData) {
-          const currentTokens = state.userData.fcmTokens || [];
+        if (state.users.entities[action.payload.id]) {
+          const currentTokens =
+            state.users.entities[action.payload.id].fcmTokens || [];
           if (!currentTokens.includes(action.payload.fcmToken)) {
-            state.userData.fcmTokens = [
+            state.users.entities[action.payload.id].fcmTokens = [
               ...currentTokens,
               action.payload.fcmToken,
             ];
@@ -647,8 +689,9 @@ const authSlice = createSlice({
       })
 
       .addCase(updateSponsorSettings.fulfilled, (state, action) => {
-        if (state.userData) {
-          state.userData.sponsorSettings = action.payload.sponsorSettings;
+        if (state.users.entities[action.payload.id]) {
+          state.users.entities[action.payload.id].sponsorSettings =
+            action.payload.sponsorSettings;
         }
         state.status = 'succeeded';
         state.error = null;
@@ -660,16 +703,16 @@ const authSlice = createSlice({
   },
 });
 
-export const {
-  clearError,
-  setUser,
-  setLocation,
-  setPendingNavigation,
-  clearPendingNavigation,
-} = authSlice.actions;
+// Memoized selectors
+const usersSelectors = usersAdapter.getSelectors<RootState>(
+  state => state.auth.users,
+);
 
 export const selectUser = (state: RootState) => state.auth.user;
-export const selectUserData = (state: RootState) => state.auth.userData;
+export const selectUserData = createSelector(
+  [usersSelectors.selectAll],
+  users => users[0] || null,
+);
 export const selectAuthStatus = (state: RootState) => state.auth.status;
 export const selectAuthError = (state: RootState) => state.auth.error;
 export const selectIsAuthenticated = (state: RootState) =>
@@ -677,5 +720,13 @@ export const selectIsAuthenticated = (state: RootState) =>
 export const selectUserLocation = (state: RootState) => state.auth.location;
 export const selectPendingNavigation = (state: RootState) =>
   state.auth.pendingNavigation;
+
+export const {
+  clearError,
+  setUser,
+  setLocation,
+  setPendingNavigation,
+  clearPendingNavigation,
+} = authSlice.actions;
 
 export default authSlice.reducer;

@@ -2,28 +2,53 @@ import {
   createSlice,
   createAsyncThunk,
   PayloadAction,
+  createEntityAdapter,
   createSelector,
 } from '@reduxjs/toolkit';
 import auth from '@react-native-firebase/auth';
 import {RootState} from '../types';
 import {ChatModel, GroupChat, ChatMessage} from '../../models/ChatModel';
 
-// Define types
+// Define entity types
+interface ChatMessageEntity extends ChatMessage {
+  id: string;
+}
+
+interface GroupChatEntity extends GroupChat {
+  id: string;
+}
+
+// Create entity adapters
+const messagesAdapter = createEntityAdapter<ChatMessageEntity>({
+  sortComparer: (a, b) => {
+    const dateA =
+      typeof a.sentAt === 'string' ? new Date(a.sentAt) : new Date(a.sentAt);
+    const dateB =
+      typeof b.sentAt === 'string' ? new Date(b.sentAt) : new Date(b.sentAt);
+    return dateA.getTime() - dateB.getTime();
+  },
+});
+
+const chatsAdapter = createEntityAdapter<GroupChatEntity>();
+
+// Define state interface
 export interface ChatState {
-  messages: Record<string, Record<string, ChatMessage>>;
-  chats: Record<string, GroupChat>;
+  messages: ReturnType<typeof messagesAdapter.getInitialState>;
+  chats: ReturnType<typeof chatsAdapter.getInitialState>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   lastFetched: Record<string, number>;
+  groupMessageIds: Record<string, string[]>;
 }
 
 // Initial state
 const initialState: ChatState = {
-  messages: {},
-  chats: {},
+  messages: messagesAdapter.getInitialState(),
+  chats: chatsAdapter.getInitialState(),
   status: 'idle',
   error: null,
   lastFetched: {},
+  groupMessageIds: {},
 };
 
 // Constants
@@ -217,18 +242,8 @@ const chatSlice = createSlice({
       action: PayloadAction<{groupId: string; messages: ChatMessage[]}>,
     ) => {
       const {groupId, messages} = action.payload;
-
-      // Initialize the messages object for this group if it doesn't exist
-      if (!state.messages[groupId]) {
-        state.messages[groupId] = {};
-      }
-
-      // Update messages
-      messages.forEach(message => {
-        state.messages[groupId][message.id] = message;
-      });
-
-      // Update last fetched timestamp
+      messagesAdapter.upsertMany(state.messages, messages);
+      state.groupMessageIds[groupId] = messages.map(m => m.id);
       state.lastFetched[groupId] = Date.now();
     },
   },
@@ -254,20 +269,9 @@ const chatSlice = createSlice({
       .addCase(fetchRecentMessages.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, messages} = action.payload;
-
-        // Initialize the messages object for this group if it doesn't exist
-        if (!state.messages[groupId]) {
-          state.messages[groupId] = {};
-        }
-
-        // Add messages to state
-        messages.forEach(message => {
-          state.messages[groupId][message.id] = message;
-        });
-
-        // Update last fetched timestamp
+        messagesAdapter.upsertMany(state.messages, messages);
+        state.groupMessageIds[groupId] = messages.map(m => m.id);
         state.lastFetched[groupId] = Date.now();
-
         state.error = null;
       })
       .addCase(fetchRecentMessages.rejected, (state, action) => {
@@ -282,17 +286,11 @@ const chatSlice = createSlice({
       .addCase(fetchEarlierMessages.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, messages} = action.payload;
-
-        // Initialize the messages object for this group if it doesn't exist
-        if (!state.messages[groupId]) {
-          state.messages[groupId] = {};
-        }
-
-        // Add messages to state
-        messages.forEach(message => {
-          state.messages[groupId][message.id] = message;
-        });
-
+        messagesAdapter.upsertMany(state.messages, messages);
+        state.groupMessageIds[groupId] = [
+          ...(state.groupMessageIds[groupId] || []),
+          ...messages.map(m => m.id),
+        ];
         state.error = null;
       })
       .addCase(fetchEarlierMessages.rejected, (state, action) => {
@@ -308,15 +306,11 @@ const chatSlice = createSlice({
       .addCase(sendMessage.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, message} = action.payload;
-
-        // Initialize the messages object for this group if it doesn't exist
-        if (!state.messages[groupId]) {
-          state.messages[groupId] = {};
+        messagesAdapter.upsertOne(state.messages, message);
+        if (!state.groupMessageIds[groupId]) {
+          state.groupMessageIds[groupId] = [];
         }
-
-        // Add the new message
-        state.messages[groupId][message.id] = message;
-
+        state.groupMessageIds[groupId].push(message.id);
         state.error = null;
       })
       .addCase(sendMessage.rejected, (state, action) => {
@@ -326,7 +320,6 @@ const chatSlice = createSlice({
 
       // Add reaction
       .addCase(addReaction.fulfilled, (state, action) => {
-        // We'll let the real-time listener update the state
         state.status = 'succeeded';
         state.error = null;
       })
@@ -338,19 +331,18 @@ const chatSlice = createSlice({
       // Mark message as read
       .addCase(markMessageAsRead.fulfilled, (state, action) => {
         const {groupId, messageId} = action.payload;
-
-        // Update the message's readBy property if it exists in state
-        if (state.messages[groupId] && state.messages[groupId][messageId]) {
-          const currentUser = auth().currentUser;
-          if (currentUser) {
-            const message = state.messages[groupId][messageId];
-            if (!message.readBy) {
-              message.readBy = {};
-            }
-            message.readBy[currentUser.uid] = true;
-          }
+        const currentUser = auth().currentUser;
+        if (currentUser && state.messages.entities[messageId]) {
+          messagesAdapter.updateOne(state.messages, {
+            id: messageId,
+            changes: {
+              readBy: {
+                ...state.messages.entities[messageId]?.readBy,
+                [currentUser.uid]: true,
+              },
+            },
+          });
         }
-
         state.status = 'succeeded';
         state.error = null;
       })
@@ -363,12 +355,12 @@ const chatSlice = createSlice({
       // Delete message
       .addCase(deleteMessage.fulfilled, (state, action) => {
         const {groupId, messageId} = action.payload;
-
-        // Remove the message from state if it exists
-        if (state.messages[groupId] && state.messages[groupId][messageId]) {
-          delete state.messages[groupId][messageId];
+        messagesAdapter.removeOne(state.messages, messageId);
+        if (state.groupMessageIds[groupId]) {
+          state.groupMessageIds[groupId] = state.groupMessageIds[
+            groupId
+          ].filter(id => id !== messageId);
         }
-
         state.status = 'succeeded';
         state.error = null;
       })
@@ -379,6 +371,15 @@ const chatSlice = createSlice({
   },
 });
 
+// Memoized selectors
+const messagesSelectors = messagesAdapter.getSelectors<RootState>(
+  state => state.chat.messages,
+);
+
+const chatsSelectors = chatsAdapter.getSelectors<RootState>(
+  state => state.chat.chats,
+);
+
 // Export actions and reducer
 export const {clearChatError, setMessages} = chatSlice.actions;
 
@@ -386,16 +387,17 @@ export const {clearChatError, setMessages} = chatSlice.actions;
 export const selectChatStatus = (state: RootState) => state.chat.status;
 export const selectChatError = (state: RootState) => state.chat.error;
 
-export const selectMessagesByGroup = (state: RootState, groupId: string) => {
-  const messagesObj = state.chat.messages[groupId] || {};
-  // Convert to array and sort by sentAt (oldest first)
-  return Object.values(messagesObj).sort((a, b) => {
-    const dateA =
-      (a.sentAt as any) instanceof Date ? a.sentAt : new Date(a.sentAt!);
-    const dateB =
-      (b.sentAt as any) instanceof Date ? b.sentAt : new Date(b.sentAt!);
-    return (dateA as Date).getTime() - (dateB as Date).getTime();
-  });
-};
+export const selectMessagesByGroup = createSelector(
+  [
+    messagesSelectors.selectAll,
+    (state: RootState, groupId: string) =>
+      state.chat.groupMessageIds[groupId] || [],
+  ],
+  (allMessages, messageIds) => {
+    return messageIds
+      .map(id => allMessages.find(m => m.id === id))
+      .filter(Boolean);
+  },
+);
 
 export default chatSlice.reducer;

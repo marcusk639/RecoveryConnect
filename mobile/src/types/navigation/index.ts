@@ -1,6 +1,6 @@
 // src/types/navigation/index.ts
 import {NavigatorScreenParams} from '@react-navigation/native';
-import {Meeting} from '../index';
+import {Meeting, ServicePosition} from '../index';
 
 // Group Stack Navigation Params
 export type GroupStackParamList = {

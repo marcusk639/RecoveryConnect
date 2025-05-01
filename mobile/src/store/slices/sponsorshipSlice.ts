@@ -1,4 +1,9 @@
-import {createSlice, createAsyncThunk} from '@reduxjs/toolkit';
+import {
+  createSlice,
+  createAsyncThunk,
+  createEntityAdapter,
+  createSelector,
+} from '@reduxjs/toolkit';
 import SponsorModel from '../../models/SponsorModel';
 import {
   Sponsorship,
@@ -9,45 +14,68 @@ import {
 import {RootState} from '../types';
 import {Timestamp} from '../../types/schema';
 
+// Define proper entity types
+interface SponsorshipEntity extends Sponsorship {
+  id: string;
+}
+
+interface SponsorEntity {
+  id: string;
+  displayName: string;
+  sobrietyDate: string;
+  requirements: string[];
+  bio: string;
+  currentSponsees: number;
+  maxSponsees: number;
+}
+
+interface SponsorshipRequestEntity {
+  id: string;
+  sponseeId: string;
+  sponseeName: string;
+  message: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: Timestamp;
+}
+
+// Create entity adapters for better performance
+const sponsorshipsAdapter = createEntityAdapter({
+  selectId: (sponsorship: SponsorshipEntity) => sponsorship.id,
+  sortComparer: (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+});
+
+const sponsorsAdapter = createEntityAdapter({
+  selectId: (sponsor: SponsorEntity) => sponsor.id,
+  sortComparer: (a, b) => a.displayName.localeCompare(b.displayName),
+});
+
+const sponsorshipRequestsAdapter = createEntityAdapter({
+  selectId: (request: SponsorshipRequestEntity) => request.id,
+  sortComparer: (a, b) =>
+    b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime(),
+});
+
+// Update state interface
 export interface SponsorshipState {
-  sponsorships: Sponsorship[];
+  sponsorships: ReturnType<typeof sponsorshipsAdapter.getInitialState>;
   analytics: SponsorshipAnalytics | null;
   chatMessages: Record<string, SponsorChatMessage[]>;
   loading: boolean;
   error: string | null;
-  sponsors: Record<
-    string,
-    {
-      id: string;
-      displayName: string;
-      sobrietyDate: string;
-      requirements: string[];
-      bio: string;
-      currentSponsees: number;
-      maxSponsees: number;
-    }[]
-  >;
-  sponsorshipRequests: Record<
-    string,
-    {
-      id: string;
-      sponseeId: string;
-      sponseeName: string;
-      message: string;
-      status: 'pending' | 'accepted' | 'rejected';
-      createdAt: Timestamp;
-    }[]
+  sponsors: ReturnType<typeof sponsorsAdapter.getInitialState>;
+  sponsorshipRequests: ReturnType<
+    typeof sponsorshipRequestsAdapter.getInitialState
   >;
 }
 
 const initialState: SponsorshipState = {
-  sponsorships: [],
+  sponsorships: sponsorshipsAdapter.getInitialState(),
   analytics: null,
   chatMessages: {},
   loading: false,
   error: null,
-  sponsors: {},
-  sponsorshipRequests: {},
+  sponsors: sponsorsAdapter.getInitialState(),
+  sponsorshipRequests: sponsorshipRequestsAdapter.getInitialState(),
 };
 
 export const fetchGroupSponsorships = createAsyncThunk(
@@ -195,40 +223,19 @@ export const updateSponsorAvailability = createAsyncThunk(
   },
 );
 
-export const selectGroupSponsors = (state: RootState, groupId: string) =>
-  state.sponsorship.sponsors[groupId] || [];
-
-export const selectSponsorshipRequests = (state: RootState, groupId: string) =>
-  state.sponsorship.sponsorshipRequests[groupId] || [];
-
-export const selectSponsorSettings = (state: RootState) =>
-  state.auth.userData?.sponsorSettings;
-
-export const selectIsSponsorAvailable = (state: RootState, groupId: string) => {
-  const sponsorSettings = state.auth.userData?.sponsorSettings;
-  return sponsorSettings?.isAvailable || false;
-};
-
-export const selectCurrentSponsees = (state: RootState) => {
-  const userId = state.auth.user?.uid;
-  if (!userId) return 0;
-  return state.sponsorship.sponsorships.filter(
-    s => s.sponsorId === userId && s.status === 'active',
-  ).length;
-};
-
+// Update the slice definition
 const sponsorshipSlice = createSlice({
   name: 'sponsorship',
   initialState,
   reducers: {
     clearSponsorshipState: state => {
-      state.sponsorships = [];
+      state.sponsorships = sponsorshipsAdapter.getInitialState();
       state.analytics = null;
       state.chatMessages = {};
       state.loading = false;
       state.error = null;
-      state.sponsors = {};
-      state.sponsorshipRequests = {};
+      state.sponsors = sponsorsAdapter.getInitialState();
+      state.sponsorshipRequests = sponsorshipRequestsAdapter.getInitialState();
     },
   },
   extraReducers: builder => {
@@ -240,7 +247,7 @@ const sponsorshipSlice = createSlice({
       })
       .addCase(fetchGroupSponsorships.fulfilled, (state, action) => {
         state.loading = false;
-        state.sponsorships = action.payload;
+        sponsorshipsAdapter.setAll(state.sponsorships, action.payload);
       })
       .addCase(fetchGroupSponsorships.rejected, (state, action) => {
         state.loading = false;
@@ -270,9 +277,7 @@ const sponsorshipSlice = createSlice({
       // Update Status
       .addCase(updateSponsorshipStatus.fulfilled, (state, action) => {
         const {sponsorshipId, status} = action.payload;
-        const sponsorship = state.sponsorships.find(
-          s => s.id === sponsorshipId,
-        );
+        const sponsorship = state.sponsorships.entities[sponsorshipId];
         if (sponsorship) {
           sponsorship.status = status;
           if (status !== 'active') {
@@ -309,7 +314,13 @@ const sponsorshipSlice = createSlice({
       })
       .addCase(fetchGroupSponsors.fulfilled, (state, action) => {
         state.loading = false;
-        state.sponsors[action.meta.arg] = action.payload;
+        state.sponsors.ids = action.payload.map(sponsor => sponsor.id);
+        state.sponsors.entities = action.payload.reduce<
+          Record<string, SponsorEntity>
+        >((acc, sponsor) => {
+          acc[sponsor.id] = sponsor;
+          return acc;
+        }, {});
       })
       .addCase(fetchGroupSponsors.rejected, (state, action) => {
         state.loading = false;
@@ -325,17 +336,17 @@ const sponsorshipSlice = createSlice({
         const {groupId, request} = action.payload;
         if (!request) return;
 
-        if (!state.sponsorshipRequests[groupId]) {
-          state.sponsorshipRequests[groupId] = [];
+        if (!state.sponsorshipRequests.entities[request.id]) {
+          state.sponsorshipRequests.ids.push(request.id);
+          state.sponsorshipRequests.entities[request.id] = {
+            id: request.id,
+            sponseeId: request.sponseeId,
+            sponseeName: request.sponseeName,
+            message: request.message,
+            status: 'pending' as const,
+            createdAt: request.createdAt,
+          };
         }
-        state.sponsorshipRequests[groupId].push({
-          id: request.id,
-          sponseeId: request.sponseeId,
-          sponseeName: request.sponseeName,
-          message: request.message,
-          status: 'pending' as const,
-          createdAt: request.createdAt,
-        });
       })
       .addCase(requestSponsorship.rejected, (state, action) => {
         state.loading = false;
@@ -349,10 +360,14 @@ const sponsorshipSlice = createSlice({
       .addCase(acceptSponsorshipRequest.fulfilled, (state, action) => {
         state.loading = false;
         const {groupId, requestId} = action.meta.arg;
-        const requests = state.sponsorshipRequests[groupId] || [];
-        const requestIndex = requests.findIndex(r => r.id === requestId);
-        if (requestIndex !== -1) {
-          requests[requestIndex].status = 'accepted';
+        const request = sponsorshipRequestsAdapter
+          .getSelectors()
+          .selectById(state.sponsorshipRequests, requestId);
+        if (request) {
+          sponsorshipRequestsAdapter.updateOne(state.sponsorshipRequests, {
+            id: requestId,
+            changes: {status: 'accepted'},
+          });
         }
       })
       .addCase(acceptSponsorshipRequest.rejected, (state, action) => {
@@ -368,10 +383,14 @@ const sponsorshipSlice = createSlice({
       .addCase(rejectSponsorshipRequest.fulfilled, (state, action) => {
         state.loading = false;
         const {groupId, requestId} = action.meta.arg;
-        const requests = state.sponsorshipRequests[groupId] || [];
-        const requestIndex = requests.findIndex(r => r.id === requestId);
-        if (requestIndex !== -1) {
-          requests[requestIndex].status = 'rejected';
+        const request = sponsorshipRequestsAdapter
+          .getSelectors()
+          .selectById(state.sponsorshipRequests, requestId);
+        if (request) {
+          sponsorshipRequestsAdapter.updateOne(state.sponsorshipRequests, {
+            id: requestId,
+            changes: {status: 'rejected'},
+          });
         }
       })
       .addCase(rejectSponsorshipRequest.rejected, (state, action) => {
@@ -397,6 +416,40 @@ const sponsorshipSlice = createSlice({
       });
   },
 });
+
+// Optimize selectors with proper memoization
+export const selectAllSponsorships = createSelector(
+  [(state: RootState) => state.sponsorship.sponsorships],
+  sponsorships => sponsorshipsAdapter.getSelectors().selectAll(sponsorships),
+);
+
+export const selectGroupSponsors = createSelector(
+  [(state: RootState) => state.sponsorship.sponsors],
+  sponsors => sponsorsAdapter.getSelectors().selectAll(sponsors),
+);
+
+export const selectSponsorshipRequests = createSelector(
+  [(state: RootState) => state.sponsorship.sponsorshipRequests],
+  requests => sponsorshipRequestsAdapter.getSelectors().selectAll(requests),
+);
+
+export const selectSponsorSettings = (state: RootState) =>
+  state.auth.users.entities[state.auth.user?.uid ?? '']?.sponsorSettings;
+
+export const selectIsSponsorAvailable = createSelector(
+  [selectSponsorSettings],
+  sponsorSettings => sponsorSettings?.isAvailable || false,
+);
+
+export const selectCurrentSponsees = createSelector(
+  [selectAllSponsorships, (state: RootState) => state.auth.user?.uid],
+  (sponsorships, userId) => {
+    if (!userId) return 0;
+    return sponsorships.filter(
+      s => s.sponsorId === userId && s.status === 'active',
+    ).length;
+  },
+);
 
 export const {clearSponsorshipState} = sponsorshipSlice.actions;
 export default sponsorshipSlice.reducer;

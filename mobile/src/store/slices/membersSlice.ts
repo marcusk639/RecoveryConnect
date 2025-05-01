@@ -1,4 +1,10 @@
-import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+  createEntityAdapter,
+  createSelector,
+} from '@reduxjs/toolkit';
 import {RootState} from '../types';
 import auth from '@react-native-firebase/auth';
 import {GroupModel} from '../../models/GroupModel';
@@ -14,21 +20,46 @@ export interface GroupMilestone {
   years: number;
 }
 
+// Define entity types
+interface GroupMemberEntity extends GroupMember {
+  id: string;
+}
+
+interface GroupMilestoneEntity extends GroupMilestone {
+  id: string;
+}
+
+// Create entity adapters
+const membersAdapter = createEntityAdapter<GroupMemberEntity>({
+  sortComparer: (a, b) => {
+    // Sort by admin status first, then by name
+    if (a.isAdmin && !b.isAdmin) return -1;
+    if (!a.isAdmin && b.isAdmin) return 1;
+    return a.name.localeCompare(b.name);
+  },
+});
+
+const milestonesAdapter = createEntityAdapter<GroupMilestoneEntity>({
+  sortComparer: (a, b) => a.date.getTime() - b.date.getTime(),
+});
+
 // State interface
 export interface MembersState {
-  items: Record<string, GroupMember>;
+  members: ReturnType<typeof membersAdapter.getInitialState>;
+  milestones: ReturnType<typeof milestonesAdapter.getInitialState>;
   groupMembers: Record<string, string[]>;
-  milestones: Record<string, GroupMilestone[]>; // By groupId
+  groupMilestones: Record<string, string[]>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
-  lastFetched: Record<string, number>; // By groupId
+  lastFetched: Record<string, number>;
 }
 
 // Initial state
 const initialState: MembersState = {
-  items: {},
+  members: membersAdapter.getInitialState(),
+  milestones: milestonesAdapter.getInitialState(),
   groupMembers: {},
-  milestones: {},
+  groupMilestones: {},
   status: 'idle',
   error: null,
   lastFetched: {},
@@ -168,7 +199,7 @@ export const updateGroupMember = createAsyncThunk(
   ) => {
     try {
       const state = getState() as RootState;
-      const currentMember = state.members.items[userId];
+      const currentMember = state.members.members.entities[userId];
 
       if (!currentMember) {
         return rejectWithValue('Member not found');
@@ -290,26 +321,15 @@ const membersSlice = createSlice({
       })
       .addCase(fetchGroupMembers.fulfilled, (state, action) => {
         state.status = 'succeeded';
-
         const {groupId, members} = action.payload;
-
-        // Update items dictionary with members
-        members.forEach((member: GroupMember) => {
-          state.items[member.id] = member;
-        });
-
-        // Update group members array with IDs
-        state.groupMembers[groupId] = members.map((m: GroupMember) => m.id);
-
-        // Update last fetched timestamp for this group
+        membersAdapter.upsertMany(state.members, members);
+        state.groupMembers[groupId] = members.map(m => m.id);
         state.lastFetched[groupId] = Date.now();
-
         state.error = null;
       })
       .addCase(fetchGroupMembers.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to fetch group members';
+        state.error = action.payload as string;
       })
 
       // Fetch group milestones
@@ -319,13 +339,17 @@ const membersSlice = createSlice({
       .addCase(fetchGroupMilestones.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, milestones} = action.payload;
-        state.milestones[groupId] = milestones;
+        const milestoneEntities = milestones.map(milestone => ({
+          ...milestone,
+          id: `${milestone.memberId}-${milestone.date.getTime()}`,
+        }));
+        milestonesAdapter.upsertMany(state.milestones, milestoneEntities);
+        state.groupMilestones[groupId] = milestoneEntities.map(m => m.id);
         state.error = null;
       })
       .addCase(fetchGroupMilestones.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to fetch group milestones';
+        state.error = action.payload as string;
       })
 
       // Add member to group
@@ -335,22 +359,16 @@ const membersSlice = createSlice({
       .addCase(addMemberToGroup.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const member = action.payload;
-
-        // Add to items
-        state.items[member.id] = member;
-
-        // Add to group members
+        membersAdapter.upsertOne(state.members, member);
         if (!state.groupMembers[member.groupId]) {
           state.groupMembers[member.groupId] = [];
         }
         state.groupMembers[member.groupId].push(member.id);
-
         state.error = null;
       })
       .addCase(addMemberToGroup.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to add member to group';
+        state.error = action.payload as string;
       })
 
       // Update group member
@@ -359,13 +377,12 @@ const membersSlice = createSlice({
       })
       .addCase(updateGroupMember.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.items[action.payload.id] = action.payload;
+        membersAdapter.upsertOne(state.members, action.payload);
         state.error = null;
       })
       .addCase(updateGroupMember.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to update group member';
+        state.error = action.payload as string;
       })
 
       // Remove member from group
@@ -376,10 +393,8 @@ const membersSlice = createSlice({
         state.status = 'succeeded';
         const {groupId, userId} = action.payload;
 
-        // Remove from items if this is their only group
         // Check if member exists in other groups
         let memberInOtherGroups = false;
-
         for (const [gId, members] of Object.entries(state.groupMembers)) {
           if (gId !== groupId && members.includes(userId)) {
             memberInOtherGroups = true;
@@ -388,13 +403,12 @@ const membersSlice = createSlice({
         }
 
         if (!memberInOtherGroups) {
-          delete state.items[userId];
+          membersAdapter.removeOne(state.members, userId);
         }
 
-        // Remove from group members
         if (state.groupMembers[groupId]) {
           state.groupMembers[groupId] = state.groupMembers[groupId].filter(
-            memberId => memberId !== userId,
+            id => id !== userId,
           );
         }
 
@@ -402,39 +416,58 @@ const membersSlice = createSlice({
       })
       .addCase(removeMemberFromGroup.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to remove member from group';
+        state.error = action.payload as string;
       });
   },
 });
 
-// Export actions and reducer
-export const {clearMembersError} = membersSlice.actions;
+// Memoized selectors
+const membersSelectors = membersAdapter.getSelectors<RootState>(
+  state => state.members.members,
+);
 
-// Selectors
-export const selectAllMembers = (state: RootState) =>
-  Object.values(state.members.items);
+const milestonesSelectors = milestonesAdapter.getSelectors<RootState>(
+  state => state.members.milestones,
+);
 
-export const selectMembersByGroupId = (state: RootState, groupId: string) => {
-  const memberIds = state.members.groupMembers[groupId] || [];
-  return memberIds.map((id: string) => state.members.items[id]).filter(Boolean);
-};
+export const selectAllMembers = membersSelectors.selectAll;
+export const selectMemberById = membersSelectors.selectById;
 
-export const selectMemberById = (state: RootState, id: string) =>
-  state.members.items[id];
+export const selectMembersByGroupId = createSelector(
+  [
+    membersSelectors.selectAll,
+    (state: RootState, groupId: string) =>
+      state.members.groupMembers[groupId] || [],
+  ],
+  (allMembers, memberIds) =>
+    memberIds.map(id => allMembers.find(m => m.id === id)).filter(Boolean),
+);
 
-export const selectGroupAdmins = (state: RootState, groupId: string) => {
-  const memberIds = state.members.groupMembers[groupId] || [];
-  return memberIds
-    .map((id: string) => state.members.items[id])
-    .filter((member: GroupMember | undefined) => member && member.isAdmin);
-};
+export const selectGroupAdmins = createSelector(
+  [selectMembersByGroupId],
+  members =>
+    members.filter(
+      (member): member is GroupMemberEntity =>
+        member !== undefined && member.isAdmin !== undefined && member.isAdmin,
+    ),
+);
 
-export const selectGroupMilestones = (state: RootState, groupId: string) =>
-  state.members.milestones[groupId] || [];
+export const selectGroupMilestones = createSelector(
+  [
+    milestonesSelectors.selectAll,
+    (state: RootState, groupId: string) =>
+      state.members.groupMilestones[groupId] || [],
+  ],
+  (allMilestones, milestoneIds) => {
+    const milestones = milestoneIds
+      .map(id => allMilestones.find(m => m.id === id))
+      .filter((m): m is GroupMilestoneEntity => m !== undefined);
+    return milestones;
+  },
+);
 
 export const selectMembersStatus = (state: RootState) => state.members.status;
-
 export const selectMembersError = (state: RootState) => state.members.error;
 
+export const {clearMembersError} = membersSlice.actions;
 export default membersSlice.reducer;

@@ -21,6 +21,7 @@ export interface FirestoreDocument<T> {
  */
 
 export interface TransactionDocument {
+  id: string;
   type: 'income' | 'expense';
   amount: number;
   description: string;

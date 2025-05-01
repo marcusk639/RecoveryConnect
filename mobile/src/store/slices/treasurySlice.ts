@@ -1,10 +1,25 @@
-import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+  createEntityAdapter,
+  createSelector,
+} from '@reduxjs/toolkit';
 import {RootState} from '../types';
 import {TreasuryStats} from '../../types/domain/treasury';
 import {TreasuryModel} from '../../models/TreasuryModel';
 
+// Define entity types
+interface TreasuryStatsEntity extends TreasuryStats {
+  id: string;
+}
+
+// Create entity adapter
+const treasuryStatsAdapter = createEntityAdapter<TreasuryStatsEntity>();
+
+// Define state interface
 export interface TreasuryState {
-  groupStats: Record<string, TreasuryStats>;
+  stats: ReturnType<typeof treasuryStatsAdapter.getInitialState>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   lastFetched: Record<string, number>;
@@ -12,7 +27,7 @@ export interface TreasuryState {
 
 // Initial state
 const initialState: TreasuryState = {
-  groupStats: {},
+  stats: treasuryStatsAdapter.getInitialState(),
   status: 'idle',
   error: null,
   lastFetched: {},
@@ -69,35 +84,37 @@ const treasurySlice = createSlice({
       })
       .addCase(fetchTreasuryStats.fulfilled, (state, action) => {
         state.status = 'succeeded';
-
         const stats = action.payload;
-        const groupId = stats.groupId;
-
-        // Update treasury stats for the group
-        state.groupStats[groupId] = stats;
-
-        // Update lastFetched
-        state.lastFetched[groupId] = Date.now();
-
+        const statsEntity = {
+          ...stats,
+          id: stats.groupId,
+        };
+        treasuryStatsAdapter.upsertOne(state.stats, statsEntity);
+        state.lastFetched[stats.groupId] = Date.now();
         state.error = null;
       })
       .addCase(fetchTreasuryStats.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to fetch treasury stats';
+        state.error = action.payload as string;
       });
   },
 });
 
-// Export actions and reducer
-export const {clearError} = treasurySlice.actions;
+// Memoized selectors
+const treasuryStatsSelectors = treasuryStatsAdapter.getSelectors<RootState>(
+  state => state.treasury.stats,
+);
 
-// Selectors
-export const selectTreasuryStatsByGroupId = (
-  state: RootState,
-  groupId: string,
-) => state.treasury.groupStats[groupId];
+export const selectTreasuryStatsByGroupId = createSelector(
+  [
+    treasuryStatsSelectors.selectAll,
+    (state: RootState, groupId: string) => groupId,
+  ],
+  (allStats, groupId) => allStats.find(stats => stats.id === groupId),
+);
+
 export const selectTreasuryStatus = (state: RootState) => state.treasury.status;
 export const selectTreasuryError = (state: RootState) => state.treasury.error;
 
+export const {clearError} = treasurySlice.actions;
 export default treasurySlice.reducer;

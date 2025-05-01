@@ -39,6 +39,7 @@ export class TreasuryModel {
   ): Partial<TransactionDocument> {
     const firestoreData: Partial<TransactionDocument> = {};
 
+    if (transaction.id !== undefined) firestoreData.id = transaction.id;
     if (transaction.type !== undefined) firestoreData.type = transaction.type;
     if (transaction.amount !== undefined)
       firestoreData.amount = transaction.amount;
@@ -186,10 +187,13 @@ export class TreasuryModel {
         throw new Error('No authenticated user');
       }
 
+      const docRef = firestore().collection('transactions').doc();
+
       const now = new Date();
       const defaultTransaction: Partial<Transaction> = {
         createdBy: currentUser.uid,
         createdAt: now,
+        id: docRef.id,
       };
 
       const newTransaction = {...defaultTransaction, ...transactionData};
@@ -211,12 +215,10 @@ export class TreasuryModel {
       }
 
       // Create the transaction in the top-level collection
-      const docRef = await firestore()
-        .collection('transactions')
-        .add({
-          ...TreasuryModel.toFirestore(newTransaction),
-          createdAt: firestore.Timestamp.fromDate(now),
-        });
+      await docRef.set({
+        ...TreasuryModel.toFirestore(newTransaction),
+        createdAt: firestore.Timestamp.fromDate(now),
+      });
 
       // Update treasury stats
       await TreasuryModel.updateTreasuryStatsAfterTransaction(
