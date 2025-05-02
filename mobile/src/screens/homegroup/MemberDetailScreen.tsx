@@ -27,6 +27,10 @@ import {
   selectMembersError,
   fetchGroupMembers,
 } from '../../store/slices/membersSlice';
+import {
+  fetchServicePositionsForGroup,
+  selectMemberServicePositionsForGroup,
+} from '../../store/slices/servicePositionsSlice';
 
 type MemberDetailScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -52,6 +56,9 @@ const MemberDetailScreen: React.FC<Props> = ({route, navigation}) => {
   const membersStatus = useAppSelector(selectMembersStatus);
   const membersError = useAppSelector(selectMembersError);
   const loading = membersStatus === 'loading';
+  const servicePositions = useAppSelector(state =>
+    selectMemberServicePositionsForGroup(state, groupId, memberId),
+  );
 
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
   const [processingAction, setProcessingAction] = useState(false);
@@ -61,7 +68,11 @@ const MemberDetailScreen: React.FC<Props> = ({route, navigation}) => {
       try {
         // Fetch members if we don't have the member in the store
         if (!member) {
-          await dispatch(fetchGroupMembers(groupId)).unwrap();
+          dispatch(fetchGroupMembers(groupId)).unwrap();
+        }
+
+        if (!servicePositions) {
+          dispatch(fetchServicePositionsForGroup(groupId)).unwrap();
         }
 
         // Check if current user is admin of this group
@@ -363,6 +374,53 @@ const MemberDetailScreen: React.FC<Props> = ({route, navigation}) => {
             </Text>
           </View>
 
+          {/* Service Positions Section */}
+          {servicePositions && servicePositions.length > 0 && (
+            <View style={styles.infoSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.infoLabel}>Service Positions</Text>
+                <View style={styles.servicePositionsIconContainer}>
+                  <Icon name="badge-account" size={20} color="#2196F3" />
+                </View>
+              </View>
+              <View style={styles.servicePositionsList}>
+                {servicePositions.map(position => (
+                  <View key={position.id} style={styles.servicePositionItem}>
+                    <View style={styles.servicePositionHeader}>
+                      <Text style={styles.servicePositionName}>
+                        {position.name}
+                      </Text>
+                      {position.description && (
+                        <Text style={styles.servicePositionDescription}>
+                          {position.description}
+                        </Text>
+                      )}
+                    </View>
+                    {(position.termStartDate || position.termEndDate) && (
+                      <View style={styles.servicePositionTerm}>
+                        <Icon name="calendar" size={12} color="#757575" />
+                        <Text style={styles.servicePositionTermText}>
+                          {position.termStartDate
+                            ? new Date(
+                                position.termStartDate,
+                              ).toLocaleDateString()
+                            : 'Started'}
+                          {position.termEndDate
+                            ? ` - ${new Date(
+                                position.termEndDate,
+                              ).toLocaleDateString()}`
+                            : position.commitmentLength
+                            ? ` (${position.commitmentLength} months)`
+                            : ''}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Admin Actions */}
           {isCurrentUserAdmin && memberId !== auth().currentUser?.uid && (
             <View style={styles.actionsSection}>
@@ -569,6 +627,47 @@ const styles = StyleSheet.create({
   phoneActionText: {
     fontSize: 14,
     fontWeight: '500',
+    marginLeft: 4,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  servicePositionsList: {
+    gap: 8,
+  },
+  servicePositionsIconContainer: {
+    marginLeft: 4,
+    paddingBottom: 6,
+  },
+  servicePositionItem: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 12,
+  },
+  servicePositionHeader: {
+    marginBottom: 4,
+  },
+  servicePositionName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#212121',
+    marginBottom: 2,
+  },
+  servicePositionDescription: {
+    fontSize: 14,
+    color: '#757575',
+    marginTop: 2,
+  },
+  servicePositionTerm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  servicePositionTermText: {
+    fontSize: 12,
+    color: '#757575',
     marginLeft: 4,
   },
 });

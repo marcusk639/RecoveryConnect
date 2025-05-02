@@ -23,6 +23,7 @@ const servicePositionsAdapter = createEntityAdapter({
 export interface ServicePositionsState {
   positions: ReturnType<typeof servicePositionsAdapter.getInitialState>;
   groupPositionIds: Record<string, string[]>;
+  memberPositionsByGroup: Record<string, Record<string, string[]>>; // groupId -> memberId -> positionIds
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   lastFetchedGroup: Record<string, number>;
@@ -32,6 +33,7 @@ export interface ServicePositionsState {
 const initialState: ServicePositionsState = {
   positions: servicePositionsAdapter.getInitialState(),
   groupPositionIds: {},
+  memberPositionsByGroup: {},
   status: 'idle',
   error: null,
   lastFetchedGroup: {},
@@ -47,6 +49,15 @@ export const fetchServicePositionsForGroup = createAsyncThunk(
     } catch (error: any) {
       throw new Error(error.message || 'Failed to fetch service positions');
     }
+  },
+  {
+    condition: (groupId, {getState}) => {
+      const state = getState() as RootState;
+      const lastFetched = state.servicePositions.lastFetchedGroup[groupId];
+      if (lastFetched && Date.now() - lastFetched < 1000 * 60 * 5) {
+        return false;
+      }
+    },
   },
 );
 
@@ -146,6 +157,33 @@ const servicePositionsSlice = createSlice({
           positionIds.push(...positions.map(pos => pos.id));
           state.groupPositionIds[positions[0].groupId] = positionIds;
           state.lastFetchedGroup[positions[0].groupId] = Date.now();
+
+          // Update member positions mapping
+          const groupId = positions[0].groupId;
+          if (!state.memberPositionsByGroup[groupId]) {
+            state.memberPositionsByGroup[groupId] = {};
+          }
+
+          positions.forEach(position => {
+            if (position.currentHolderId) {
+              if (
+                !state.memberPositionsByGroup[groupId][position.currentHolderId]
+              ) {
+                state.memberPositionsByGroup[groupId][
+                  position.currentHolderId
+                ] = [];
+              }
+              if (
+                !state.memberPositionsByGroup[groupId][
+                  position.currentHolderId
+                ].includes(position.id)
+              ) {
+                state.memberPositionsByGroup[groupId][
+                  position.currentHolderId
+                ].push(position.id);
+              }
+            }
+          });
         } else {
           state.groupPositionIds[action.meta.arg] = [];
           state.lastFetchedGroup[action.meta.arg] = Date.now();
@@ -183,7 +221,48 @@ const servicePositionsSlice = createSlice({
       })
       .addCase(updateServicePosition.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        servicePositionsAdapter.upsertOne(state.positions, action.payload);
+        const updatedPosition = action.payload;
+        servicePositionsAdapter.upsertOne(state.positions, updatedPosition);
+
+        // Update member positions mapping
+        const groupId = updatedPosition.groupId;
+        if (!state.memberPositionsByGroup[groupId]) {
+          state.memberPositionsByGroup[groupId] = {};
+        }
+
+        // Remove position from old holder if exists
+        const oldPosition = state.positions.entities[updatedPosition.id];
+        if (oldPosition?.currentHolderId) {
+          const oldHolderPositions =
+            state.memberPositionsByGroup[groupId][oldPosition.currentHolderId];
+          if (oldHolderPositions) {
+            state.memberPositionsByGroup[groupId][oldPosition.currentHolderId] =
+              oldHolderPositions.filter(id => id !== updatedPosition.id);
+          }
+        }
+
+        // Add position to new holder if exists
+        if (updatedPosition.currentHolderId) {
+          if (
+            !state.memberPositionsByGroup[groupId][
+              updatedPosition.currentHolderId
+            ]
+          ) {
+            state.memberPositionsByGroup[groupId][
+              updatedPosition.currentHolderId
+            ] = [];
+          }
+          if (
+            !state.memberPositionsByGroup[groupId][
+              updatedPosition.currentHolderId
+            ].includes(updatedPosition.id)
+          ) {
+            state.memberPositionsByGroup[groupId][
+              updatedPosition.currentHolderId
+            ].push(updatedPosition.id);
+          }
+        }
+
         state.error = null;
       })
       .addCase(updateServicePosition.rejected, (state, action) => {
@@ -272,3 +351,38 @@ export const selectServicePositionsError = (state: RootState) =>
 
 export const {clearServicePositionsError} = servicePositionsSlice.actions;
 export default servicePositionsSlice.reducer;
+
+// Add new selector for efficient lookup
+export const selectMemberServicePositionsForGroup = createSelector(
+  [
+    (state: RootState) => state.servicePositions.positions,
+    (state: RootState) => state.servicePositions.memberPositionsByGroup,
+    (state: RootState, groupId: string) => groupId,
+    (state: RootState, groupId: string, memberId: string) => memberId,
+  ],
+  (positions, memberPositionsByGroup, groupId, memberId) => {
+    const positionIds = memberPositionsByGroup[groupId]?.[memberId] || [];
+    return positionIds
+      .map((id: string) => positions.entities[id])
+      .filter(
+        (position): position is ServicePositionEntity => position !== undefined,
+      );
+  },
+);
+
+// Add new selector for efficient group positions lookup
+export const selectServicePositionsForGroup = createSelector(
+  [
+    (state: RootState) => state.servicePositions.positions,
+    (state: RootState) => state.servicePositions.groupPositionIds,
+    (state: RootState, groupId: string) => groupId,
+  ],
+  (positions, groupPositionIds, groupId) => {
+    const positionIds = groupPositionIds[groupId] || [];
+    return positionIds
+      .map((id: string) => positions.entities[id])
+      .filter(
+        (position): position is ServicePositionEntity => position !== undefined,
+      );
+  },
+);

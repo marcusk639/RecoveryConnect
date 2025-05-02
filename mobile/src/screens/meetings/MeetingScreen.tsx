@@ -643,15 +643,10 @@ const MeetingsScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.useMyLocationButton}
             onPress={() => {
-              setUsingCustomLocation(false);
-              setCustomLocation(null);
-              setCustomLocationAddress(null);
               setShowLocationPicker(false);
             }}
-            testID="location-picker-use-my-location-button">
-            <Text style={styles.useMyLocationText}>
-              Use My Current Location
-            </Text>
+            testID="location-picker-done-button">
+            <Text style={styles.useMyLocationText}>Done</Text>
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -1009,7 +1004,7 @@ const styles = StyleSheet.create({
   },
   filterButtonsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 8,
     gap: 8,
   },
@@ -1421,17 +1416,17 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   useMyLocationButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#E3F2FD',
-    alignItems: 'center',
     marginTop: 16,
+    padding: 16,
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    alignItems: 'center',
+    zIndex: 0,
   },
   useMyLocationText: {
-    color: '#1976D2',
-    fontSize: 16,
+    color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: 16,
   },
   modalHeader: {
     flexDirection: 'row',

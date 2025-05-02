@@ -6,12 +6,14 @@ import {
   SafeAreaView,
   ScrollView,
   Image,
+  TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {theme} from '../../theme/theme';
 import {Button} from '../../components/common/Button';
-import {Card} from '../../components/common/Card';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 type RootStackParamList = {
   Login: undefined;
@@ -21,116 +23,156 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+const {width} = Dimensions.get('window');
+
 const LandingScreen = () => {
   const navigation = useNavigation<NavigationProp>();
 
   return (
     <SafeAreaView style={styles.container} testID="landing-screen">
-      <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>RC</Text>
-          </View>
-          <Text style={styles.headerTitle}>Recovery Connect</Text>
-        </View>
-        <Button
-          title="Sign In"
-          variant="outline"
-          size="small"
-          onPress={() => navigation.navigate('Login')}
-          testID="landing-signin-button"
-        />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}>
+        {/* Hero Section */}
         <View style={styles.heroSection}>
+          <View style={styles.logoContainer}>
+            <View style={styles.logo}>
+              <Icon
+                name="account-group"
+                size={40}
+                color={theme.colors.primary.main}
+              />
+            </View>
+            <Text style={styles.appName}>Homegroups</Text>
+          </View>
+
           <Text style={styles.heroTitle}>
-            Find support in your recovery journey
+            Your Recovery Community,{'\n'}Connected
           </Text>
           <Text style={styles.heroSubtitle}>
-            Connect with your recovery community while maintaining anonymity and
-            privacy. Meeting schedules, group announcements, and treasury
-            management made simple.
+            Stay connected with your recovery group while maintaining complete
+            anonymity and privacy.
           </Text>
 
-          <View style={styles.actionButtons}>
-            <Button
-              title="Find a Meeting"
-              variant="primary"
-              size="large"
-              onPress={() => navigation.navigate('Meetings')}
-              testID="landing-find-meeting-button"
-            />
-
-            <Button
-              title="Register"
-              variant="secondary"
-              size="large"
-              onPress={() => navigation.navigate('Register')}
-              testID="landing-register-button"
-            />
+          <View style={styles.heroImageContainer}>
+            <View style={styles.heroImagePlaceholder}>
+              <Icon
+                name="cellphone"
+                size={120}
+                color={theme.colors.primary.light}
+              />
+            </View>
           </View>
-
-          <Card variant="filled" style={styles.privacyCard}>
-            <Text style={styles.privacyNoteText}>
-              <Text style={styles.privacyNoteBold}>Privacy First:</Text> We
-              respect anonymity. First names only, encrypted messages, and no
-              social media integration.
-            </Text>
-          </Card>
         </View>
 
+        {/* Features Section */}
         <View style={styles.featuresSection}>
-          <Card variant="elevated" style={styles.featureCard}>
-            <View style={styles.featureIconContainer}>
-              {/* <Image
-                source={require('../../assets/icons/calendar.png')}
-                style={styles.featureIcon}
-              /> */}
+          <View style={styles.featureCard}>
+            <View style={styles.featureIcon}>
+              <Icon
+                name="calendar-clock"
+                size={32}
+                color={theme.colors.primary.main}
+              />
             </View>
             <Text style={styles.featureTitle}>Meeting Directory</Text>
             <Text style={styles.featureDescription}>
-              Find meetings, save your schedule, and get reminders for your
-              homegroup.
+              Find and save meetings, get reminders, and stay connected with
+              your homegroup schedule.
             </Text>
-          </Card>
+          </View>
 
-          <Card variant="elevated" style={styles.featureCard}>
-            <View style={styles.featureIconContainer}>
-              {/* <Image
-                source={require('../../assets/icons/chat.png')}
-                style={styles.featureIcon}
-              /> */}
+          <View style={styles.featureCard}>
+            <View style={styles.featureIcon}>
+              <Icon
+                name="message-text"
+                size={32}
+                color={theme.colors.primary.main}
+              />
             </View>
-            <Text style={styles.featureTitle}>Group Communication</Text>
+            <Text style={styles.featureTitle}>Secure Communication</Text>
             <Text style={styles.featureDescription}>
-              Secure announcements and messaging for your recovery community.
+              Private messaging and announcements to keep your group connected
+              while respecting anonymity.
             </Text>
-          </Card>
+          </View>
 
-          <Card variant="elevated" style={styles.featureCard}>
-            <View style={styles.featureIconContainer}>
-              {/* <Image
-                source={require('../../assets/icons/money.png')}
-                style={styles.featureIcon}
-              /> */}
+          <View style={styles.featureCard}>
+            <View style={styles.featureIcon}>
+              <Icon
+                name="cash-multiple"
+                size={32}
+                color={theme.colors.primary.main}
+              />
             </View>
             <Text style={styles.featureTitle}>Treasury Management</Text>
             <Text style={styles.featureDescription}>
-              Track 7th Tradition contributions and expenses with easy handoff
-              between treasurers.
+              Track contributions and expenses with secure, transparent
+              financial management.
             </Text>
-          </Card>
+          </View>
+        </View>
+
+        {/* Privacy Section */}
+        <View style={styles.privacySection}>
+          <View style={styles.privacyIcon}>
+            <Icon
+              name="shield-lock"
+              size={32}
+              color={theme.colors.primary.main}
+            />
+          </View>
+          <Text style={styles.privacyTitle}>Privacy First</Text>
+          <Text style={styles.privacyText}>
+            We respect anonymity. First names only, encrypted messages, and no
+            social media integration.
+          </Text>
+        </View>
+
+        {/* CTA Section */}
+        <View style={styles.ctaSection}>
+          <Button
+            title="Get Started"
+            variant="primary"
+            size="large"
+            onPress={() => navigation.navigate('Register')}
+            style={styles.primaryButton}
+            testID="landing-register-button"
+          />
+          <Button
+            title="Sign In"
+            variant="outline"
+            size="large"
+            onPress={() => navigation.navigate('Login')}
+            style={styles.secondaryButton}
+            testID="landing-signin-button"
+          />
+          <Button
+            title="Find a Meeting"
+            variant="secondary"
+            size="large"
+            onPress={() => navigation.navigate('Meetings')}
+            style={styles.tertiaryButton}
+            testID="landing-find-meeting-button"
+          />
         </View>
       </ScrollView>
 
+      {/* Footer */}
       <View style={styles.footer}>
-        <Text style={styles.footerText}>© 2025 Recovery Connect</Text>
         <View style={styles.footerLinks}>
-          <Text style={styles.footerLink}>Privacy Policy</Text>
-          <Text style={styles.footerLink}>Terms of Service</Text>
-          <Text style={styles.footerLink}>About</Text>
+          <TouchableOpacity>
+            <Text style={styles.footerLink}>Privacy Policy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity>
+            <Text style={styles.footerLink}>Terms of Service</Text>
+          </TouchableOpacity>
+          <TouchableOpacity>
+            <Text style={styles.footerLink}>About</Text>
+          </TouchableOpacity>
         </View>
+        <Text style={styles.copyright}>© 2024 Homegroups</Text>
       </View>
     </SafeAreaView>
   );
@@ -141,44 +183,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background.primary,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: theme.spacing.xxl,
+  },
+  heroSection: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.neutral.grey200,
+    paddingTop: theme.spacing.xl,
+    alignItems: 'center',
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: theme.spacing.xl,
   },
   logo: {
-    width: 40,
-    height: 40,
+    width: 60,
+    height: 60,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.primary.light,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: theme.spacing.sm,
   },
-  logoText: {
-    fontSize: theme.typography.fontSize.lg,
+  appName: {
+    fontSize: theme.typography.fontSize.xl,
     fontWeight: 'bold',
     color: theme.colors.primary.main,
-  },
-  headerTitle: {
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: '600',
-    color: theme.colors.primary.main,
-  },
-  content: {
-    padding: theme.spacing.lg,
-  },
-  heroSection: {
-    alignItems: 'center',
-    paddingVertical: theme.spacing.xxl,
   },
   heroTitle: {
     fontSize: theme.typography.fontSize.xxl,
@@ -186,51 +217,51 @@ const styles = StyleSheet.create({
     color: theme.colors.neutral.grey900,
     textAlign: 'center',
     marginBottom: theme.spacing.md,
+    lineHeight: 40,
   },
   heroSubtitle: {
-    fontSize: theme.typography.fontSize.md,
+    fontSize: theme.typography.fontSize.lg,
     color: theme.colors.neutral.grey600,
     textAlign: 'center',
     marginBottom: theme.spacing.xl,
-    paddingHorizontal: theme.spacing.lg,
+    lineHeight: 24,
+    paddingHorizontal: theme.spacing.md,
   },
-  actionButtons: {
-    flexDirection: 'column',
-    width: '100%',
-    marginBottom: theme.spacing.xl,
+  heroImageContainer: {
+    width: width * 0.8,
+    height: width * 0.8,
+    marginVertical: theme.spacing.xl,
   },
-  privacyCard: {
-    padding: theme.spacing.lg,
-    width: '100%',
-  },
-  privacyNoteText: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.neutral.grey700,
-  },
-  privacyNoteBold: {
-    fontWeight: 'bold',
+  heroImagePlaceholder: {
+    flex: 1,
+    backgroundColor: theme.colors.primary.light,
+    borderRadius: theme.borderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   featuresSection: {
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.xxl,
+    paddingHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xl,
   },
   featureCard: {
+    backgroundColor: theme.colors.background.paper,
+    borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.lg,
-  },
-  featureIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.primary.light,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.md,
+    shadowColor: theme.colors.neutral.grey900,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   featureIcon: {
-    width: 24,
-    height: 24,
-    tintColor: theme.colors.primary.main,
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
   },
   featureTitle: {
     fontSize: theme.typography.fontSize.lg,
@@ -239,28 +270,73 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xs,
   },
   featureDescription: {
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.md,
     color: theme.colors.neutral.grey600,
+    lineHeight: 22,
+  },
+  privacySection: {
+    backgroundColor: theme.colors.neutral.grey50,
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xl,
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.neutral.grey200,
+  },
+  privacyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  privacyTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: '600',
+    color: theme.colors.neutral.grey900,
+    marginBottom: theme.spacing.xs,
+  },
+  privacyText: {
+    fontSize: theme.typography.fontSize.md,
+    color: theme.colors.neutral.grey700,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  ctaSection: {
+    paddingHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xl,
+  },
+  primaryButton: {
+    marginBottom: theme.spacing.md,
+  },
+  secondaryButton: {
+    marginBottom: theme.spacing.md,
+  },
+  tertiaryButton: {
+    marginBottom: theme.spacing.xl,
   },
   footer: {
     padding: theme.spacing.lg,
     borderTopWidth: 1,
     borderTopColor: theme.colors.neutral.grey200,
   },
-  footerText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.neutral.grey500,
-    textAlign: 'center',
-    marginBottom: theme.spacing.xs,
-  },
   footerLinks: {
     flexDirection: 'row',
     justifyContent: 'center',
+    marginBottom: theme.spacing.xs,
   },
   footerLink: {
-    fontSize: theme.typography.fontSize.xs,
+    fontSize: theme.typography.fontSize.sm,
     color: theme.colors.primary.main,
     marginHorizontal: theme.spacing.sm,
+  },
+  copyright: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.neutral.grey500,
+    textAlign: 'center',
   },
 });
 

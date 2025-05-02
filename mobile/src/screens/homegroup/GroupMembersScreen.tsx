@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
@@ -35,8 +35,13 @@ import {
   selectGroupById,
   selectGroupsStatus,
 } from '../../store/slices/groupsSlice';
-import {selectServicePositionsByMember} from '../../store/slices/servicePositionsSlice';
-import {GroupMember} from '../../types';
+import {
+  fetchServicePositionsForGroup,
+  selectMemberServicePositionsForGroup,
+  selectServicePositionsByMember,
+  selectServicePositionsForGroup,
+} from '../../store/slices/servicePositionsSlice';
+import {GroupMember, ServicePosition} from '../../types';
 
 type GroupMembersScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -66,10 +71,39 @@ const GroupMembersScreen: React.FC = () => {
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const servicePositions = useAppSelector(state =>
+    selectServicePositionsForGroup(state, groupId),
+  );
+  // const memberPositions = useAppSelector(state =>
+  //   selectMemberServicePositionsForGroup(state, groupId, item.id),
+  // );
+  const memberPositions = useMemo(() => {
+    const result: Record<string, ServicePosition[]> = {};
+    members.forEach(member => {
+      result[member.id] = servicePositions.filter(
+        position => position.currentHolderId === member.id,
+      );
+    });
+    return result;
+  }, [servicePositions, members, groupId]);
+
+  const loadData = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        dispatch(fetchGroupMembers(groupId)).unwrap(),
+        dispatch(fetchServicePositionsForGroup(groupId)).unwrap(),
+      ]);
+    } catch (error) {
+      // Error is already handled in the useEffect above
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    loadMembers();
-  }, [groupId]);
+    loadData();
+  }, [dispatch, groupId]);
 
   // Update group name when group data is loaded
   useEffect(() => {
@@ -90,17 +124,6 @@ const GroupMembersScreen: React.FC = () => {
       Alert.alert('Error', membersError);
     }
   }, [membersError]);
-
-  const loadMembers = async () => {
-    setRefreshing(true);
-    try {
-      await dispatch(fetchGroupMembers(groupId)).unwrap();
-    } catch (error) {
-      // Error is already handled in the useEffect above
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   const handleMemberPress = (member: GroupMember) => {
     navigation.navigate('GroupMemberDetails', {
@@ -179,10 +202,6 @@ const GroupMembersScreen: React.FC = () => {
   };
 
   const renderMemberItem = ({item}: {item: GroupMember}) => {
-    const servicePositions = useAppSelector(state =>
-      selectServicePositionsByMember(state, item.id),
-    );
-
     return (
       <TouchableOpacity
         style={styles.memberItem}
@@ -207,15 +226,17 @@ const GroupMembersScreen: React.FC = () => {
             <Text style={styles.memberName}>{item.name}</Text>
             {item.isAdmin && (
               <View style={styles.adminBadge}>
+                <Icon name="shield-account" size={12} color="#2196F3" />
                 <Text style={styles.adminBadgeText}>Admin</Text>
               </View>
             )}
           </View>
 
-          {servicePositions.length > 0 && (
+          {memberPositions[item.id].length > 0 && (
             <View style={styles.servicePositionsContainer}>
-              {servicePositions.map(position => (
+              {memberPositions[item.id].map(position => (
                 <View key={position.id} style={styles.servicePositionBadge}>
+                  <Icon name="badge-account" size={12} color="#2196F3" />
                   <Text style={styles.servicePositionText}>
                     {position.name}
                   </Text>
@@ -225,9 +246,12 @@ const GroupMembersScreen: React.FC = () => {
           )}
 
           {item.sobrietyDate && (
-            <Text style={styles.memberSobriety}>
-              {formatSobrietyDate(item.sobrietyDate)}
-            </Text>
+            <View style={styles.sobrietyContainer}>
+              <Icon name="calendar-check" size={12} color="#2196F3" />
+              <Text style={styles.memberSobriety}>
+                {formatSobrietyDate(item.sobrietyDate)}
+              </Text>
+            </View>
           )}
         </View>
 
@@ -318,7 +342,7 @@ const GroupMembersScreen: React.FC = () => {
         }
         contentContainerStyle={styles.listContainer}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={loadMembers} />
+          <RefreshControl refreshing={refreshing} onRefresh={loadData} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -403,9 +427,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   servicePositionsContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
-    marginBottom: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+    gap: 4,
   },
   servicePositionItem: {
     flexDirection: 'row',
@@ -486,6 +511,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#E3F2FD',
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -496,27 +523,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#2196F3',
     fontWeight: '600',
+    marginLeft: 2,
   },
-  servicePositionsContainer: {
+  sobrietyContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     marginTop: 4,
-    gap: 4,
-  },
-  servicePositionBadge: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  servicePositionText: {
-    fontSize: 10,
-    color: '#2196F3',
-    fontWeight: '600',
   },
   memberSobriety: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#2196F3',
+    marginLeft: 4,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -549,6 +566,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 12,
     gap: 8,
+  },
+  servicePositionsList: {
+    gap: 8,
+  },
+  servicePositionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  servicePositionText: {
+    fontSize: 10,
+    color: '#2196F3',
+    fontWeight: '600',
+    marginLeft: 2,
   },
 });
 

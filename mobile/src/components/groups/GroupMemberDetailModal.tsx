@@ -12,6 +12,7 @@ import {
 import {Button} from '../common/Button';
 import {useAppSelector} from '../../store';
 import {selectServicePositionsByMember} from '../../store/slices/servicePositionsSlice';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 interface GroupMember {
   id: string;
@@ -130,6 +131,7 @@ const GroupMemberDetailModal: React.FC<GroupMemberDetailModalProps> = ({
 
               {member.isAdmin && (
                 <View style={styles.adminBadge}>
+                  <Icon name="shield-account" size={14} color="#2196F3" />
                   <Text style={styles.adminText}>Admin</Text>
                 </View>
               )}
@@ -144,38 +146,54 @@ const GroupMemberDetailModal: React.FC<GroupMemberDetailModalProps> = ({
 
             {servicePositions.length > 0 && (
               <View style={styles.detailSection}>
-                <Text style={styles.sectionTitle}>Service Positions</Text>
-                {servicePositions.map(position => (
-                  <View key={position.id} style={styles.servicePositionItem}>
-                    <Text style={styles.servicePositionName}>
-                      {position.name}
-                    </Text>
-                    {position.description && (
-                      <Text style={styles.servicePositionDescription}>
-                        {position.description}
-                      </Text>
-                    )}
-                    {position.termStartDate && (
-                      <Text style={styles.servicePositionTerm}>
-                        Term:{' '}
-                        {new Date(position.termStartDate).toLocaleDateString()}
-                        {position.termEndDate
-                          ? ` - ${new Date(
-                              position.termEndDate,
-                            ).toLocaleDateString()}`
-                          : position.commitmentLength
-                          ? ` (${position.commitmentLength} months)`
-                          : ''}
-                      </Text>
-                    )}
-                  </View>
-                ))}
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Service Positions</Text>
+                  <Icon name="badge-account" size={16} color="#2196F3" />
+                </View>
+                <View style={styles.servicePositionsList}>
+                  {servicePositions.map(position => (
+                    <View key={position.id} style={styles.servicePositionItem}>
+                      <View style={styles.servicePositionHeader}>
+                        <Text style={styles.servicePositionName}>
+                          {position.name}
+                        </Text>
+                        {position.description && (
+                          <Text style={styles.servicePositionDescription}>
+                            {position.description}
+                          </Text>
+                        )}
+                      </View>
+                      {(position.termStartDate || position.termEndDate) && (
+                        <View style={styles.servicePositionTerm}>
+                          <Icon name="calendar" size={12} color="#757575" />
+                          <Text style={styles.servicePositionTermText}>
+                            {position.termStartDate
+                              ? new Date(
+                                  position.termStartDate,
+                                ).toLocaleDateString()
+                              : 'Started'}
+                            {position.termEndDate
+                              ? ` - ${new Date(
+                                  position.termEndDate,
+                                ).toLocaleDateString()}`
+                              : position.commitmentLength
+                              ? ` (${position.commitmentLength} months)`
+                              : ''}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
               </View>
             )}
 
             {member.sobrietyDate && (
               <View style={styles.detailSection}>
-                <Text style={styles.sectionTitle}>Recovery Info</Text>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Recovery Info</Text>
+                  <Icon name="calendar-check" size={16} color="#2196F3" />
+                </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Recovery Date:</Text>
                   <Text style={styles.detailText}>
@@ -342,27 +360,43 @@ const styles = StyleSheet.create({
   removeButtonText: {
     color: '#F44336',
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  servicePositionsList: {
+    gap: 8,
+  },
   servicePositionItem: {
     backgroundColor: '#F5F5F5',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 8,
+  },
+  servicePositionHeader: {
+    marginBottom: 4,
   },
   servicePositionName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#212121',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   servicePositionDescription: {
     fontSize: 14,
     color: '#757575',
-    marginBottom: 4,
+    marginTop: 2,
   },
   servicePositionTerm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  servicePositionTermText: {
     fontSize: 12,
-    color: '#9E9E9E',
-    fontStyle: 'italic',
+    color: '#757575',
+    marginLeft: 4,
   },
 });
 

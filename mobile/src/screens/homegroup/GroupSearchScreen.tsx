@@ -85,8 +85,9 @@ const GroupSearchScreen: React.FC = () => {
   const [searchRadius, setSearchRadius] = useState<number>(25);
   const [usingCustomLocation, setUsingCustomLocation] = useState(false);
 
-  // New state for type filter modal
+  // New state for type filter
   const [showTypeFilterModal, setShowTypeFilterModal] = useState(false);
+  const [showRadiusFilterModal, setShowRadiusFilterModal] = useState(false);
 
   // Get user data from Redux
   const userData = useAppSelector(selectUserData);
@@ -414,6 +415,26 @@ const GroupSearchScreen: React.FC = () => {
     </View>
   );
 
+  const renderRadiusFilter = () => (
+    <TouchableOpacity
+      style={styles.filterButton}
+      onPress={() => setShowRadiusFilterModal(true)}>
+      <Icon name="map-marker-radius" size={18} color="#2196F3" />
+      <Text style={styles.filterButtonText}>{searchRadius} miles</Text>
+    </TouchableOpacity>
+  );
+
+  const getLocationChipText = () => {
+    if (customLocation && usingCustomLocation) {
+      const addressPart = customLocation.address.split(',')[0].trim();
+      if (addressPart.length > 15) {
+        return `${addressPart.substring(0, 15)}...`;
+      }
+      return addressPart;
+    }
+    return 'Search Location';
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerContainer}>
@@ -456,60 +477,20 @@ const GroupSearchScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
 
+          {/* Radius Filter */}
+          {(userLocation || (customLocation && usingCustomLocation)) &&
+            renderRadiusFilter()}
+
           {/* Location Search */}
           <TouchableOpacity
             style={styles.locationButton}
             onPress={() => setShowLocationPicker(true)}>
             <Icon name="map-marker" size={18} color="#2196F3" />
-            <Text style={styles.locationButtonText}>
-              {customLocation ? 'Change Location' : 'Search Location'}
+            <Text style={styles.locationButtonText} numberOfLines={1}>
+              {getLocationChipText()}
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Search radius selector */}
-        {(userLocation || (customLocation && usingCustomLocation)) && (
-          <View style={styles.radiusContainer}>
-            <Text style={styles.radiusLabel}>
-              Search radius: {searchRadius} miles
-            </Text>
-            <View style={styles.radiusButtonsRow}>
-              {[5, 10, 25, 50, 100].map(radius => (
-                <TouchableOpacity
-                  key={radius}
-                  style={[
-                    styles.radiusButton,
-                    searchRadius === radius && styles.radiusButtonActive,
-                  ]}
-                  onPress={() => {
-                    setSearchRadius(radius);
-                    // Reload groups with new radius
-                    if (usingCustomLocation && customLocation) {
-                      loadNearbyGroups(
-                        customLocation.latitude,
-                        customLocation.longitude,
-                        radius,
-                      );
-                    } else if (userLocation) {
-                      loadNearbyGroups(
-                        userLocation.latitude,
-                        userLocation.longitude,
-                        radius,
-                      );
-                    }
-                  }}>
-                  <Text
-                    style={[
-                      styles.radiusButtonText,
-                      searchRadius === radius && styles.radiusButtonTextActive,
-                    ]}>
-                    {radius}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
       </View>
 
       {loading ? (
@@ -721,6 +702,83 @@ const GroupSearchScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Radius Filter Modal */}
+      <Modal
+        visible={showRadiusFilterModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowRadiusFilterModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowRadiusFilterModal(false)}>
+          <View style={styles.filterModalContainer}>
+            <View style={styles.pullIndicator} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Search Radius</Text>
+              <TouchableOpacity
+                onPress={() => setShowRadiusFilterModal(false)}
+                style={styles.closeButton}>
+                <Icon name="close" size={24} color="#2196F3" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={[5, 10, 25, 50, 100]}
+              keyExtractor={item => item.toString()}
+              renderItem={({item: radius}) => (
+                <TouchableOpacity
+                  style={[
+                    styles.typeFilterButton,
+                    searchRadius === radius && styles.typeFilterButtonActive,
+                  ]}
+                  onPress={() => {
+                    setSearchRadius(radius);
+                    if (usingCustomLocation && customLocation) {
+                      loadNearbyGroups(
+                        customLocation.latitude,
+                        customLocation.longitude,
+                        radius,
+                      );
+                    } else if (userLocation) {
+                      loadNearbyGroups(
+                        userLocation.latitude,
+                        userLocation.longitude,
+                        radius,
+                      );
+                    }
+                    setShowRadiusFilterModal(false);
+                  }}>
+                  <View style={styles.typeFilterButtonContent}>
+                    <Icon
+                      name="map-marker-radius"
+                      size={24}
+                      color={searchRadius === radius ? '#FFFFFF' : '#2196F3'}
+                    />
+                    <Text
+                      style={[
+                        styles.typeFilterButtonText,
+                        searchRadius === radius &&
+                          styles.typeFilterButtonTextActive,
+                      ]}>
+                      {radius} miles
+                    </Text>
+                  </View>
+                  {searchRadius === radius && (
+                    <Icon
+                      name="check"
+                      size={24}
+                      color="#FFFFFF"
+                      style={styles.typeFilterCheckIcon}
+                    />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -770,23 +828,28 @@ const styles = StyleSheet.create({
   },
   filterButtonsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 12,
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#E3F2FD',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#E3F2FD',
     borderRadius: 16,
-    marginRight: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: '#2196F3',
   },
   filterButtonText: {
     color: '#2196F3',
     fontWeight: '600',
     fontSize: 14,
     marginLeft: 4,
+  },
+  filterButtonTextActive: {
+    color: '#FFFFFF',
   },
   locationButton: {
     flexDirection: 'row',
@@ -795,12 +858,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: '#E3F2FD',
     borderRadius: 16,
+    maxWidth: 150,
   },
   locationButtonText: {
     color: '#2196F3',
     fontWeight: '600',
     fontSize: 14,
     marginLeft: 4,
+    flexShrink: 1,
   },
   radiusContainer: {
     marginTop: 8,
@@ -977,6 +1042,10 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 16,
+    zIndex: 1,
+  },
+  locationPickerContainer: {
+    zIndex: 2,
   },
   useMyLocationButton: {
     marginTop: 16,
@@ -984,6 +1053,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2196F3',
     borderRadius: 8,
     alignItems: 'center',
+    zIndex: 0,
   },
   useMyLocationText: {
     color: '#FFFFFF',
@@ -1039,8 +1109,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 16,
-    paddingBottom: 34, // Extra padding for bottom to account for home indicator on iPhone
-    maxHeight: '70%', // Reduced height to ensure it fits on screen
+    paddingBottom: 34,
+    maxHeight: '70%',
   },
   pullIndicator: {
     width: 40,
@@ -1049,6 +1119,20 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
     marginBottom: 16,
     alignSelf: 'center',
+  },
+  filterSection: {
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  filterSectionTitle: {
+    fontSize: 14,
+    color: '#757575',
+    marginBottom: 8,
+  },
+  filterButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
 });
 
