@@ -5,9 +5,13 @@ import * as functions from "firebase-functions"; // Needed for logger
 import {
   Meeting,
   MeetingDocument,
+  MeetingGuideMeeting,
   MeetingInstanceDocument,
 } from "../entities/Meeting";
 import * as geofire from "geofire-common"; // Import geofire
+import { generateMeetingHash } from "./meetings";
+
+const GEOHASH_PRECISION = 9;
 
 // --- Helper Functions Moved Here ---
 
@@ -15,46 +19,65 @@ import * as geofire from "geofire-common"; // Import geofire
  * Helper function to format a meeting from the Meeting Guide API into a Firestore document
  */
 export function formatMeetingForFirestore(
-  meeting: any
-): Omit<Meeting, "id" | "groupId" | "createdAt" | "updatedAt"> {
+  apiMeeting: MeetingGuideMeeting
+): Meeting {
   // Extract the relevant fields from the Meeting Guide API response
   // and format them for storage in Firestore
   // Return type excludes fields set by the calling function
-  const baseMeetingData: Partial<Meeting> = {
-    name: meeting.name || "Unnamed Meeting",
-    day: meeting.day || "",
-    time: meeting.time || "",
-    locationName: meeting.location_name || "",
-    address: meeting.address || "",
-    city: meeting.city || "",
-    state: meeting.state || "",
-    street: meeting.street || "",
-    zip: meeting.postal_code || "",
-    country: meeting.country || "USA",
-    lat: parseFloat(meeting.latitude) || undefined,
-    lng: parseFloat(meeting.longitude) || undefined,
-    type: "AA", // Since these are from the AA API
-    format: meeting.types || "",
-    onlineNotes: meeting.location_notes || "",
-    online: !!meeting.conference_url, // If there's a URL, it's likely online
-    link: meeting.conference_url || null,
-    // Include other relevant fields if they exist on the source `meeting` object
-    notes: meeting.notes,
-    formattedAddress: meeting.formatted_address,
-    // Add any other fields from the Meeting type that might be present in the source
-  };
+  const meeting: Partial<Meeting> = {};
+  let day = meeting.day || "";
+  if (typeof day === "number") {
+    day = moment.weekdays(day);
+  }
 
-  // Clean undefined properties
-  Object.keys(baseMeetingData).forEach(
-    (key) =>
-      baseMeetingData[key as keyof Meeting] === undefined &&
-      delete baseMeetingData[key as keyof Meeting]
+  meeting.name = apiMeeting.name;
+  meeting.time =
+    apiMeeting.time?.substring(0, apiMeeting.time?.lastIndexOf(":")) || "";
+  meeting.street = apiMeeting.address;
+  meeting.address = `${apiMeeting.address}, ${apiMeeting.city}, ${apiMeeting.state} ${apiMeeting.postal_code}`;
+  meeting.city = apiMeeting.city;
+  meeting.state = apiMeeting.state;
+  meeting.zip = apiMeeting.postal_code;
+  meeting.types = apiMeeting.types || "";
+  meeting.lat = parseFloat(apiMeeting.latitude);
+  meeting.lng = parseFloat(apiMeeting.longitude);
+  meeting.geohash = ngeohash.encode(
+    apiMeeting.latitude,
+    apiMeeting.longitude,
+    GEOHASH_PRECISION
+  ); // Add geohash
+  meeting.country = apiMeeting.country || "USA";
+  meeting.locationName = apiMeeting.location;
+  meeting.type = "AA";
+  meeting.day = day;
+  meeting.formattedAddress = apiMeeting.formatted_address;
+  meeting.online = !!(
+    apiMeeting.conference_url ||
+    apiMeeting.conference_phone ||
+    apiMeeting.types?.includes("ONL") ||
+    apiMeeting.types?.includes("HYB")
   );
+  meeting.link = apiMeeting.conference_url;
+  meeting.onlineNotes =
+    apiMeeting.conference_url_notes || apiMeeting.conference_phone_notes;
+  meeting.format = apiMeeting.types || "";
+  meeting.notes = apiMeeting.notes;
+  meeting.locationNotes = apiMeeting.location_notes;
+  meeting.groupName = apiMeeting.group;
+  meeting.timezone = apiMeeting.timezone;
+  meeting.venmo = apiMeeting.venmo;
+  meeting.square = apiMeeting.square;
+  meeting.paypal = apiMeeting.paypal;
+  // Fields set by script
+  meeting.verified = true;
+  meeting.addedBy = "system";
+  meeting.createdAt = new Date();
+  meeting.updatedAt = new Date();
 
-  return baseMeetingData as Omit<
-    Meeting,
-    "id" | "groupId" | "createdAt" | "updatedAt"
-  >;
+  // Now generate the hash ID *from* the populated meeting object
+  meeting.id = generateMeetingHash(meeting as Meeting);
+
+  return meeting as Omit<Meeting, "groupId">;
 }
 
 export function hasNameOverlap(meeting: any, groupName: string): boolean {

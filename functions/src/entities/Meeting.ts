@@ -115,3 +115,45 @@ export interface MeetingDocument {
   temporaryNotice?: string | null;
   isCancelledTemporarily?: boolean;
 }
+
+export interface MeetingGuideMeeting {
+  id: number;
+  name: string;
+  notes: string | null;
+  day: number;
+  time: string; // Format: "HH:MM:SS"
+  end_time: string | null;
+  time_periods: string[];
+  url: string;
+  types: string;
+  type_codes: string;
+  updated_at: string; // Format: "YYYY-MM-DD HH:MM:SS"
+  group: string;
+  group_notes: string | null;
+  venmo: string | null;
+  paypal: string | null;
+  square: string | null;
+  conference_provider: string | null;
+  conference_url: string | null;
+  conference_url_notes: string | null;
+  conference_phone: string | null;
+  conference_phone_notes: string | null;
+  organization_id: number;
+  organization: string;
+  contacts: any[]; // Can be made more specific if contact structure is known
+  distance: number;
+  location_id: number;
+  location: string;
+  location_notes: string;
+  latitude: string;
+  longitude: string;
+  formatted_address: string;
+  address: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  approximate: number;
+  county: string | null;
+  country: string;
+  timezone: string;
+}

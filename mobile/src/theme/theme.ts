@@ -45,6 +45,7 @@ export const theme = {
       primary: '#FFFFFF',
       secondary: '#F5F5F5',
       tertiary: '#EEEEEE',
+      paper: '#FFFFFF',
     },
   },
   typography: {

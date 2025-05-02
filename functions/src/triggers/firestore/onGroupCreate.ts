@@ -97,10 +97,14 @@ export const onGroupCreateFetchMeetings = functionsV1.firestore
       for (const meeting of relevantMeetings) {
         const formattedMeeting = formatMeetingForFirestore(meeting);
         // Use a consistent hashing function if available, otherwise use API ID or generate one
-        const meetingId =
-          meeting.slug ||
-          generateMeetingHash(formattedMeeting as any) ||
-          meetingsCollection.doc().id; // Fallback to auto-ID
+        const meetingId = generateMeetingHash(formattedMeeting as Meeting);
+
+        if (meetingId !== meeting.id) {
+          throw new Error(
+            `Meeting ID mismatch for ${meeting.name}. Expected ${meeting.id}, got ${meetingId}`
+          );
+        }
+
         const meetingDocRef = meetingsCollection.doc(meetingId);
 
         // Check if meeting already exists (basic check)
@@ -112,7 +116,7 @@ export const onGroupCreateFetchMeetings = functionsV1.firestore
             groupId: groupId,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            addedBy: "trigger:onGroupCreate", // Indicate source
+            addedBy: "system", // Indicate source
             verified: true, // Assume verified from source initially
           });
           meetingsCreated++;

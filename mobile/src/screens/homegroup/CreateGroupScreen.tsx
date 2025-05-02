@@ -15,8 +15,8 @@ import {
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RouteProp, useNavigation, useRoute} from '@react-navigation/native';
 import {MainStackParamList, Meeting, MeetingType, HomeGroup} from '../../types';
-import Input from '../../components/common/Input';
-import Button from '../../components/common/Button';
+import {Input} from '../../components/common/Input';
+import {Button} from '../../components/common/Button';
 import DayPicker from '../../components/groups/DayPicker';
 import TimePicker from '../../components/groups/TimePicker';
 import MeetingTypeSelector from '../../components/groups/MeetingTypeSelector';
@@ -280,18 +280,7 @@ const CreateGroupScreen: React.FC = () => {
       // create a default meeting
       if (meetings.length === 0) {
         const defaultMeeting: MeetingFormData = {
-          id: generateMeetingHash({
-            name: groupName,
-            type: groupType,
-            day: '',
-            time: '',
-            location: '',
-            online: false,
-            verified: true,
-            addedBy: auth().currentUser?.uid || '',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }),
+          id: '',
           name: groupName,
           day: '',
           time: '',
@@ -854,7 +843,7 @@ const CreateGroupScreen: React.FC = () => {
             {currentMeeting.online ? (
               <Input
                 label="Online Meeting Link"
-                value={currentMeeting.link}
+                value={currentMeeting.link || ''}
                 onChangeText={value => updateCurrentMeeting('link', value)}
                 error={errors.link}
                 placeholder="Enter online meeting link"
@@ -873,7 +862,7 @@ const CreateGroupScreen: React.FC = () => {
 
                 <LocationPicker
                   label="Address"
-                  initialAddress={getMeetingAddress(currentMeeting)}
+                  initialAddress={getMeetingAddress(currentMeeting) || ''}
                   initialLocation={
                     currentMeeting.lat && currentMeeting.lng
                       ? {
@@ -883,8 +872,6 @@ const CreateGroupScreen: React.FC = () => {
                       : undefined
                   }
                   onLocationSelect={location => {
-                    console.log('LocationPicker selected location:', location);
-
                     // Prepare updates object with initial values
                     const locationUpdates: Partial<MeetingFormData> = {
                       address: location.address || '',

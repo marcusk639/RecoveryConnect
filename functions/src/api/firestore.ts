@@ -11,10 +11,6 @@ export async function getMeetingsWhere(attribute: string, value: string) {
   return meetingCollection.where(attribute, "==", value).get();
 }
 
-export async function getMeetings() {
-  return meetingCollection.where("type", "==", "Custom").get();
-}
-
 export async function getNaMeetings(
   lat: any,
   lng: any,
