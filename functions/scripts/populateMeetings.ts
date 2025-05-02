@@ -7,7 +7,7 @@ import * as crypto from "crypto"; // Import crypto module
 
 // --- Configuration ---
 const SERVICE_ACCOUNT_PATH = "./recovery-connect.json"; // Ensure this env var is set
-const FIRESTORE_COLLECTION = "homegroups-meetings";
+const FIRESTORE_COLLECTION = "meetings";
 const MEETING_GUIDE_API_URL = "https://api.meetingguide.org/app/v2/request"; // Using the correct v2 URL
 const BATCH_SIZE = 400; // Firestore batch write limit is 500, stay below it
 const DELAY_MS = 500; // Delay between API calls to avoid rate limiting
@@ -74,9 +74,18 @@ interface ApiMeeting {
 
 // Define the target Firestore Meeting structure using the class
 class Meeting {
-  name = "";
-  time = "";
-  address?: string; // Using address for the full string from API
+  // Required fields with default values
+  name: string = "";
+  time: string = "";
+  format: string = "";
+  type: string = "AA";
+  verified: boolean = false;
+  addedBy: string = "script:meeting-guide";
+  createdAt: Date = new Date();
+  updatedAt: Date = new Date();
+
+  // Optional fields
+  address?: string;
   city?: string;
   state?: string;
   street?: string;
@@ -85,30 +94,23 @@ class Meeting {
   types?: string;
   lat?: number;
   lng?: number;
-  geohash?: string; // Added for geohashing
+  geohash?: string;
   country?: string;
-  locationName?: string; // Building Name / Location details from API
-  type?: "AA"; // Hardcoding for this script
-  day?: string; // Store as string "0"-"6"
+  locationName?: string;
+  day?: string;
   online?: boolean;
   link?: string;
   onlineNotes?: string;
-  format: string = ""; // Comma-separated string of types
-  id?: string; // Our generated hash ID
-  apiId?: string; // Store the original API ID for reference
-  notes?: string; // Meeting notes
-  locationNotes?: string; // Location-specific notes
-  groupName?: string; // Group name associated with meeting
+  id?: string;
+  apiId?: string;
+  notes?: string;
+  locationNotes?: string;
+  groupName?: string;
   district?: string;
   timezone?: string;
   venmo?: string;
   square?: string;
   paypal?: string;
-  // Fields set by script
-  verified?: boolean;
-  addedBy?: string;
-  createdAt?: Date;
-  updatedAt?: Date; // Corresponds to API 'updated' field
 }
 
 // --- Helper Functions ---
@@ -154,6 +156,57 @@ export function generateMeetingHash(meeting: Meeting): string {
 
   // Return a significant portion (e.g., first 24 chars) for practical uniqueness
   return hash.substring(0, 24);
+}
+
+/**
+ * Parses the street address from a formatted address string.
+ * Handles various formats and edge cases.
+ * @param formattedAddress The full formatted address string
+ * @returns The parsed street address or undefined if parsing fails
+ */
+function parseStreetAddress(formattedAddress?: string): string | undefined {
+  if (!formattedAddress) return undefined;
+
+  try {
+    // Remove country if present (e.g., ", USA")
+    const addressWithoutCountry = formattedAddress.replace(
+      /,?\s*[A-Z]{2,3}$/,
+      ""
+    );
+
+    // Split by commas and trim whitespace
+    const parts = addressWithoutCountry.split(",").map((part) => part.trim());
+
+    // The street address is typically the first part
+    // But we need to handle cases where it might be empty or malformed
+    if (parts.length > 0) {
+      const streetPart = parts[0];
+
+      // Validate that this looks like a street address
+      // Should contain at least one number and some text
+      if (/^\d+\s+[A-Za-z\s]+$/.test(streetPart)) {
+        return streetPart;
+      }
+
+      // If the first part doesn't look like a street address,
+      // try to find a part that does
+      for (const part of parts) {
+        if (/^\d+\s+[A-Za-z\s]+$/.test(part)) {
+          return part;
+        }
+      }
+    }
+
+    // If we couldn't find a valid street address, return the first part
+    // This handles cases where the address might be in a different format
+    return parts[0] || undefined;
+  } catch (error) {
+    console.warn(
+      `Error parsing street address from "${formattedAddress}":`,
+      error
+    );
+    return undefined;
+  }
 }
 
 // Function to fetch meetings from the API with retries
@@ -216,7 +269,7 @@ function mapApiToFirestore(apiMeeting: ApiMeeting): Meeting | null {
     return null;
   }
 
-  // Validate day string ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+  // Validate day string
   let validDay: string | undefined = undefined;
   if (apiMeeting.day !== undefined && apiMeeting.day !== null) {
     const dayNum = parseInt(apiMeeting.day, 10);
@@ -229,17 +282,13 @@ function mapApiToFirestore(apiMeeting: ApiMeeting): Meeting | null {
     }
   }
 
-  let parsedUpdatedAt: Date | undefined = undefined;
+  // Parse updated date
+  let parsedUpdatedAt: Date = new Date();
   if (apiMeeting.updated) {
     try {
-      // Attempt to parse the date string (might need adjustments based on exact format)
-      const updatedDate = new Date(apiMeeting.updated.replace(" ", "T") + "Z"); // Assume UTC if no offset
+      const updatedDate = new Date(apiMeeting.updated.replace(" ", "T") + "Z");
       if (!isNaN(updatedDate.getTime())) {
         parsedUpdatedAt = updatedDate;
-      } else {
-        console.warn(
-          `Invalid updated date format for meeting ${apiMeeting.id}: ${apiMeeting.updated}`
-        );
       }
     } catch (e) {
       console.warn(
@@ -251,35 +300,39 @@ function mapApiToFirestore(apiMeeting: ApiMeeting): Meeting | null {
 
   const meeting = new Meeting();
 
-  // Populate the Meeting instance first
-  meeting.name = apiMeeting.name;
+  // Required fields
+  meeting.name = apiMeeting.name || "Unnamed Meeting";
   meeting.time =
     apiMeeting.time?.substring(0, apiMeeting.time?.lastIndexOf(":")) || "";
-  meeting.street = apiMeeting.address;
-  meeting.address = `${apiMeeting.address}, ${apiMeeting.city}, ${apiMeeting.state} ${apiMeeting.postal_code}`;
+  meeting.format = apiMeeting.types || "";
+  meeting.type = "AA";
+  meeting.verified = true;
+  meeting.addedBy = "system";
+  meeting.createdAt = new Date();
+  meeting.updatedAt = parsedUpdatedAt;
+
+  // Optional fields
+  const streetAddress = parseStreetAddress(apiMeeting.formatted_address);
+  meeting.street = streetAddress || apiMeeting.address;
+  meeting.address =
+    apiMeeting.formatted_address ||
+    `${apiMeeting.address}, ${apiMeeting.city}, ${apiMeeting.state} ${apiMeeting.postal_code}`;
   meeting.city = apiMeeting.city;
   meeting.state = apiMeeting.state;
   meeting.zip = apiMeeting.postal_code;
-  meeting.types = apiMeeting.types || "";
+  meeting.types = apiMeeting.types;
   meeting.lat = latitude;
   meeting.lng = longitude;
-  meeting.geohash = ngeohash.encode(latitude, longitude, GEOHASH_PRECISION); // Add geohash
+  meeting.geohash = ngeohash.encode(latitude, longitude, GEOHASH_PRECISION);
   meeting.country = apiMeeting.country;
   meeting.locationName = apiMeeting.location;
-  meeting.type = "AA";
   meeting.day = validDay;
   meeting.formattedAddress = apiMeeting.formatted_address;
-  meeting.online = !!(
-    apiMeeting.conference_url ||
-    apiMeeting.conference_phone ||
-    apiMeeting.types?.includes("ONL") ||
-    apiMeeting.types?.includes("HYB")
-  );
+  meeting.online = !!(apiMeeting.conference_url || apiMeeting.conference_phone);
   meeting.link = apiMeeting.conference_url;
   meeting.onlineNotes =
     apiMeeting.conference_url_notes || apiMeeting.conference_phone_notes;
-  meeting.format = apiMeeting.types || "";
-  meeting.apiId = apiMeeting.id; // Store original API ID for reference
+  meeting.apiId = apiMeeting.id;
   meeting.notes = apiMeeting.notes;
   meeting.locationNotes = apiMeeting.location_notes;
   meeting.groupName = apiMeeting.group;
@@ -288,20 +341,11 @@ function mapApiToFirestore(apiMeeting: ApiMeeting): Meeting | null {
   meeting.venmo = apiMeeting.venmo;
   meeting.square = apiMeeting.square;
   meeting.paypal = apiMeeting.paypal;
-  // Fields set by script
-  meeting.verified = true;
-  meeting.addedBy = "script:meeting-guide";
-  meeting.createdAt = new Date();
-  meeting.updatedAt = parsedUpdatedAt || meeting.createdAt; // Use parsed date, fallback to createdAt
 
-  // Now generate the hash ID *from* the populated meeting object
+  // Generate ID after all fields are populated
   meeting.id = generateMeetingHash(meeting);
 
-  // Convert class instance to a plain object for Firestore batch write
-  // This also implicitly handles removing undefined optional fields
-  const meetingObject = { ...meeting };
-
-  return meetingObject as Meeting; // Cast back for type consistency if needed
+  return meeting;
 }
 
 /**
@@ -366,7 +410,7 @@ async function populateMeetings() {
 
               const docRef = meetingsCollection.doc(mappedMeetingData.id);
 
-              console.log("Adding meeting to batch:", cleanedMeetingData.id);
+              console.log("Adding meeting to batch:", cleanedMeetingData);
               // Use the cleaned object for the batch operation
               batch.set(docRef, cleanedMeetingData, { merge: true });
 

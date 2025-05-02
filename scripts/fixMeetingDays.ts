@@ -4,7 +4,7 @@ import * as path from "path";
 
 // --- Configuration ---
 const SERVICE_ACCOUNT_PATH = "./recovery-connect.json";
-const FIRESTORE_COLLECTION = "homegroups-meetings";
+const FIRESTORE_COLLECTION = "meetings";
 const BATCH_SIZE = 400;
 const DELAY_MS = 500;
 const RETRY_LIMIT = 3;

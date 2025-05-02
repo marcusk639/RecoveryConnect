@@ -210,7 +210,7 @@ export async function getCustomMeetings(
     const start = Date.now();
     let query: Query = admin
       .firestore()
-      .collection("homegroups-meetings")
+      .collection("meetings")
       .where("type", "==", "Custom");
 
     // Apply day filter if provided
@@ -332,7 +332,7 @@ export async function getAlcoholicsAnonymousMeetings(
 
   try {
     const db = admin.firestore();
-    const meetingsCollection = db.collection("homegroups-meetings");
+    const meetingsCollection = db.collection("meetings");
     let baseQuery: Query = meetingsCollection.where("type", "==", "AA");
     let results: Meeting[] = [];
 

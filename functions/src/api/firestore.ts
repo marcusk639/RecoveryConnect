@@ -1,7 +1,7 @@
 import { getQueriesForDocumentsAround } from "../utils/meetings";
 import { db } from "../utils/firebase";
 
-export const meetingCollection = db.collection("homegroups-meetings");
+export const meetingCollection = db.collection("meetings");
 
 /**
  * Gets houses where attribute == value

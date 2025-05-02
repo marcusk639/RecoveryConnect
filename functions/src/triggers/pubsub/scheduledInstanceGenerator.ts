@@ -27,7 +27,7 @@ export const generateMonthlyMeetingInstances = functionsV1.pubsub // Renamed for
           const groupTimezone = groupData?.timezone || "UTC";
 
           const meetingsSnapshot = await db
-            .collection("homegroups-meetings")
+            .collection("meetings")
             .where("groupId", "==", groupId)
             .get();
 
