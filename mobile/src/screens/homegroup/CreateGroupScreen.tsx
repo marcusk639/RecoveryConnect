@@ -62,7 +62,6 @@ const CreateGroupScreen: React.FC = () => {
       : '',
   );
   const [foundedDate, setFoundedDate] = useState<string>('');
-  const [placeName, setPlaceName] = useState<string>('');
   const [groupType, setGroupType] = useState<MeetingType>(
     initialMeeting ? initialMeeting.type : 'AA',
   );
@@ -701,12 +700,6 @@ const CreateGroupScreen: React.FC = () => {
         onClose={() => {}}
         onSelect={date => setFoundedDate(date?.toISOString() || '')}
         initialDate={foundedDate ? new Date(foundedDate) : undefined}
-      />
-      <Input
-        label="Place Name (Optional)"
-        value={placeName}
-        onChangeText={setPlaceName}
-        placeholder="Enter place name"
       />
     </View>
   );

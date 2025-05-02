@@ -33,8 +33,11 @@ interface SponsorshipRequestDocument {
 }
 
 interface SponsorshipDocument {
+  groupId: string;
   sponsorId: string;
   sponseeId: string;
+  sponsorName: string;
+  sponseeName: string;
   status: 'active' | 'completed' | 'terminated';
   startDate: Timestamp;
   endDate?: Timestamp;
@@ -85,9 +88,12 @@ class SponsorModel {
       sponseeId: data.sponseeId,
       status: data.status,
       startDate: data.startDate.toDate(),
-      endDate: data.endDate?.toDate(),
+      endDate: data.endDate?.toDate() || null,
       createdAt: data.createdAt.toDate(),
       updatedAt: data.updatedAt.toDate(),
+      groupId: data.groupId,
+      sponsorName: data.sponsorName,
+      sponseeName: data.sponseeName,
     };
   }
 
@@ -280,8 +286,6 @@ class SponsorModel {
     try {
       const chatId = [sponsorId, sponseeId].sort().join('_');
       const snapshot = await firestore()
-        .collection('groups')
-        .doc(groupId)
         .collection('sponsorChats')
         .doc(chatId)
         .collection('messages')
@@ -309,8 +313,6 @@ class SponsorModel {
     try {
       const chatId = [sponsorId, sponseeId].sort().join('_');
       await firestore()
-        .collection('groups')
-        .doc(groupId)
         .collection('sponsorChats')
         .doc(chatId)
         .collection('messages')

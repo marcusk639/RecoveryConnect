@@ -343,10 +343,26 @@ const MeetingsScreen: React.FC = () => {
 
   // Helper to format time string (HH:MM) to AM/PM
   const formatMeetingTime = (timeString?: string): string => {
-    if (!timeString || !moment(timeString, 'HH:mm').isValid()) {
+    if (!timeString) {
       return 'Time TBD';
     }
-    return moment(timeString, 'HH:mm').format('h:mm A');
+
+    // Try different formats
+    const formats = [
+      'HH:mm:ss', // Military time with seconds
+      'HH:mm', // Military time
+      'hh:mm:ss A', // 12-hour with seconds and AM/PM
+      'hh:mm A', // 12-hour with AM/PM
+    ];
+
+    for (const format of formats) {
+      const momentTime = moment(timeString, format);
+      if (momentTime.isValid()) {
+        return momentTime.format('h:mm A');
+      }
+    }
+
+    return 'Time TBD';
   };
 
   const formatDayAndTime = (meeting: Meeting): string => {
@@ -641,7 +657,7 @@ const MeetingsScreen: React.FC = () => {
             label="Search for meetings near..."
           />
           <TouchableOpacity
-            style={styles.useMyLocationButton}
+            style={[styles.useMyLocationButton, {zIndex: 0}]}
             onPress={() => {
               setShowLocationPicker(false);
             }}
@@ -1414,6 +1430,7 @@ const styles = StyleSheet.create({
   locationModalContent: {
     flex: 1,
     padding: 16,
+    zIndex: 1,
   },
   useMyLocationButton: {
     marginTop: 16,

@@ -1,10 +1,13 @@
 export interface Sponsorship {
   id: string;
+  groupId: string;
   sponsorId: string;
   sponseeId: string;
-  status: 'active' | 'completed' | 'terminated';
+  sponsorName: string;
+  sponseeName: string;
   startDate: Date;
-  endDate?: Date;
+  endDate: Date | null;
+  status: 'active' | 'completed' | 'terminated';
   createdAt: Date;
   updatedAt: Date;
 }

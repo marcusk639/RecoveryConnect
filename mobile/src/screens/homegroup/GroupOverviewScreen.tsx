@@ -38,17 +38,14 @@ import {
   GroupMilestone,
 } from '../../store/slices/membersSlice';
 import {
-  fetchUpcomingMeetingInstances,
-  selectUpcomingMeetingInstances,
-  selectMeetingsStatus,
   fetchGroupMeetings,
-  selectGroupMeetingTemplateIds,
-  selectMeetingById,
   selectGroupMeetings,
 } from '../../store/slices/meetingsSlice';
-import {upperFirst} from 'lodash';
+import {
+  fetchGroupSponsorships,
+  selectActiveSponsorship,
+} from '../../store/slices/sponsorshipSlice';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import {RecoveryCelebration} from '../../types/domain';
 
 type GroupOverviewScreenRouteProp = RouteProp<
   GroupStackParamList,
@@ -70,15 +67,12 @@ const GroupOverviewScreen: React.FC = () => {
   const announcements = useAppSelector(state =>
     selectAnnouncementsByGroupId(state, groupId),
   );
-  const members = useAppSelector(state =>
-    selectMembersByGroupId(state, groupId),
-  );
-  const meetingIds = useAppSelector(state =>
-    selectGroupMeetingTemplateIds(state, groupId),
-  );
   const meetings = useAppSelector(state => selectGroupMeetings(state, groupId));
   const celebrations = useAppSelector(state =>
     selectGroupMilestones(state, groupId),
+  );
+  const activeSponsorship = useAppSelector(state =>
+    selectActiveSponsorship(state, groupId),
   );
 
   // Local state
@@ -105,6 +99,7 @@ const GroupOverviewScreen: React.FC = () => {
         dispatch(fetchGroupMembers(groupId)).unwrap(),
         dispatch(fetchGroupMeetings(groupId)).unwrap(),
         dispatch(fetchGroupMilestones({groupId})).unwrap(),
+        dispatch(fetchGroupSponsorships(groupId)).unwrap(),
       ]);
     } catch (error: any) {
       console.error('Error loading group data:', error);
@@ -174,6 +169,19 @@ const GroupOverviewScreen: React.FC = () => {
     navigation.navigate('GroupSponsors', {
       groupId,
       groupName,
+    });
+  };
+
+  const navigateToSponsorChat = () => {
+    if (!activeSponsorship) return;
+
+    navigation.navigate('SponsorChat', {
+      groupId,
+      groupName: group?.name || '',
+      sponsorId: activeSponsorship.sponsorId,
+      sponseeId: activeSponsorship.sponseeId,
+      sponsorName: activeSponsorship.sponsorName,
+      sponseeName: activeSponsorship.sponseeName,
     });
   };
 
@@ -290,8 +298,27 @@ const GroupOverviewScreen: React.FC = () => {
     // Get the next occurrence of this meeting
     const now = new Date();
     const meetingTime = new Date();
-    const [hours, minutes] = meeting.time.split(':').map(Number);
-    meetingTime.setHours(hours, minutes, 0, 0);
+    let time = meeting.time.replace(/^0/, ''); // Remove leading zero
+    let isPM = false;
+
+    if (time.includes('PM')) {
+      time = time.replace('PM', '').trim();
+      isPM = true;
+    } else if (time.includes('AM')) {
+      time = time.replace('AM', '').trim();
+    }
+
+    const [hours, minutes] = time.split(':').map(Number);
+
+    // Handle 12-hour format conversion
+    let adjustedHours = hours;
+    if (isPM && hours !== 12) {
+      adjustedHours = hours + 12;
+    } else if (!isPM && hours === 12) {
+      adjustedHours = 0; // Midnight
+    }
+
+    meetingTime.setHours(adjustedHours, minutes, 0, 0);
 
     // Find the next occurrence of this meeting day
     const days = [
@@ -503,6 +530,30 @@ const GroupOverviewScreen: React.FC = () => {
           <Text style={styles.navTileText}>Service Positions</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Sponsor Section */}
+      {activeSponsorship && (
+        <View style={styles.section} testID="group-sponsor-section">
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Sponsor</Text>
+          </View>
+          <View style={styles.sponsorContainer}>
+            <Text style={styles.sponsorName}>
+              {activeSponsorship.sponsorName}
+            </Text>
+            <Text style={styles.sponsorStatus}>
+              Active since{' '}
+              {new Date(activeSponsorship.startDate).toLocaleDateString()}
+            </Text>
+            <TouchableOpacity
+              style={styles.chatButton}
+              onPress={navigateToSponsorChat}>
+              <Icon name="message-text" size={20} color="#2196F3" />
+              <Text style={styles.chatButtonText}>Chat with Sponsor</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Admin Actions */}
       {group.admins && group.admins.includes(auth().currentUser?.uid || '') && (
@@ -1150,6 +1201,36 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 14,
+  },
+  sponsorContainer: {
+    padding: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+  },
+  sponsorName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#212121',
+    marginBottom: 4,
+  },
+  sponsorStatus: {
+    fontSize: 14,
+    color: '#757575',
+    marginBottom: 12,
+  },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  chatButtonText: {
+    color: '#2196F3',
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
 

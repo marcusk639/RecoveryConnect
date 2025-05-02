@@ -15,8 +15,18 @@ import {RootState} from '../types';
 import {Timestamp} from '../../types/schema';
 
 // Define proper entity types
-export interface SponsorshipEntity extends Sponsorship {
+export interface SponsorshipEntity {
   id: string;
+  groupId: string;
+  sponsorId: string;
+  sponseeId: string;
+  sponsorName: string;
+  sponseeName: string;
+  startDate: string;
+  endDate: string | null;
+  status: 'active' | 'ended' | 'pending';
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SponsorEntity {
@@ -41,7 +51,8 @@ export interface SponsorshipRequestEntity {
 // Create entity adapters for better performance
 const sponsorshipsAdapter = createEntityAdapter({
   selectId: (sponsorship: SponsorshipEntity) => sponsorship.id,
-  sortComparer: (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  sortComparer: (a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
 });
 
 const sponsorsAdapter = createEntityAdapter({
@@ -79,6 +90,27 @@ const initialState: SponsorshipState = {
   sponsorshipRequests: sponsorshipRequestsAdapter.getInitialState(),
   groupSponsors: {},
 };
+
+const convertToSponsorshipEntity = (
+  sponsorship: Sponsorship,
+): SponsorshipEntity => ({
+  id: sponsorship.id,
+  groupId: sponsorship.groupId,
+  sponsorId: sponsorship.sponsorId,
+  sponseeId: sponsorship.sponseeId,
+  sponsorName: sponsorship.sponsorName,
+  sponseeName: sponsorship.sponseeName,
+  startDate: sponsorship.startDate.toISOString(),
+  endDate: sponsorship.endDate?.toISOString() || null,
+  status:
+    sponsorship.status === 'completed'
+      ? 'ended'
+      : sponsorship.status === 'terminated'
+      ? 'ended'
+      : sponsorship.status,
+  createdAt: sponsorship.createdAt.toISOString(),
+  updatedAt: sponsorship.updatedAt.toISOString(),
+});
 
 export const fetchGroupSponsorships = createAsyncThunk(
   'sponsorship/fetchGroupSponsorships',
@@ -250,7 +282,8 @@ const sponsorshipSlice = createSlice({
       })
       .addCase(fetchGroupSponsorships.fulfilled, (state, action) => {
         state.loading = false;
-        sponsorshipsAdapter.setAll(state.sponsorships, action.payload);
+        const entities = action.payload.map(convertToSponsorshipEntity);
+        sponsorshipsAdapter.setAll(state.sponsorships, entities);
       })
       .addCase(fetchGroupSponsorships.rejected, (state, action) => {
         state.loading = false;
@@ -282,9 +315,14 @@ const sponsorshipSlice = createSlice({
         const {sponsorshipId, status} = action.payload;
         const sponsorship = state.sponsorships.entities[sponsorshipId];
         if (sponsorship) {
-          sponsorship.status = status;
+          sponsorship.status =
+            status === 'completed'
+              ? 'ended'
+              : status === 'terminated'
+              ? 'ended'
+              : status;
           if (status !== 'active') {
-            sponsorship.endDate = new Date();
+            sponsorship.endDate = new Date().toISOString();
           }
         }
       })
@@ -464,6 +502,18 @@ export const selectCurrentSponsees = createSelector(
     return sponsorships.filter(
       s => s.sponsorId === userId && s.status === 'active',
     ).length;
+  },
+);
+
+export const selectActiveSponsorship = createSelector(
+  [selectAllSponsorships, (state, groupId: string) => groupId],
+  (sponsorships, groupId) => {
+    return sponsorships.find(
+      sponsorship =>
+        sponsorship.groupId === groupId &&
+        sponsorship.status === 'active' &&
+        sponsorship.endDate === null,
+    );
   },
 );
 
