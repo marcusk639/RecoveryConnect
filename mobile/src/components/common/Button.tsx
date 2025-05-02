@@ -24,6 +24,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   testID?: string;
+  fullWidth?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -36,6 +37,7 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
   testID,
+  fullWidth = false,
 }) => {
   const scaleValue = React.useRef(new Animated.Value(1)).current;
 
@@ -136,6 +138,7 @@ export const Button: React.FC<ButtonProps> = ({
         styles.container,
         getVariantStyles(),
         getSizeStyles(),
+        fullWidth && styles.fullWidth,
         style,
         {transform: [{scale: scaleValue}]},
       ]}>
@@ -175,6 +178,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
     overflow: 'hidden',
     ...theme.shadows.sm,
+  },
+  fullWidth: {
+    width: '100%',
   },
   touchable: {
     flex: 1,

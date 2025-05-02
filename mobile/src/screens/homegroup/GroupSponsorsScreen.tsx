@@ -25,6 +25,7 @@ import {
 import {GroupStackParamList} from '../../types/navigation';
 import {Timestamp} from '../../types/schema';
 import moment from 'moment';
+import {RootState} from '../../store/types';
 
 interface Sponsor {
   id: string;
@@ -56,10 +57,8 @@ const GroupSponsorsScreen: React.FC = () => {
   const dispatch = useAppDispatch();
   const {groupId} = route.params;
 
-  const sponsors = useAppSelector(state => selectGroupSponsors(state, groupId));
-  const requests = useAppSelector(state =>
-    selectSponsorshipRequests(state, groupId),
-  );
+  const sponsors = useAppSelector(state => selectGroupSponsors(state));
+  const requests = useAppSelector(state => selectSponsorshipRequests(state));
   const [loading, setLoading] = useState(true);
   const [requestModalVisible, setRequestModalVisible] = useState(false);
   const [selectedSponsor, setSelectedSponsor] = useState<Sponsor | null>(null);

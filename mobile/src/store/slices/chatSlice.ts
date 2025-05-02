@@ -10,11 +10,11 @@ import {RootState} from '../types';
 import {ChatModel, GroupChat, ChatMessage} from '../../models/ChatModel';
 
 // Define entity types
-interface ChatMessageEntity extends ChatMessage {
+export interface ChatMessageEntity extends ChatMessage {
   id: string;
 }
 
-interface GroupChatEntity extends GroupChat {
+export interface GroupChatEntity extends GroupChat {
   id: string;
 }
 
@@ -242,8 +242,25 @@ const chatSlice = createSlice({
       action: PayloadAction<{groupId: string; messages: ChatMessage[]}>,
     ) => {
       const {groupId, messages} = action.payload;
+
+      // Update messages in the entity adapter
       messagesAdapter.upsertMany(state.messages, messages);
-      state.groupMessageIds[groupId] = messages.map(m => m.id);
+
+      // Get existing message IDs for this group
+      const existingMessageIds = state.groupMessageIds[groupId] || [];
+
+      // Get new message IDs that aren't already in the list
+      const newMessageIds = messages
+        .map(m => m.id)
+        .filter(id => !existingMessageIds.includes(id));
+
+      // Update the group's message IDs, maintaining order
+      state.groupMessageIds[groupId] = [
+        ...existingMessageIds,
+        ...newMessageIds,
+      ];
+
+      // Update last fetched timestamp
       state.lastFetched[groupId] = Date.now();
     },
   },
@@ -389,14 +406,12 @@ export const selectChatError = (state: RootState) => state.chat.error;
 
 export const selectMessagesByGroup = createSelector(
   [
-    messagesSelectors.selectAll,
+    messagesSelectors.selectEntities,
     (state: RootState, groupId: string) =>
       state.chat.groupMessageIds[groupId] || [],
   ],
-  (allMessages, messageIds) => {
-    return messageIds
-      .map(id => allMessages.find(m => m.id === id))
-      .filter(Boolean);
+  (entities, messageIds) => {
+    return messageIds.map(id => entities[id]).filter(Boolean);
   },
 );
 

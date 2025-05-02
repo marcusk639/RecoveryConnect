@@ -710,8 +710,11 @@ const usersSelectors = usersAdapter.getSelectors<RootState>(
 
 export const selectUser = (state: RootState) => state.auth.user;
 export const selectUserData = createSelector(
-  [usersSelectors.selectAll],
-  users => users[0] || null,
+  [usersSelectors.selectAll, (state: RootState) => state.auth.user?.uid],
+  (users, currentUserId) => {
+    if (!currentUserId) return null;
+    return users.find(user => user.id === currentUserId) || null;
+  },
 );
 export const selectAuthStatus = (state: RootState) => state.auth.status;
 export const selectAuthError = (state: RootState) => state.auth.error;

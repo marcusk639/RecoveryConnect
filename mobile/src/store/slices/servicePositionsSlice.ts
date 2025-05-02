@@ -9,7 +9,7 @@ import {ServicePosition} from '../../types';
 import {ServicePositionModel} from '../../models/ServicePositionModel';
 
 // Define proper entity type
-interface ServicePositionEntity extends ServicePosition {
+export interface ServicePositionEntity extends ServicePosition {
   id: string;
 }
 
@@ -228,11 +228,16 @@ export const selectGroupPositionIds = createSelector(
 );
 
 export const selectServicePositionsByGroup = createSelector(
-  [selectAllServicePositions, selectGroupPositionIds],
-  (allPositions, positionIds) => {
-    return positionIds
-      .map(id => allPositions.find(pos => pos.id === id))
-      .filter(Boolean);
+  [
+    (state: RootState) => state.servicePositions.positions,
+    (state: RootState, groupId: string) => groupId,
+  ],
+  (positions, groupId) => {
+    const entities = positions.entities;
+    return Object.values(entities).filter(
+      (position): position is ServicePositionEntity =>
+        position !== undefined && position.groupId === groupId,
+    );
   },
 );
 

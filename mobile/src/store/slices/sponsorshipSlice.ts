@@ -15,11 +15,11 @@ import {RootState} from '../types';
 import {Timestamp} from '../../types/schema';
 
 // Define proper entity types
-interface SponsorshipEntity extends Sponsorship {
+export interface SponsorshipEntity extends Sponsorship {
   id: string;
 }
 
-interface SponsorEntity {
+export interface SponsorEntity {
   id: string;
   displayName: string;
   sobrietyDate: string;
@@ -29,7 +29,7 @@ interface SponsorEntity {
   maxSponsees: number;
 }
 
-interface SponsorshipRequestEntity {
+export interface SponsorshipRequestEntity {
   id: string;
   sponseeId: string;
   sponseeName: string;
@@ -66,6 +66,7 @@ export interface SponsorshipState {
   sponsorshipRequests: ReturnType<
     typeof sponsorshipRequestsAdapter.getInitialState
   >;
+  groupSponsors: Record<string, string[]>;
 }
 
 const initialState: SponsorshipState = {
@@ -76,6 +77,7 @@ const initialState: SponsorshipState = {
   error: null,
   sponsors: sponsorsAdapter.getInitialState(),
   sponsorshipRequests: sponsorshipRequestsAdapter.getInitialState(),
+  groupSponsors: {},
 };
 
 export const fetchGroupSponsorships = createAsyncThunk(
@@ -236,6 +238,7 @@ const sponsorshipSlice = createSlice({
       state.error = null;
       state.sponsors = sponsorsAdapter.getInitialState();
       state.sponsorshipRequests = sponsorshipRequestsAdapter.getInitialState();
+      state.groupSponsors = {};
     },
   },
   extraReducers: builder => {
@@ -314,6 +317,9 @@ const sponsorshipSlice = createSlice({
       })
       .addCase(fetchGroupSponsors.fulfilled, (state, action) => {
         state.loading = false;
+        state.groupSponsors[action.meta.arg] = action.payload.map(
+          sponsor => sponsor.id,
+        );
         state.sponsors.ids = action.payload.map(sponsor => sponsor.id);
         state.sponsors.entities = action.payload.reduce<
           Record<string, SponsorEntity>
@@ -425,12 +431,22 @@ export const selectAllSponsorships = createSelector(
 
 export const selectGroupSponsors = createSelector(
   [(state: RootState) => state.sponsorship.sponsors],
-  sponsors => sponsorsAdapter.getSelectors().selectAll(sponsors),
+  sponsors =>
+    sponsorsAdapter
+      .getSelectors()
+      .selectAll(sponsors)
+      .filter((sponsor): sponsor is SponsorEntity => sponsor !== undefined),
 );
 
 export const selectSponsorshipRequests = createSelector(
   [(state: RootState) => state.sponsorship.sponsorshipRequests],
-  requests => sponsorshipRequestsAdapter.getSelectors().selectAll(requests),
+  requests =>
+    sponsorshipRequestsAdapter
+      .getSelectors()
+      .selectAll(requests)
+      .filter(
+        (request): request is SponsorshipRequestEntity => request !== undefined,
+      ),
 );
 
 export const selectSponsorSettings = (state: RootState) =>

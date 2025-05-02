@@ -10,7 +10,7 @@ import {AnnouncementModel} from '../../models/AnnouncementModel';
 import {RootState} from '../types';
 
 // Define proper entity type
-interface AnnouncementEntity extends Announcement {
+export interface AnnouncementEntity extends Announcement {
   id: string;
 }
 
@@ -291,11 +291,26 @@ export const selectAnnouncementById = (
 };
 
 export const selectGroupAnnouncements = createSelector(
-  [selectAllAnnouncements, selectGroupAnnouncementIds],
-  (allAnnouncements, announcementIds) => {
-    return announcementIds
-      .map(id => allAnnouncements.find(a => a.id === id))
-      .filter(Boolean);
+  [
+    announcementsAdapter.getSelectors().selectEntities,
+    selectGroupAnnouncementIds,
+  ],
+  (entities, announcementIds) => {
+    return announcementIds.map(id => entities[id]).filter(Boolean);
+  },
+);
+
+const announcementsSelectors = announcementsAdapter.getSelectors<RootState>(
+  state => state.announcements.announcements,
+);
+
+export const selectAnnouncementsByGroupId = createSelector(
+  [
+    announcementsSelectors.selectEntities,
+    (state: RootState, groupId: string) => groupId,
+  ],
+  (entities, groupId) => {
+    return Object.values(entities).filter(a => a.groupId === groupId);
   },
 );
 

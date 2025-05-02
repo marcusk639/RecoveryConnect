@@ -234,6 +234,7 @@ export const fetchUpcomingMeetingInstances = createAsyncThunk(
 // HELPERS
 function getNextMeetingDate(dayOfWeek: string, time: string): Date | null {
   const days = DAYS_OF_WEEK;
+  if (typeof dayOfWeek !== 'string' || typeof time !== 'string') return null;
   const targetDayIndex = days.indexOf(dayOfWeek.toLowerCase() as DayOfWeek);
   if (targetDayIndex === -1) return null;
 
@@ -384,16 +385,22 @@ export const selectUpcomingMeetingInstances = createSelector(
 
 export const selectMeetingsStatus = (state: RootState) => state.meetings.status;
 export const selectMeetingsError = (state: RootState) => state.meetings.error;
-export const selectAllMeetings = createSelector(
-  [selectAllMeetingTemplates],
-  meetings => meetings,
-);
 export const selectUserLocation = (state: RootState) =>
   state.meetings.userLocation;
 export const selectGroupMeetings = createSelector(
-  [selectAllMeetings, selectGroupMeetingTemplateIds],
-  (allMeetings, groupIds) => {
-    return groupIds.map(id => allMeetings[id]).filter(Boolean);
+  [meetingsSelectors.selectEntities, selectGroupMeetingTemplateIds],
+  (entities, groupIds) => {
+    return groupIds.map(id => entities[id]).filter(Boolean);
   },
 );
+
+// Define entity types
+export interface MeetingEntity extends Meeting {
+  id: string;
+}
+
+export interface MeetingInstanceEntity extends MeetingInstance {
+  id: string;
+}
+
 export default meetingsSlice.reducer;

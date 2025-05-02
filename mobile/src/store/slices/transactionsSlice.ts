@@ -11,7 +11,7 @@ import {TreasuryModel} from '../../models/TreasuryModel';
 import {Transaction, TransactionType} from '../../types/domain/treasury';
 
 // Define entity types
-interface TransactionEntity extends Transaction {
+export interface TransactionEntity extends Transaction {
   id: string;
 }
 
@@ -199,10 +199,10 @@ export const selectGroupTransactionIds = (state: RootState, groupId: string) =>
   state.transactions.groupTransactionIds[groupId] || [];
 
 export const selectGroupTransactions = createSelector(
-  [transactionsSelectors.selectAll, selectGroupTransactionIds],
-  (allTransactions, transactionIds) => {
+  [transactionsSelectors.selectEntities, selectGroupTransactionIds],
+  (entities, transactionIds) => {
     const transactions = transactionIds
-      .map(id => allTransactions.find(tx => tx.id === id))
+      .map(id => entities[id])
       .filter((tx): tx is TransactionEntity => tx !== undefined);
     return transactions;
   },

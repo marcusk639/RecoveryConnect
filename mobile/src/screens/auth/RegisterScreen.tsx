@@ -21,8 +21,8 @@ import {
   signInWithFacebook,
 } from '../../services/firebase/auth';
 import {AuthStackParamList} from '../../types';
-import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
+import {Button} from '../../components/common/Button';
+import {Input} from '../../components/common/Input';
 import SocialSignInButton from '../../components/common/SocialSignInButton';
 import DatePicker from '../../components/common/DatePicker';
 import {validateEmail, validatePassword} from '../../utils/validation';

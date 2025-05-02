@@ -347,7 +347,7 @@ const GroupOverviewScreen: React.FC = () => {
               onPress={() => setClaimModalVisible(true)}
               testID="group-overview-claim-button">
               <Text style={styles.claimGroupButtonText}>
-                Is this your group? Claim Admin Access
+                Is this your group? Request admin access
               </Text>
             </TouchableOpacity>
           )}

@@ -180,9 +180,7 @@ export class ChatModel {
     }
     const now = new Date();
     const messageRef = firestore()
-      .collection('groups')
-      .doc(groupId)
-      .collection('messages')
+      .collection(COLLECTION_PATHS.CHAT_MESSAGES(groupId))
       .doc();
     const senderId = isSystemMessage ? 'system' : currentUser!.uid;
     const senderName = isSystemMessage
@@ -194,6 +192,7 @@ export class ChatModel {
 
     // Create the data object directly for Firestore
     const messageData = {
+      id: messageRef.id,
       groupId,
       senderId,
       senderName,

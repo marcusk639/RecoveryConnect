@@ -23,7 +23,7 @@ export class MeetingModel {
   static fromFirestore(doc: FirestoreDocument<MeetingDocument>): Meeting {
     const data = doc.data();
     return {
-      id: doc.id || data.meetingId,
+      id: doc.id,
       meetingId: data.meetingId,
       name: data.name,
       type: data.type as any,

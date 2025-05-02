@@ -21,11 +21,11 @@ export interface GroupMilestone {
 }
 
 // Define entity types
-interface GroupMemberEntity extends GroupMember {
+export interface GroupMemberEntity extends GroupMember {
   id: string;
 }
 
-interface GroupMilestoneEntity extends GroupMilestone {
+export interface GroupMilestoneEntity extends GroupMilestone {
   id: string;
 }
 
@@ -435,12 +435,11 @@ export const selectMemberById = membersSelectors.selectById;
 
 export const selectMembersByGroupId = createSelector(
   [
-    membersSelectors.selectAll,
+    membersSelectors.selectEntities, // returns Record<string, GroupMemberEntity>
     (state: RootState, groupId: string) =>
       state.members.groupMembers[groupId] || [],
   ],
-  (allMembers, memberIds) =>
-    memberIds.map(id => allMembers.find(m => m.id === id)).filter(Boolean),
+  (entities, memberIds) => memberIds.map(id => entities[id]).filter(Boolean),
 );
 
 export const selectGroupAdmins = createSelector(

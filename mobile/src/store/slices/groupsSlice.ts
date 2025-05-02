@@ -523,8 +523,8 @@ export const {clearError} = groupsSlice.actions;
 
 // Optimize selectors with proper memoization
 export const selectAllGroups = createSelector(
-  [(state: RootState) => state.groups.groups],
-  groups => groupsAdapter.getSelectors().selectAll(groups),
+  [groupsAdapter.getSelectors().selectAll],
+  groups => groups,
 );
 
 export const selectMemberGroupIds = createSelector(
@@ -561,6 +561,14 @@ export const selectAdminGroups = createSelector(
       .map(id => allGroups.find(group => group.id === id))
       .filter(Boolean);
   },
+);
+
+export const selectUserGroups = createSelector(
+  [(state: RootState) => state.groups.groups],
+  groups =>
+    Object.values(groups.entities).filter(
+      (group): group is GroupEntity => group !== undefined,
+    ),
 );
 
 // Simple selectors that don't need memoization
