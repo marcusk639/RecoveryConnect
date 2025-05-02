@@ -20,6 +20,7 @@ import {
   selectServicePositionsStatus,
   selectServicePositionsError,
   deleteServicePosition,
+  ServicePositionEntity,
 } from '../../store/slices/servicePositionsSlice';
 import {selectGroupById} from '../../store/slices/groupsSlice'; // To check admin status
 import {ServicePosition} from '../../types';
@@ -102,7 +103,7 @@ const GroupServicePositionsScreen: React.FC = () => {
     );
   };
 
-  const renderItem = ({item}: {item: ServicePosition}) => (
+  const renderItem = ({item}: {item: ServicePositionEntity}) => (
     <View style={styles.positionCard} testID={`service-pos-item-${item.id}`}>
       <View style={styles.positionHeader}>
         <Text style={styles.positionName}>{item.name}</Text>
@@ -181,9 +182,9 @@ const GroupServicePositionsScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.addButton}
           onPress={handleAddPosition}
-          testID="service-pos-add-button">
-          <Icon name="plus-circle-outline" size={24} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>Add New Position</Text>
+          activeOpacity={0.8}>
+          <Icon name="plus" size={24} color="#FFFFFF" />
+          <Text style={styles.addButtonText}>Add Position</Text>
         </TouchableOpacity>
       )}
       {status === 'loading' && positions.length === 0 ? (
@@ -328,17 +329,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   addButton: {
-    flexDirection: 'row',
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
     backgroundColor: '#2196F3',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    elevation: 3,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 28,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    zIndex: 1000,
   },
   addButtonText: {
     color: '#FFFFFF',

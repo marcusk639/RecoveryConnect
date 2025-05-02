@@ -21,6 +21,7 @@ export interface FirestoreDocument<T> {
  */
 
 export interface TransactionDocument {
+  id: string;
   type: 'income' | 'expense';
   amount: number;
   description: string;
@@ -184,6 +185,7 @@ export interface EventDocument {
  * Meeting Document
  */
 export interface MeetingDocument {
+  meetingId?: string;
   name: string;
   type: string; // AA, NA, etc.
   day: string;

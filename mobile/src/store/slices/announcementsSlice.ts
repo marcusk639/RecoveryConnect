@@ -1,20 +1,37 @@
-import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+  createEntityAdapter,
+  createSelector,
+} from '@reduxjs/toolkit';
 import {Announcement} from '../../types';
 import {AnnouncementModel} from '../../models/AnnouncementModel';
-import {createSelector} from 'reselect';
 import {RootState} from '../types';
-// State interface
+
+// Define proper entity type
+export interface AnnouncementEntity extends Announcement {
+  id: string;
+}
+
+// Create entity adapter for better performance
+const announcementsAdapter = createEntityAdapter({
+  selectId: (announcement: AnnouncementEntity) => announcement.id,
+  sortComparer: (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+});
+
+// Update state interface
 export interface AnnouncementsState {
-  items: Record<string, Announcement>;
+  announcements: ReturnType<typeof announcementsAdapter.getInitialState>;
   groupAnnouncementIds: Record<string, string[]>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
-  lastFetchedGroup: Record<string, number>; // Track last fetch time per group
+  lastFetchedGroup: Record<string, number>;
 }
 
 // Initial state
 const initialState: AnnouncementsState = {
-  items: {},
+  announcements: announcementsAdapter.getInitialState(),
   groupAnnouncementIds: {},
   status: 'idle',
   error: null,
@@ -124,7 +141,9 @@ export const updateAnnouncement = createAsyncThunk(
   ) => {
     try {
       const state = getState() as RootState;
-      const currentAnnouncement = state.announcements.items[announcementId];
+      const currentAnnouncement = announcementsAdapter
+        .getSelectors()
+        .selectById(state.announcements.announcements, announcementId);
 
       if (!currentAnnouncement) {
         return rejectWithValue('Announcement not found');
@@ -180,12 +199,8 @@ const announcementsSlice = createSlice({
       .addCase(fetchAnnouncementsForGroup.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, announcements} = action.payload;
-        const announcementIds: string[] = [];
-        announcements.forEach(announcement => {
-          state.items[announcement.id] = announcement;
-          announcementIds.push(announcement.id);
-        });
-        state.groupAnnouncementIds[groupId] = announcementIds;
+        announcementsAdapter.upsertMany(state.announcements, announcements);
+        state.groupAnnouncementIds[groupId] = announcements.map(a => a.id);
         state.lastFetchedGroup[groupId] = Date.now();
         state.error = null;
       })
@@ -200,12 +215,11 @@ const announcementsSlice = createSlice({
       .addCase(createAnnouncement.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const newAnnouncement = action.payload;
-        state.items[newAnnouncement.id] = newAnnouncement;
-        // Add to the specific group's list
+        announcementsAdapter.upsertOne(state.announcements, newAnnouncement);
         if (state.groupAnnouncementIds[newAnnouncement.groupId]) {
           state.groupAnnouncementIds[newAnnouncement.groupId].unshift(
             newAnnouncement.id,
-          ); // Add to beginning
+          );
         } else {
           state.groupAnnouncementIds[newAnnouncement.groupId] = [
             newAnnouncement.id,
@@ -223,7 +237,7 @@ const announcementsSlice = createSlice({
       })
       .addCase(updateAnnouncement.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.items[action.payload.id] = action.payload;
+        announcementsAdapter.upsertOne(state.announcements, action.payload);
         state.error = null;
       })
       .addCase(updateAnnouncement.rejected, (state, action) => {
@@ -238,9 +252,7 @@ const announcementsSlice = createSlice({
       .addCase(deleteAnnouncement.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, announcementId} = action.payload;
-        // Remove from items
-        delete state.items[announcementId];
-        // Remove from group mapping
+        announcementsAdapter.removeOne(state.announcements, announcementId);
         if (state.groupAnnouncementIds[groupId]) {
           state.groupAnnouncementIds[groupId] = state.groupAnnouncementIds[
             groupId
@@ -255,29 +267,58 @@ const announcementsSlice = createSlice({
   },
 });
 
-// Export actions and reducer
-export const {clearAnnouncementsError} = announcementsSlice.actions;
+// Optimize selectors with proper memoization
+export const selectAllAnnouncements = createSelector(
+  [(state: RootState) => state.announcements.announcements],
+  announcements => announcementsAdapter.getSelectors().selectAll(announcements),
+);
 
-// Selectors
-export const selectAllAnnouncements = (state: RootState) =>
-  state.announcements.items;
-export const selectGroupAnnouncementIds = (state: RootState, groupId: string) =>
-  state.announcements.groupAnnouncementIds[groupId] || [];
-
-export const selectAnnouncementsByGroupId = createSelector(
-  [selectAllAnnouncements, selectGroupAnnouncementIds],
-  (allItems, groupIds) => {
-    return groupIds.map(id => allItems[id]).filter(Boolean);
-  },
+export const selectGroupAnnouncementIds = createSelector(
+  [
+    (state: RootState, groupId: string) =>
+      state.announcements.groupAnnouncementIds[groupId] || [],
+  ],
+  announcementIds => announcementIds,
 );
 
 export const selectAnnouncementById = (
   state: RootState,
   announcementId: string,
-) => state.announcements.items[announcementId];
+) => {
+  return announcementsAdapter
+    .getSelectors()
+    .selectById(state.announcements.announcements, announcementId);
+};
+
+export const selectGroupAnnouncements = createSelector(
+  [
+    announcementsAdapter.getSelectors().selectEntities,
+    selectGroupAnnouncementIds,
+  ],
+  (entities, announcementIds) => {
+    return announcementIds.map(id => entities[id]).filter(Boolean);
+  },
+);
+
+const announcementsSelectors = announcementsAdapter.getSelectors<RootState>(
+  state => state.announcements.announcements,
+);
+
+export const selectAnnouncementsByGroupId = createSelector(
+  [
+    announcementsSelectors.selectEntities,
+    (state: RootState, groupId: string) => groupId,
+  ],
+  (entities, groupId) => {
+    return Object.values(entities).filter(a => a.groupId === groupId);
+  },
+);
+
+// Simple selectors that don't need memoization
 export const selectAnnouncementsStatus = (state: RootState) =>
   state.announcements.status;
 export const selectAnnouncementsError = (state: RootState) =>
   state.announcements.error;
 
+export const {clearAnnouncementsError} = announcementsSlice.actions;
 export default announcementsSlice.reducer;

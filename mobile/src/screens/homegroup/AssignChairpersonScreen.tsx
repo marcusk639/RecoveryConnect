@@ -17,10 +17,6 @@ import {
   selectMembersByGroupId,
   fetchGroupMembers,
 } from '../../store/slices/membersSlice';
-import {
-  selectMeetingInstanceById,
-  updateMeetingInstance,
-} from '../../store/slices/meetingsSlice'; // Assuming an update action exists
 import {GroupMember} from '../../types';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {MeetingModel} from '../../models/MeetingModel'; // Direct model call for now

@@ -3,6 +3,7 @@ import {
   createAsyncThunk,
   PayloadAction,
   createSelector,
+  createEntityAdapter,
 } from '@reduxjs/toolkit';
 import auth from '@react-native-firebase/auth';
 import {RootState} from '../types';
@@ -10,9 +11,20 @@ import {HomeGroup, Meeting} from '../../types';
 import {GroupModel} from '../../models/GroupModel';
 import firestore from '@react-native-firebase/firestore';
 
-// Define types
+// Define proper entity types
+interface GroupEntity extends HomeGroup {
+  id: string;
+}
+
+// Create entity adapter for better performance
+const groupsAdapter = createEntityAdapter({
+  selectId: (group: GroupEntity) => group.id,
+  sortComparer: (a, b) => a.name.localeCompare(b.name),
+});
+
+// Update state interface
 export interface GroupsState {
-  items: Record<string, HomeGroup>;
+  groups: ReturnType<typeof groupsAdapter.getInitialState>;
   memberGroups: string[];
   adminGroups: string[];
   nearbyGroups: HomeGroup[];
@@ -21,9 +33,9 @@ export interface GroupsState {
   lastFetched: Record<string, number>;
 }
 
-// Initial state
+// Update initial state
 const initialState: GroupsState = {
-  items: {},
+  groups: groupsAdapter.getInitialState(),
   memberGroups: [],
   adminGroups: [],
   nearbyGroups: [],
@@ -308,7 +320,7 @@ const groupsSlice = createSlice({
         // Add/update groups in the items dictionary
         action.payload.forEach((group: HomeGroup) => {
           if (group.id) {
-            state.items[group.id] = group;
+            groupsAdapter.upsertOne(state.groups, group);
             state.lastFetched[group.id] = Date.now();
           }
         });
@@ -343,7 +355,7 @@ const groupsSlice = createSlice({
 
         // Add/update the group in the items dictionary
         if (action.payload) {
-          state.items[action.payload.id!] = action.payload;
+          groupsAdapter.upsertOne(state.groups, action.payload);
           state.lastFetched[action.payload.id!] = Date.now();
         }
 
@@ -361,7 +373,7 @@ const groupsSlice = createSlice({
       .addCase(createGroup.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const group = action.payload;
-        state.items[group.id!] = group;
+        groupsAdapter.upsertOne(state.groups, group);
 
         // Add to user groups if it's not already there
         if (!state.memberGroups.includes(group.id!)) {
@@ -383,7 +395,7 @@ const groupsSlice = createSlice({
         state.status = 'succeeded';
 
         // Update the group
-        state.items[action.payload.id!] = action.payload;
+        groupsAdapter.upsertOne(state.groups, action.payload);
         state.lastFetched[action.payload.id!] = Date.now();
 
         state.error = null;
@@ -402,7 +414,7 @@ const groupsSlice = createSlice({
 
         if (action.payload) {
           // Update the group
-          state.items[action.payload.id!] = action.payload;
+          groupsAdapter.upsertOne(state.groups, action.payload);
           state.lastFetched[action.payload.id!] = Date.now();
 
           // Add to member groups if not already there
@@ -451,7 +463,7 @@ const groupsSlice = createSlice({
         // Also add groups to items dictionary
         action.payload.forEach((group: HomeGroup) => {
           if (group.id) {
-            state.items[group.id] = group;
+            groupsAdapter.upsertOne(state.groups, group);
           }
         });
 
@@ -472,7 +484,7 @@ const groupsSlice = createSlice({
 
         // Update the group in the items dictionary
         if (action.payload && action.payload.id) {
-          state.items[action.payload.id] = action.payload;
+          groupsAdapter.upsertOne(state.groups, action.payload);
           state.lastFetched[action.payload.id] = Date.now();
         }
 
@@ -492,7 +504,7 @@ const groupsSlice = createSlice({
         state.status = 'succeeded';
 
         if (action.payload) {
-          state.items[action.payload.id!] = action.payload;
+          groupsAdapter.upsertOne(state.groups, action.payload);
           state.lastFetched[action.payload.id!] = Date.now();
         }
 
@@ -509,33 +521,58 @@ const groupsSlice = createSlice({
 // Export actions and reducer
 export const {clearError} = groupsSlice.actions;
 
-// Selectors
-export const selectAllGroups = (state: RootState) => state.groups.items;
-export const selectMemberGroupIds = (state: RootState) =>
-  state.groups.memberGroups;
-export const selectAdminGroupIds = (state: RootState) =>
-  state.groups.adminGroups;
-export const selectGroupById = (state: RootState, groupId: string) =>
-  state.groups.items[groupId];
+// Optimize selectors with proper memoization
+export const selectAllGroups = createSelector(
+  [groupsAdapter.getSelectors().selectAll],
+  groups => groups,
+);
 
-export const selectUserGroups = createSelector(
+export const selectMemberGroupIds = createSelector(
+  [(state: RootState) => state.groups.memberGroups],
+  memberGroups => memberGroups,
+);
+
+export const selectAdminGroupIds = createSelector(
+  [(state: RootState) => state.groups.adminGroups],
+  adminGroups => adminGroups,
+);
+
+export const selectGroupById = (state: RootState, groupId: string) =>
+  groupsAdapter.getSelectors().selectById(state.groups.groups, groupId);
+
+export const selectNearbyGroups = createSelector(
+  [(state: RootState) => state.groups.nearbyGroups],
+  nearbyGroups => nearbyGroups,
+);
+
+export const selectMemberGroups = createSelector(
   [selectAllGroups, selectMemberGroupIds],
-  (groupItems, memberGroupIds) => {
-    return memberGroupIds.map(id => groupItems[id]).filter(Boolean);
+  (allGroups, memberIds) => {
+    return memberIds
+      .map(id => allGroups.find(group => group.id === id))
+      .filter(Boolean);
   },
 );
 
 export const selectAdminGroups = createSelector(
   [selectAllGroups, selectAdminGroupIds],
-  (groupItems, adminGroupIds) => {
-    return adminGroupIds.map(id => groupItems[id]).filter(Boolean);
+  (allGroups, adminIds) => {
+    return adminIds
+      .map(id => allGroups.find(group => group.id === id))
+      .filter(Boolean);
   },
 );
 
+export const selectUserGroups = createSelector(
+  [(state: RootState) => state.groups.groups],
+  groups =>
+    Object.values(groups.entities).filter(
+      (group): group is GroupEntity => group !== undefined,
+    ),
+);
+
+// Simple selectors that don't need memoization
 export const selectGroupsStatus = (state: RootState) => state.groups.status;
 export const selectGroupsError = (state: RootState) => state.groups.error;
-
-export const selectNearbyGroups = (state: RootState) =>
-  state.groups.nearbyGroups;
 
 export default groupsSlice.reducer;

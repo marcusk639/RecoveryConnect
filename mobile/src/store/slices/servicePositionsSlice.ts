@@ -1,21 +1,36 @@
-import {createSlice, createAsyncThunk} from '@reduxjs/toolkit';
+import {
+  createSlice,
+  createAsyncThunk,
+  createEntityAdapter,
+  createSelector,
+} from '@reduxjs/toolkit';
 import {RootState} from '../types';
 import {ServicePosition} from '../../types';
 import {ServicePositionModel} from '../../models/ServicePositionModel';
-import {createSelector} from 'reselect';
 
-// Define State Type
+// Define proper entity type
+export interface ServicePositionEntity extends ServicePosition {
+  id: string;
+}
+
+// Create entity adapter for better performance
+const servicePositionsAdapter = createEntityAdapter({
+  selectId: (position: ServicePositionEntity) => position.id,
+  sortComparer: (a, b) => a.name.localeCompare(b.name),
+});
+
+// Update state interface
 export interface ServicePositionsState {
-  items: Record<string, ServicePosition>; // Store positions by positionId
-  groupPositionIds: Record<string, string[]>; // Map groupId -> [positionId]
+  positions: ReturnType<typeof servicePositionsAdapter.getInitialState>;
+  groupPositionIds: Record<string, string[]>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
-  lastFetchedGroup: Record<string, number>; // Track last fetch time per group
+  lastFetchedGroup: Record<string, number>;
 }
 
 // Initial State
 const initialState: ServicePositionsState = {
-  items: {},
+  positions: servicePositionsAdapter.getInitialState(),
   groupPositionIds: {},
   status: 'idle',
   error: null,
@@ -127,14 +142,11 @@ const servicePositionsSlice = createSlice({
         const positionIds: string[] = [];
 
         if (positions.length > 0) {
-          positions.forEach(pos => {
-            state.items[pos.id] = pos;
-            positionIds.push(pos.id);
-          });
+          servicePositionsAdapter.upsertMany(state.positions, positions);
+          positionIds.push(...positions.map(pos => pos.id));
           state.groupPositionIds[positions[0].groupId] = positionIds;
           state.lastFetchedGroup[positions[0].groupId] = Date.now();
         } else {
-          // Handle empty positions array
           state.groupPositionIds[action.meta.arg] = [];
           state.lastFetchedGroup[action.meta.arg] = Date.now();
         }
@@ -153,7 +165,7 @@ const servicePositionsSlice = createSlice({
       .addCase(createServicePosition.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const newPosition = action.payload;
-        state.items[newPosition.id] = newPosition;
+        servicePositionsAdapter.upsertOne(state.positions, newPosition);
         if (!state.groupPositionIds[newPosition.groupId]) {
           state.groupPositionIds[newPosition.groupId] = [];
         }
@@ -171,8 +183,7 @@ const servicePositionsSlice = createSlice({
       })
       .addCase(updateServicePosition.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        const updatedPosition = action.payload;
-        state.items[updatedPosition.id] = updatedPosition;
+        servicePositionsAdapter.upsertOne(state.positions, action.payload);
         state.error = null;
       })
       .addCase(updateServicePosition.rejected, (state, action) => {
@@ -187,7 +198,7 @@ const servicePositionsSlice = createSlice({
       .addCase(deleteServicePosition.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, positionId} = action.payload;
-        delete state.items[positionId];
+        servicePositionsAdapter.removeOne(state.positions, positionId);
         if (state.groupPositionIds[groupId]) {
           state.groupPositionIds[groupId] = state.groupPositionIds[
             groupId
@@ -202,32 +213,48 @@ const servicePositionsSlice = createSlice({
   },
 });
 
-// --- Exports ---
+// Optimize selectors with proper memoization
+export const selectAllServicePositions = createSelector(
+  [(state: RootState) => state.servicePositions.positions],
+  positions => servicePositionsAdapter.getSelectors().selectAll(positions),
+);
 
-export const {clearServicePositionsError} = servicePositionsSlice.actions;
-
-// Selectors
-export const selectAllServicePositions = (state: RootState) =>
-  state.servicePositions.items;
-export const selectGroupPositionIds = (state: RootState, groupId: string) =>
-  state.servicePositions.groupPositionIds[groupId] || [];
+export const selectGroupPositionIds = createSelector(
+  [
+    (state: RootState, groupId: string) =>
+      state.servicePositions.groupPositionIds[groupId] || [],
+  ],
+  positionIds => positionIds,
+);
 
 export const selectServicePositionsByGroup = createSelector(
-  [selectAllServicePositions, selectGroupPositionIds],
-  (allItems, groupIds) => {
-    return groupIds.map(id => allItems[id]).filter(Boolean);
+  [
+    (state: RootState) => state.servicePositions.positions,
+    (state: RootState, groupId: string) => groupId,
+  ],
+  (positions, groupId) => {
+    const entities = positions.entities;
+    return Object.values(entities).filter(
+      (position): position is ServicePositionEntity =>
+        position !== undefined && position.groupId === groupId,
+    );
   },
 );
 
 export const selectServicePositionById = (
   state: RootState,
   positionId: string,
-) => state.servicePositions.items[positionId];
+) => {
+  return servicePositionsAdapter
+    .getSelectors()
+    .selectById(state.servicePositions.positions, positionId);
+};
 
+// Simple selectors that don't need memoization
 export const selectServicePositionsStatus = (state: RootState) =>
   state.servicePositions.status;
-
 export const selectServicePositionsError = (state: RootState) =>
   state.servicePositions.error;
 
+export const {clearServicePositionsError} = servicePositionsSlice.actions;
 export default servicePositionsSlice.reducer;

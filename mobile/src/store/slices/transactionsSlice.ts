@@ -1,22 +1,49 @@
-import {createSlice, createAsyncThunk, PayloadAction} from '@reduxjs/toolkit';
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+  createEntityAdapter,
+  createSelector,
+} from '@reduxjs/toolkit';
 import {RootState} from '../types';
 import auth from '@react-native-firebase/auth';
 import {TreasuryModel} from '../../models/TreasuryModel';
 import {Transaction, TransactionType} from '../../types/domain/treasury';
-import {createSelector} from 'reselect';
 
-// Define State Type
+// Define entity types
+export interface TransactionEntity extends Transaction {
+  id: string;
+}
+
+// Create entity adapter
+const transactionsAdapter = createEntityAdapter<TransactionEntity>({
+  sortComparer: (a, b) => {
+    const dateA = a.createdAt
+      ? a.createdAt instanceof Date
+        ? a.createdAt
+        : new Date(a.createdAt)
+      : new Date(0);
+    const dateB = b.createdAt
+      ? b.createdAt instanceof Date
+        ? b.createdAt
+        : new Date(b.createdAt)
+      : new Date(0);
+    return dateB.getTime() - dateA.getTime();
+  },
+});
+
+// Define state interface
 export interface TransactionsState {
-  items: Record<string, Transaction>; // Store transactions by ID
-  groupTransactionIds: Record<string, string[]>; // Map groupId -> [transactionId]
+  transactions: ReturnType<typeof transactionsAdapter.getInitialState>;
+  groupTransactionIds: Record<string, string[]>;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   lastFetchedGroup: Record<string, number>;
 }
 
-// Initial State
+// Initial state
 const initialState: TransactionsState = {
-  items: {},
+  transactions: transactionsAdapter.getInitialState(),
   groupTransactionIds: {},
   status: 'idle',
   error: null,
@@ -90,7 +117,6 @@ export const deleteTransaction = createAsyncThunk(
   },
 );
 
-// Create the slice
 const transactionsSlice = createSlice({
   name: 'transactions',
   initialState,
@@ -108,13 +134,8 @@ const transactionsSlice = createSlice({
       .addCase(fetchGroupTransactions.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, transactions} = action.payload;
-        const transactionIds: string[] = [];
-        transactions.forEach(tx => {
-          state.items[tx.id] = tx;
-          transactionIds.push(tx.id);
-        });
-        // Replace or merge? For now, replace the list for the group.
-        state.groupTransactionIds[groupId] = transactionIds;
+        transactionsAdapter.upsertMany(state.transactions, transactions);
+        state.groupTransactionIds[groupId] = transactions.map(tx => tx.id);
         state.lastFetchedGroup[groupId] = Date.now();
         state.error = null;
       })
@@ -122,6 +143,7 @@ const transactionsSlice = createSlice({
         state.status = 'failed';
         state.error = action.payload as string;
       })
+
       // Add Transaction
       .addCase(addTransaction.pending, state => {
         state.status = 'loading';
@@ -129,8 +151,7 @@ const transactionsSlice = createSlice({
       .addCase(addTransaction.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const newTransaction = action.payload;
-        state.items[newTransaction.id] = newTransaction;
-        // Add to the beginning of the group's transaction list
+        transactionsAdapter.upsertOne(state.transactions, newTransaction);
         if (!state.groupTransactionIds[newTransaction.groupId]) {
           state.groupTransactionIds[newTransaction.groupId] = [];
         }
@@ -143,6 +164,7 @@ const transactionsSlice = createSlice({
         state.status = 'failed';
         state.error = action.payload as string;
       })
+
       // Delete transaction
       .addCase(deleteTransaction.pending, state => {
         state.status = 'loading';
@@ -150,42 +172,39 @@ const transactionsSlice = createSlice({
       .addCase(deleteTransaction.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const {groupId, transactionId} = action.payload;
-
-        // Remove from transactions array
-        if (state.items[transactionId]) {
-          delete state.items[transactionId];
-        }
-
-        // Remove from group transaction IDs
+        transactionsAdapter.removeOne(state.transactions, transactionId);
         if (state.groupTransactionIds[groupId]) {
           state.groupTransactionIds[groupId] = state.groupTransactionIds[
             groupId
           ].filter(id => id !== transactionId);
         }
-
         state.error = null;
       })
       .addCase(deleteTransaction.rejected, (state, action) => {
         state.status = 'failed';
-        state.error =
-          (action.payload as string) || 'Failed to delete transaction';
+        state.error = action.payload as string;
       });
   },
 });
 
-// Export actions and reducer
-export const {clearTransactionsError} = transactionsSlice.actions;
+// Memoized selectors
+const transactionsSelectors = transactionsAdapter.getSelectors<RootState>(
+  state => state.transactions.transactions,
+);
 
-// Selectors
-export const selectAllTransactions = (state: RootState) =>
-  state.transactions.items;
+export const selectAllTransactions = transactionsSelectors.selectAll;
+export const selectTransactionById = transactionsSelectors.selectById;
+
 export const selectGroupTransactionIds = (state: RootState, groupId: string) =>
   state.transactions.groupTransactionIds[groupId] || [];
 
 export const selectGroupTransactions = createSelector(
-  [selectAllTransactions, selectGroupTransactionIds],
-  (allItems, groupIds) => {
-    return groupIds.map((id: string) => allItems[id]).filter(Boolean);
+  [transactionsSelectors.selectEntities, selectGroupTransactionIds],
+  (entities, transactionIds) => {
+    const transactions = transactionIds
+      .map(id => entities[id])
+      .filter((tx): tx is TransactionEntity => tx !== undefined);
+    return transactions;
   },
 );
 
@@ -194,4 +213,5 @@ export const selectTransactionsStatus = (state: RootState) =>
 export const selectTransactionsError = (state: RootState) =>
   state.transactions.error;
 
+export const {clearTransactionsError} = transactionsSlice.actions;
 export default transactionsSlice.reducer;

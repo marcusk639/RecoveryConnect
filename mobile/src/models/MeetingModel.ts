@@ -24,6 +24,7 @@ export class MeetingModel {
     const data = doc.data();
     return {
       id: doc.id,
+      meetingId: data.meetingId,
       name: data.name,
       type: data.type as any,
       day: data.day,
@@ -207,13 +208,22 @@ export class MeetingModel {
         throw new Error('Meeting not found');
       }
 
+      // Convert the meeting data to Firestore format
+      const firestoreData = MeetingModel.toFirestore(meetingData);
+
+      // Ensure updatedAt is always set
       const updatePayload = {
-        ...MeetingModel.toFirestore(meetingData),
+        ...firestoreData,
         updatedAt: Firestore.Timestamp.now(),
       };
 
+      // Log the update payload for debugging
+      console.log('Updating meeting with payload:', updatePayload);
+
+      // Update the document
       await meetingRef.update(updatePayload);
 
+      // Fetch and return the updated document
       const updatedDoc = await meetingRef.get();
       return MeetingModel.fromFirestore({
         id: updatedDoc.id,
@@ -352,6 +362,7 @@ export class MeetingModel {
       const instances = instancesSnapshot.docs.map(doc => {
         const data = doc.data();
         return {
+          id: doc.id,
           instanceId: doc.id,
           meetingId: data.meetingId,
           groupId: data.groupId,

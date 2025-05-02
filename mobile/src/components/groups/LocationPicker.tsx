@@ -289,21 +289,40 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
         fetchDetails={true}
         onFail={error => console.error('Places API Error:', error)}
         styles={{
-          container: styles.autocompleteContainer,
+          container: {
+            ...styles.autocompleteContainer,
+            position: 'relative',
+            zIndex: 1,
+          },
           textInput: styles.autocompleteInput,
-          listView: styles.autocompleteList,
+          listView: {
+            ...styles.autocompleteList,
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            zIndex: 2,
+          },
+          row: {
+            ...styles.autocompleteRow,
+            padding: 10,
+            height: 44,
+          },
+          description: {
+            ...styles.autocompleteDescription,
+            fontSize: 14,
+          },
           predefinedPlacesDescription: {
             color: '#1976D2',
           },
-          row: styles.autocompleteRow,
-          description: styles.autocompleteDescription,
         }}
         textInputProps={{
           placeholderTextColor: '#757575',
         }}
         debounce={300}
         enablePoweredByContainer={false}
-        listViewDisplayed={false}
+        listViewDisplayed={true}
+        minLength={2}
       />
 
       {/* Current Location Button */}

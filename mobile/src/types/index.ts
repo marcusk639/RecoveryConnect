@@ -168,26 +168,10 @@ export type MeetingType =
   | 'Celebrate Recovery'
   | 'Custom';
 
-const exampleMeeting: Meeting = {
-  state: 'TX',
-  locationName: undefined,
-  zip: '78703',
-  onlineNotes: undefined,
-  link: undefined,
-  time: '10:00',
-  day: 'saturday',
-  street: '3201 Windsor Road',
-  type: 'AA',
-  lat: 30.296411,
-  city: 'Austin',
-  lng: -97.7688783,
-  online: false,
-  name: 'Benevolent Manipulators - IN-PERSON',
-};
-
 export interface Meeting {
-  id?: string;
+  id: string;
   name: string;
+  meetingId?: string;
   type: MeetingType;
   day: string;
   time: string;

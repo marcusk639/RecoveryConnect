@@ -63,7 +63,6 @@ const GroupOverviewScreen: React.FC = () => {
 
   // Get data from Redux store
   const group = useAppSelector(state => selectGroupById(state, groupId));
-  const groupsStatus = useAppSelector(selectGroupsStatus);
   const announcements = useAppSelector(state =>
     selectAnnouncementsByGroupId(state, groupId),
   );
@@ -73,7 +72,6 @@ const GroupOverviewScreen: React.FC = () => {
   const upcomingMeetingInstances = useAppSelector(state =>
     selectUpcomingMeetingInstances(state, groupId),
   );
-  const meetingsStatus = useAppSelector(selectMeetingsStatus);
   const celebrations = useAppSelector(state =>
     selectGroupMilestones(state, groupId),
   );
@@ -349,7 +347,7 @@ const GroupOverviewScreen: React.FC = () => {
               onPress={() => setClaimModalVisible(true)}
               testID="group-overview-claim-button">
               <Text style={styles.claimGroupButtonText}>
-                Is this your group? Claim Admin Access
+                Is this your group? Request admin access
               </Text>
             </TouchableOpacity>
           )}

@@ -231,7 +231,9 @@ const GroupsListScreen: React.FC = () => {
                 testID="group-list-create-button">
                 <Text style={styles.createGroupButtonText}>Create</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={navigateToGroupSearch} testID="group-list-search-button">
+              <TouchableOpacity
+                onPress={navigateToGroupSearch}
+                testID="group-list-search-button">
                 <Text style={styles.seeAllText}>Join New</Text>
               </TouchableOpacity>
             </View>
