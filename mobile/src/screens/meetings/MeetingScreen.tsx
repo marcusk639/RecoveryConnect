@@ -367,13 +367,16 @@ const MeetingsScreen: React.FC = () => {
       return 'Online Meeting';
     }
 
-    const parts: string[] = [];
-    if (meeting.address) parts.push(meeting.address);
-    if (meeting.city) parts.push(meeting.city);
-    if (meeting.state) parts.push(meeting.state);
-    if (meeting.zip) parts.push(meeting.zip);
+    const streetLine = meeting.address || meeting.street || '';
+    const cityStateZipLine = [meeting.city, meeting.state, meeting.zip]
+      .filter(Boolean)
+      .join(', ');
 
-    return parts.length > 0 ? parts.join(', ') : 'Address not specified';
+    if (!streetLine && !cityStateZipLine) {
+      return 'Address not specified';
+    }
+
+    return `${streetLine}\n${cityStateZipLine}`;
   };
 
   const calculateDistance = (meeting: Meeting): string => {
@@ -398,6 +401,7 @@ const MeetingsScreen: React.FC = () => {
 
   const renderMeetingItem = ({item}: {item: Meeting}) => {
     const distanceText = calculateDistance(item);
+    const formattedAddress = formatAddress(item);
 
     return (
       <TouchableOpacity
@@ -415,7 +419,7 @@ const MeetingsScreen: React.FC = () => {
 
         <View style={styles.meetingContent}>
           <Text style={styles.meetingName}>{item.name}</Text>
-          <Text style={styles.meetingLocation}>{formatAddress(item)}</Text>
+          <Text style={styles.meetingLocation}>{formattedAddress}</Text>
           <View style={styles.meetingTags}>
             <View style={styles.formatTag}>
               <Text style={styles.formatTagText}>{item.type}</Text>
@@ -910,6 +914,11 @@ const MeetingsScreen: React.FC = () => {
         <View style={styles.loaderContainer} testID="meetings-loader">
           <ActivityIndicator size="large" color="#2196F3" />
           <Text style={styles.loadingText}>Finding meetings...</Text>
+          <Text style={styles.loadingSubtext}>
+            {usingCustomLocation && customLocationAddress
+              ? `Searching near ${customLocationAddress.split(',')[0]}`
+              : 'Searching near your location'}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -1046,7 +1055,14 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+    fontWeight: '600',
+    color: '#2196F3',
+  },
+  loadingSubtext: {
+    marginTop: 8,
+    fontSize: 14,
     color: '#757575',
+    textAlign: 'center',
   },
   errorContainer: {
     backgroundColor: '#FFEBEE',

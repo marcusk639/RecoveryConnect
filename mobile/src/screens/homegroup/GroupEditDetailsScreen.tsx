@@ -137,7 +137,6 @@ const GroupEditDetailsScreen: React.FC<GroupEditDetailsScreenProps> = ({
         }),
       );
 
-      Alert.alert('Success', 'Group details updated successfully');
       navigation.goBack();
     } catch (error) {
       console.error('Error updating group:', error);

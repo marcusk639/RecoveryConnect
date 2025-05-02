@@ -41,6 +41,10 @@ export class UserModel {
     };
   }
 
+  static getCurrentAuthUser() {
+    return Auth().currentUser;
+  }
+
   /**
    * Convert a Firestore user document to a User object
    */

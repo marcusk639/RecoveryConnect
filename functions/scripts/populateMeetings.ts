@@ -7,7 +7,7 @@ import * as crypto from "crypto"; // Import crypto module
 
 // --- Configuration ---
 const SERVICE_ACCOUNT_PATH = "./recovery-connect.json"; // Ensure this env var is set
-const FIRESTORE_COLLECTION = "meetings";
+const FIRESTORE_COLLECTION = "homegroups-meetings";
 const MEETING_GUIDE_API_URL = "https://api.meetingguide.org/app/v2/request"; // Using the correct v2 URL
 const BATCH_SIZE = 400; // Firestore batch write limit is 500, stay below it
 const DELAY_MS = 500; // Delay between API calls to avoid rate limiting

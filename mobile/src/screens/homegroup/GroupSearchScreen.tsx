@@ -348,6 +348,16 @@ const GroupSearchScreen: React.FC = () => {
     setUsingCustomLocation(true);
   };
 
+  const handleViewDetails = (group: HomeGroup) => {
+    navigation.navigate('Home', {
+      screen: 'GroupOverview',
+      params: {
+        groupId: group.id!,
+        groupName: group.name,
+      },
+    });
+  };
+
   const renderGroupItem = ({item}: {item: HomeGroup}) => (
     <View style={styles.groupCard}>
       <View style={styles.groupHeader}>
@@ -398,15 +408,7 @@ const GroupSearchScreen: React.FC = () => {
 
       <TouchableOpacity
         style={styles.viewButton}
-        onPress={() =>
-          navigation.navigate('Home', {
-            screen: 'GroupOverview',
-            params: {
-              groupId: item.id!,
-              groupName: item.name,
-            },
-          })
-        }>
+        onPress={() => handleViewDetails(item)}>
         <Text style={styles.viewButtonText}>View Details</Text>
       </TouchableOpacity>
     </View>

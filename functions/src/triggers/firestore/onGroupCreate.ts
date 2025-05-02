@@ -92,7 +92,7 @@ export const onGroupCreateFetchMeetings = functionsV1.firestore
 
       const batch = db.batch();
       let meetingsCreated = 0;
-      const meetingsCollection = db.collection("meetings");
+      const meetingsCollection = db.collection("homegroups-meetings");
 
       for (const meeting of relevantMeetings) {
         const formattedMeeting = formatMeetingForFirestore(meeting);

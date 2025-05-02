@@ -7,7 +7,7 @@ import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 // Types
-interface Announcement {
+export interface Announcement {
   id: string;
   title: string;
   content: string;
@@ -40,6 +40,7 @@ const AnnouncementsScreen: React.FC = () => {
   const [selectedAnnouncement, setSelectedAnnouncement] =
     useState<Announcement | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   useEffect(() => {
     // Set the screen title
@@ -84,12 +85,21 @@ const AnnouncementsScreen: React.FC = () => {
     Alert.alert('Success', 'Announcement deleted successfully!');
   };
 
+  // Sort announcements to show pinned ones first
+  const sortedAnnouncements = [...announcements].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+
   return (
     <SafeAreaView style={styles.container}>
       <AnnouncementList
         groupId={groupId}
         isAdmin={isAdmin}
         onAnnouncementPress={handleAnnouncementPress}
+        announcements={sortedAnnouncements}
+        setAnnouncements={setAnnouncements}
       />
       {selectedAnnouncement && (
         <AnnouncementDetail

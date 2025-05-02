@@ -1,26 +1,33 @@
-// import * as functions from "firebase-functions";
-// import get from "lodash/get";
-// import {Email} from "../entities/Email";
-// import sendgrid from "@sendgrid/mail";
-// import {logger} from "firebase-functions/v1";
+import sgMail from "@sendgrid/mail";
 
-// export const regroupEmail = "admin@regroup-app.com";
-// const API_KEY = get(functions.config(), "sendgrid.key", "");
-// sendgrid.setApiKey(API_KEY);
+// Initialize SendGrid with API key from Firebase config
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-// /**
-//  * Sends an email
-//  * @param email
-//  */
-// export const sendEmail = async (email: Email) => {
-//   try {
-//     await sendgrid.send({
-//       to: email.to,
-//       from: email.from || regroupEmail,
-//       text: email.text,
-//       subject: email.subject,
-//     });
-//   } catch (error) {
-//     logger.info("There was an error sending the email:", JSON.stringify(error));
-//   }
-// };
+interface EmailOptions {
+  to: string;
+  subject: string;
+  html: string;
+  from?: string;
+}
+
+export const sendEmail = async ({
+  to,
+  subject,
+  html,
+  from = "admin@homegroups-app.com",
+}: EmailOptions): Promise<void> => {
+  try {
+    const msg = {
+      to,
+      from,
+      subject,
+      html,
+    };
+
+    await sgMail.send(msg);
+    console.log(`Email sent successfully to ${to}`);
+  } catch (error) {
+    console.error("Error sending email:", error);
+    throw new Error("Failed to send email");
+  }
+};

@@ -90,7 +90,6 @@ const ProfileScreen: React.FC = () => {
 
   // Form values
   const [newDisplayName, setNewDisplayName] = useState('');
-  const [useInitialOnly, setUseInitialOnly] = useState<boolean>(false);
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [tempSobrietyDate, setTempSobrietyDate] = useState<Date | undefined>(
     userData?.sobrietyStartDate
@@ -133,6 +132,8 @@ const ProfileScreen: React.FC = () => {
     requirements: ['30 days sober', 'Working the steps'],
     bio: '',
   });
+
+  const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({});
 
   // Load user data from Redux or fetch if needed
   useEffect(() => {
@@ -186,15 +187,6 @@ const ProfileScreen: React.FC = () => {
       setCelebrationNotifications(
         userData.notificationSettings?.celebrations !== false,
       );
-
-      // Determine useInitialOnly based on fetched displayName
-      if (
-        userData.displayName &&
-        userData.displayName.length === 2 &&
-        userData.displayName.endsWith('.')
-      ) {
-        setUseInitialOnly(true);
-      }
     }
   }, [user, userData, authStatus]);
 
@@ -283,11 +275,11 @@ const ProfileScreen: React.FC = () => {
       Alert.alert('Error', 'Display name cannot be empty');
       return;
     }
+    setIsLoading(prev => ({...prev, name: true}));
     try {
       await dispatch(
         updateDisplayName({
           displayName: newDisplayName.trim(),
-          useInitialOnly: useInitialOnly,
         }),
       ).unwrap();
       setEditingSection(null);
@@ -297,10 +289,13 @@ const ProfileScreen: React.FC = () => {
         'Error',
         error.message || 'Failed to update display name. Please try again.',
       );
+    } finally {
+      setIsLoading(prev => ({...prev, name: false}));
     }
   };
 
   const savePhoneNumber = async () => {
+    setIsLoading(prev => ({...prev, phone: true}));
     try {
       await dispatch(updateUserPhoneNumber(phoneNumber)).unwrap();
       setEditingSection(null);
@@ -310,6 +305,8 @@ const ProfileScreen: React.FC = () => {
         'Error',
         error.message || 'Failed to update phone number. Please try again.',
       );
+    } finally {
+      setIsLoading(prev => ({...prev, phone: false}));
     }
   };
 
@@ -349,23 +346,35 @@ const ProfileScreen: React.FC = () => {
       });
   };
 
-  const saveNotificationSettings = async () => {
+  const handleNotificationChange = async (
+    setting: 'meetings' | 'announcements' | 'celebrations',
+    value: boolean,
+  ) => {
+    setIsLoading(prev => ({...prev, [setting]: true}));
     try {
       await dispatch(
         updateUserNotificationSettings({
-          meetings: meetingNotifications,
-          announcements: announcementNotifications,
-          celebrations: celebrationNotifications,
+          meetings:
+            setting === 'meetings'
+              ? value
+              : userData?.notificationSettings?.meetings ?? true,
+          announcements:
+            setting === 'announcements'
+              ? value
+              : userData?.notificationSettings?.announcements ?? true,
+          celebrations:
+            setting === 'celebrations'
+              ? value
+              : userData?.notificationSettings?.celebrations ?? true,
         }),
       ).unwrap();
-      setEditingSection(null);
     } catch (error: any) {
-      console.error('Error updating notification settings:', error);
       Alert.alert(
         'Error',
-        error.message ||
-          'Failed to update notification settings. Please try again.',
+        error.message || 'Failed to update notification settings',
       );
+    } finally {
+      setIsLoading(prev => ({...prev, [setting]: false}));
     }
   };
 
@@ -573,23 +582,19 @@ const ProfileScreen: React.FC = () => {
                   onChangeText={setNewDisplayName}
                   placeholder="Your name"
                 />
-                <View style={styles.switchContainer}>
-                  <Text style={styles.switchLabel}>Use first initial only</Text>
-                  <Switch
-                    value={useInitialOnly}
-                    onValueChange={setUseInitialOnly}
-                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-                    thumbColor={useInitialOnly ? '#2196F3' : '#FFFFFF'}
-                  />
-                </View>
                 <Text style={styles.helperText}>
-                  For anonymity, we recommend using only your first name or
-                  initial.
+                  For anonymity, we recommend using only your first name and
+                  last initial.
                 </Text>
                 <TouchableOpacity
                   style={styles.saveButton}
-                  onPress={saveDisplayName}>
-                  <Text style={styles.saveButtonText}>Save</Text>
+                  onPress={saveDisplayName}
+                  disabled={isLoading.name}>
+                  {isLoading.name ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             ) : (
@@ -629,8 +634,13 @@ const ProfileScreen: React.FC = () => {
                 </Text>
                 <TouchableOpacity
                   style={styles.saveButton}
-                  onPress={savePhoneNumber}>
-                  <Text style={styles.saveButtonText}>Save</Text>
+                  onPress={savePhoneNumber}
+                  disabled={isLoading.phone}>
+                  {isLoading.phone ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             ) : (
@@ -691,11 +701,6 @@ const ProfileScreen: React.FC = () => {
                     ? formatSobrietyDateForDisplay(userData.sobrietyStartDate)
                     : 'Not set'}
                 </Text>
-                {userData?.sobrietyStartDate && (
-                  <Text style={styles.sobrietyTimeText}>
-                    {calculateSobrietyTime(userData.sobrietyStartDate)}
-                  </Text>
-                )}
               </>
             )}
           </View>
@@ -721,7 +726,7 @@ const ProfileScreen: React.FC = () => {
                     View milestones & progress
                   </Text>
                 </View>
-                <Icon name="chevron-right" size={28} color="#BDBDBD" />
+                <Icon name="chevron-forward" size={28} color="#BDBDBD" />
               </View>
             </TouchableOpacity>
           )}
@@ -783,222 +788,114 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Notification Settings</Text>
-              <TouchableOpacity
-                onPress={() =>
-                  setEditingSection(
-                    editingSection === 'notifications' ? null : 'notifications',
-                  )
-                }
-                style={styles.editButton}>
-                <Text style={styles.editButtonText}>
-                  {editingSection === 'notifications' ? 'Cancel' : 'Edit'}
-                </Text>
-              </TouchableOpacity>
             </View>
-
-            {editingSection === 'notifications' ? (
-              <View style={styles.editContainer}>
-                <View style={styles.switchContainer}>
-                  <Text style={styles.switchLabel}>Meeting Reminders</Text>
-                  <Switch
-                    value={meetingNotifications}
-                    onValueChange={setMeetingNotifications}
-                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-                    thumbColor={meetingNotifications ? '#2196F3' : '#FFFFFF'}
-                  />
-                </View>
-                <View style={styles.switchContainer}>
-                  <Text style={styles.switchLabel}>Group Announcements</Text>
-                  <Switch
-                    value={announcementNotifications}
-                    onValueChange={setAnnouncementNotifications}
-                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-                    thumbColor={
-                      announcementNotifications ? '#2196F3' : '#FFFFFF'
-                    }
-                  />
-                </View>
-                <View style={styles.switchContainer}>
-                  <Text style={styles.switchLabel}>Celebrations</Text>
-                  <Switch
-                    value={celebrationNotifications}
-                    onValueChange={setCelebrationNotifications}
-                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-                    thumbColor={
-                      celebrationNotifications ? '#2196F3' : '#FFFFFF'
-                    }
-                  />
-                </View>
-                <TouchableOpacity
-                  style={styles.saveButton}
-                  onPress={saveNotificationSettings}>
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Meeting Reminders</Text>
+                <Text style={styles.settingDescription}>
+                  Receive notifications about upcoming meetings
+                </Text>
               </View>
-            ) : (
-              <View>
-                <View style={styles.notificationItem}>
-                  <Text style={styles.notificationLabel}>
-                    Meeting Reminders:
-                  </Text>
-                  <Text style={styles.notificationValue}>
-                    {userData?.notificationSettings?.meetings !== false
-                      ? 'On'
-                      : 'Off'}
-                  </Text>
-                </View>
-                <View style={styles.notificationItem}>
-                  <Text style={styles.notificationLabel}>
-                    Group Announcements:
-                  </Text>
-                  <Text style={styles.notificationValue}>
-                    {userData?.notificationSettings?.announcements !== false
-                      ? 'On'
-                      : 'Off'}
-                  </Text>
-                </View>
-                <View style={styles.notificationItem}>
-                  <Text style={styles.notificationLabel}>Celebrations:</Text>
-                  <Text style={styles.notificationValue}>
-                    {userData?.notificationSettings?.celebrations !== false
-                      ? 'On'
-                      : 'Off'}
-                  </Text>
-                </View>
+              {isLoading.meetings ? (
+                <ActivityIndicator size="small" color="#2196F3" />
+              ) : (
+                <Switch
+                  value={userData?.notificationSettings?.meetings ?? true}
+                  onValueChange={value =>
+                    handleNotificationChange('meetings', value)
+                  }
+                  trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                  thumbColor={
+                    userData?.notificationSettings?.meetings
+                      ? '#2196F3'
+                      : '#FFFFFF'
+                  }
+                />
+              )}
+            </View>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Group Announcements</Text>
+                <Text style={styles.settingDescription}>
+                  Receive notifications about group announcements
+                </Text>
               </View>
-            )}
+              {isLoading.announcements ? (
+                <ActivityIndicator size="small" color="#2196F3" />
+              ) : (
+                <Switch
+                  value={userData?.notificationSettings?.announcements ?? true}
+                  onValueChange={value =>
+                    handleNotificationChange('announcements', value)
+                  }
+                  trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                  thumbColor={
+                    userData?.notificationSettings?.announcements
+                      ? '#2196F3'
+                      : '#FFFFFF'
+                  }
+                />
+              )}
+            </View>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Celebrations</Text>
+                <Text style={styles.settingDescription}>
+                  Receive notifications about member celebrations
+                </Text>
+              </View>
+              {isLoading.celebrations ? (
+                <ActivityIndicator size="small" color="#2196F3" />
+              ) : (
+                <Switch
+                  value={userData?.notificationSettings?.celebrations ?? true}
+                  onValueChange={value =>
+                    handleNotificationChange('celebrations', value)
+                  }
+                  trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                  thumbColor={
+                    userData?.notificationSettings?.celebrations
+                      ? '#2196F3'
+                      : '#FFFFFF'
+                  }
+                />
+              )}
+            </View>
           </View>
 
           {/* Sponsorship Settings Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Sponsorship</Text>
-              <TouchableOpacity
-                onPress={() =>
-                  setEditingSection(
-                    editingSection === 'sponsorship' ? null : 'sponsorship',
-                  )
-                }
-                style={styles.editButton}>
-                <Text style={styles.editButtonText}>
-                  {editingSection === 'sponsorship' ? 'Cancel' : 'Edit'}
-                </Text>
-              </TouchableOpacity>
             </View>
-
-            {editingSection === 'sponsorship' ? (
-              <View style={styles.editContainer}>
-                <View style={styles.switchContainer}>
-                  <Text style={styles.switchLabel}>Available to Sponsor</Text>
-                  <Switch
-                    value={sponsorshipSettings.isAvailable}
-                    onValueChange={value =>
-                      setSponsorshipSettings(prev => ({
-                        ...prev,
-                        isAvailable: value,
-                      }))
-                    }
-                    trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
-                    thumbColor={
-                      sponsorshipSettings.isAvailable ? '#2196F3' : '#FFFFFF'
-                    }
-                  />
-                </View>
-
-                {sponsorshipSettings.isAvailable && (
-                  <>
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.inputLabel}>Maximum Sponsees</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        keyboardType="numeric"
-                        value={sponsorshipSettings.maxSponsees.toString()}
-                        onChangeText={value =>
-                          setSponsorshipSettings(prev => ({
-                            ...prev,
-                            maxSponsees: parseInt(value) || 0,
-                          }))
-                        }
-                      />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.inputLabel}>Requirements</Text>
-                      <TextInput
-                        style={[styles.textInput, styles.multilineInput]}
-                        multiline
-                        value={sponsorshipSettings.requirements.join(', ')}
-                        onChangeText={value =>
-                          setSponsorshipSettings(prev => ({
-                            ...prev,
-                            requirements: value.split(',').map(r => r.trim()),
-                          }))
-                        }
-                        placeholder="Enter requirements separated by commas"
-                      />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.inputLabel}>Sponsorship Bio</Text>
-                      <TextInput
-                        style={[styles.textInput, styles.multilineInput]}
-                        multiline
-                        value={sponsorshipSettings.bio}
-                        onChangeText={value =>
-                          setSponsorshipSettings(prev => ({
-                            ...prev,
-                            bio: value,
-                          }))
-                        }
-                        placeholder="Tell potential sponsees about your sponsorship style"
-                      />
-                    </View>
-                  </>
-                )}
-
-                <TouchableOpacity
-                  style={styles.saveButton}
-                  onPress={saveSponsorshipSettings}>
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Available to Sponsor</Text>
+                <Text style={styles.settingDescription}>
+                  Indicate if you're available to sponsor others
+                </Text>
               </View>
-            ) : (
-              <View>
-                <View style={styles.settingItem}>
-                  <Text style={styles.settingLabel}>Available to Sponsor</Text>
-                  <Text style={styles.settingValue}>
-                    {userData?.sponsorSettings?.isAvailable ? 'Yes' : 'No'}
-                  </Text>
-                </View>
-
-                {userData?.sponsorSettings?.isAvailable && (
-                  <>
-                    <View style={styles.settingItem}>
-                      <Text style={styles.settingLabel}>Maximum Sponsees</Text>
-                      <Text style={styles.settingValue}>
-                        {userData.sponsorSettings.maxSponsees}
-                      </Text>
-                    </View>
-
-                    <View style={styles.settingItem}>
-                      <Text style={styles.settingLabel}>Requirements</Text>
-                      <Text style={styles.settingValue}>
-                        {userData.sponsorSettings.requirements.join(', ')}
-                      </Text>
-                    </View>
-
-                    {userData.sponsorSettings.bio && (
-                      <View style={styles.settingItem}>
-                        <Text style={styles.settingLabel}>Bio</Text>
-                        <Text style={styles.settingValue}>
-                          {userData.sponsorSettings.bio}
-                        </Text>
-                      </View>
-                    )}
-                  </>
-                )}
-              </View>
-            )}
+              <Switch
+                value={userData?.sponsorSettings?.isAvailable ?? false}
+                onValueChange={value => {
+                  dispatch(
+                    updateSponsorSettings({
+                      isAvailable: value,
+                      maxSponsees: userData?.sponsorSettings?.maxSponsees ?? 3,
+                      requirements: userData?.sponsorSettings?.requirements ?? [
+                        '30 days sober',
+                        'Work the steps',
+                      ],
+                      bio: userData?.sponsorSettings?.bio ?? '',
+                    }),
+                  );
+                }}
+                trackColor={{false: '#E0E0E0', true: '#90CAF9'}}
+                thumbColor={
+                  userData?.sponsorSettings?.isAvailable ? '#2196F3' : '#FFFFFF'
+                }
+              />
+            </View>
           </View>
 
           {/* Account Actions - Simplified for clarity */}

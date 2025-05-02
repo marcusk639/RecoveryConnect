@@ -3,6 +3,10 @@
 
 // Initialize Firebase Admin SDK *once* globally (usually implicitly via first import)
 // We ensure it's initialized in utils/firebase.ts
+import dotenv from "dotenv";
+
+dotenv.config();
+
 import "./utils/firebase";
 
 // --- Callable Functions --- (Exported for client SDKs to call)

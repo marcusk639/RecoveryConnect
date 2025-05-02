@@ -88,6 +88,7 @@ export interface AuthState {
   lastFetched: number | null;
   location: Location | null;
   pendingNavigation: {route: string; params: any} | null;
+  loading: boolean;
 }
 
 const initialState: AuthState = {
@@ -99,6 +100,7 @@ const initialState: AuthState = {
   lastFetched: null,
   location: null,
   pendingNavigation: null,
+  loading: false,
 };
 
 const mapUserToSliceData = (
@@ -207,19 +209,17 @@ export const fetchUserData = createAsyncThunk<
 
 export const updateDisplayName = createAsyncThunk<
   {id: string; displayName: string},
-  {displayName: string; useInitialOnly: boolean},
+  {displayName: string},
   {state: RootState; rejectValue: string}
 >(
   'auth/updateDisplayName',
-  async ({displayName, useInitialOnly}, {getState, rejectWithValue}) => {
+  async ({displayName}, {getState, rejectWithValue}) => {
     const state = getState();
     const currentUser = state.auth.user;
     if (!currentUser) return rejectWithValue('User not logged in');
 
     try {
-      const formattedName = useInitialOnly
-        ? `${displayName.trim().charAt(0)}.`
-        : displayName.trim();
+      const formattedName = displayName.trim();
 
       await currentUser.updateProfile({displayName: formattedName});
       await UserModel.update(currentUser.uid, {displayName: formattedName});
@@ -512,6 +512,20 @@ const authSlice = createSlice({
     clearPendingNavigation: state => {
       state.pendingNavigation = null;
     },
+    login: state => {
+      state.isAuthenticated = true;
+      state.error = null;
+    },
+    logout: state => {
+      state.isAuthenticated = false;
+      state.error = null;
+    },
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.loading = action.payload;
+    },
+    setError: (state, action: PayloadAction<string | null>) => {
+      state.error = action.payload;
+    },
   },
   extraReducers: builder => {
     builder
@@ -730,6 +744,10 @@ export const {
   setLocation,
   setPendingNavigation,
   clearPendingNavigation,
+  login,
+  logout,
+  setLoading,
+  setError,
 } = authSlice.actions;
 
 export default authSlice.reducer;

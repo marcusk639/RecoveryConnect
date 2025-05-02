@@ -3,7 +3,7 @@ import { HttpsError } from "firebase-functions/v1/https";
 import { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../utils/firebase";
 import * as admin from "firebase-admin";
-// Assume email sending utility exists: import { sendEmail } from '../utils/email';
+import { sendEmail } from "../utils/email";
 
 interface SendInviteEmailData {
   groupId: string;
@@ -82,16 +82,16 @@ export const sendGroupInviteEmail = functions.https.onCall(
         throw new HttpsError("failed-precondition", "Invite code has expired.");
       }
 
-      const universalLinkBase = "https://recoveryconnect.app/";
+      const universalLinkBase = "https://homegroups-app.com/";
       const link = `${universalLinkBase}join?code=${inviteCode}`;
       const inviterName = userData?.displayName || "A member";
       const groupName = groupData?.name || "the group";
-      const subject = `Invitation to join ${groupName} on Recovery Connect`;
+      const subject = `Invitation to join ${groupName} on Homegroups`;
       const emailBody = `
             <p>Hello,</p>
-            <p>${inviterName} has invited you to join the recovery group "${groupName}" on the Recovery Connect app.</p>
-            <p>Recovery Connect helps groups stay connected and organized while respecting anonymity.</p>
-            <p>To join the group, download the Recovery Connect app and use the invite code below, or click the link:</p>
+            <p>${inviterName} has invited you to join the homegroup "${groupName}" on the Homegroups app.</p>
+            <p>Homegroups helps groups stay connected and organized while respecting anonymity.</p>
+            <p>To join the group, download the Homegroups app and use the invite code below, or click the link:</p>
             <p style="font-size: 1.5em; font-weight: bold; margin: 15px 0; letter-spacing: 2px;">${inviteCode}</p>
             <p><a href="${link}" style="display: inline-block; padding: 10px 15px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px;">Join Group Now</a></p>
             <p>If the button doesn't work, copy and paste this link into your browser: <br/> ${link}</p>
@@ -99,13 +99,15 @@ export const sendGroupInviteEmail = functions.https.onCall(
             <p>If you did not expect this invitation, please ignore this email.</p>
             <br/>
             <p>Sincerely,</p>
-            <p>The Recovery Connect Team</p>
+            <p>The Homegroups Team</p>
         `;
 
-      // --- Send Email ---
-      console.log(`Simulating email send to: ${inviteeEmail}`);
-      console.log(`Subject: ${subject}`);
-      // await sendEmail({ to: inviteeEmail, subject: subject, html: emailBody });
+      // Send Email
+      await sendEmail({
+        to: inviteeEmail,
+        subject,
+        html: emailBody,
+      });
 
       await inviteSnap.docs[0].ref.update({
         emailSentTo: inviteeEmail,
@@ -113,7 +115,7 @@ export const sendGroupInviteEmail = functions.https.onCall(
       });
 
       console.log(
-        `Invite email triggered for ${inviteeEmail} for group ${groupId} by user ${inviterUid}`
+        `Invite email sent to ${inviteeEmail} for group ${groupId} by user ${inviterUid}`
       );
       return { success: true };
     } catch (error) {

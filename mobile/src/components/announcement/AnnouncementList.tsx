@@ -16,39 +16,51 @@ import {
 } from 'react-native';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {
-  Announcement,
   fetchAnnouncementsForGroup,
   createAnnouncement,
+  updateAnnouncement,
   selectAnnouncementsByGroupId,
   selectAnnouncementsStatus,
   selectAnnouncementsError,
 } from '../../store/slices/announcementsSlice';
+import {Announcement} from '../../screens/announcements/AnnouncementsScreen';
+import UserModel from '../../models/UserModel';
+import {
+  selectMemberById,
+  selectMemberByUserId,
+} from '../../store/slices/membersSlice';
 
 interface AnnouncementListProps {
   groupId: string;
   isAdmin: boolean;
   onAnnouncementPress: (announcement: Announcement) => void;
+  announcements: Announcement[];
+  setAnnouncements: React.Dispatch<React.SetStateAction<Announcement[]>>;
 }
 
 const AnnouncementList: React.FC<AnnouncementListProps> = ({
   groupId,
   isAdmin,
   onAnnouncementPress,
+  announcements,
+  setAnnouncements,
 }) => {
   const dispatch = useAppDispatch();
 
   // Get data from Redux store
-  const announcements = useAppSelector(state =>
-    selectAnnouncementsByGroupId(state, groupId),
-  );
   const status = useAppSelector(selectAnnouncementsStatus);
   const error = useAppSelector(selectAnnouncementsError);
 
   const loading = status === 'loading';
   const refreshing = status === 'loading'; // Can use the same status for refresh
 
+  const currentUser = UserModel.getCurrentAuthUser();
+
   // Local UI state for modal
   const [createModalVisible, setCreateModalVisible] = useState<boolean>(false);
+  const member = useAppSelector(state =>
+    selectMemberByUserId(state, currentUser?.uid!),
+  );
   const [newTitle, setNewTitle] = useState<string>('');
   const [newContent, setNewContent] = useState<string>('');
   const [isPinned, setIsPinned] = useState<boolean>(false);
@@ -88,14 +100,17 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
 
     try {
       setSubmitting(true);
+      const currentUser = await UserModel.getCurrentAuthUser();
       await dispatch(
         createAnnouncement({
           groupId,
           title: newTitle,
           content: newContent,
           isPinned,
+          userId: currentUser?.uid!,
+          memberId: member?.id,
         }),
-      ).unwrap(); // unwrap() throws error on rejection
+      ).unwrap();
 
       setCreateModalVisible(false);
       resetForm();
@@ -107,6 +122,23 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleTogglePin = async (announcement: Announcement) => {
+    try {
+      await dispatch(
+        updateAnnouncement({
+          announcementId: announcement.id,
+          isPinned: !announcement.isPinned,
+        }),
+      ).unwrap();
+    } catch (err: any) {
+      console.error('Error toggling pin:', err);
+      Alert.alert(
+        'Error',
+        err.message || 'Could not update announcement. Please try again.',
+      );
     }
   };
 
@@ -141,22 +173,25 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
 
   const renderItem = ({item}: {item: Announcement}) => (
     <TouchableOpacity
-      style={[styles.announcementCard, item.isPinned && styles.pinnedCard]}
-      onPress={() => onAnnouncementPress && onAnnouncementPress(item)}>
-      {item.isPinned && (
-        <View style={styles.pinnedBadge}>
-          <Text style={styles.pinnedText}>📌 Pinned</Text>
-        </View>
-      )}
-      <Text style={styles.announcementTitle}>{item.title}</Text>
-      <Text style={styles.announcementContent} numberOfLines={3}>
+      style={[
+        styles.announcementContainer,
+        item.isPinned && styles.pinnedAnnouncement,
+      ]}
+      onPress={() => onAnnouncementPress(item)}>
+      <View style={styles.announcementHeader}>
+        <Text style={styles.announcementTitle}>{item.title}</Text>
+        <TouchableOpacity
+          onPress={() => handleTogglePin(item)}
+          style={styles.pinButton}>
+          <Text style={[styles.pinText, item.isPinned && styles.pinTextActive]}>
+            📌
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.announcementContent} numberOfLines={2}>
         {item.content}
       </Text>
-      <View style={styles.announcementFooter}>
-        <Text style={styles.announcementMeta}>
-          Posted by {item.authorName} on {formatDate(item.createdAt)}
-        </Text>
-      </View>
+      <Text style={styles.announcementDate}>{formatDate(item.createdAt)}</Text>
     </TouchableOpacity>
   );
 
@@ -246,7 +281,7 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
       ) : (
         <>
           <FlatList
-            data={announcements} // Use data from Redux
+            data={announcements}
             renderItem={renderItem}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.listContainer}
@@ -319,50 +354,55 @@ const styles = StyleSheet.create({
   listContainer: {
     padding: 16,
   },
-  announcementCard: {
+  announcementContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  pinnedCard: {
-    backgroundColor: '#FFF8E1',
-    borderLeftWidth: 3,
-    borderLeftColor: '#FFC107',
+  pinnedAnnouncement: {
+    backgroundColor: '#FFF9C4', // Light yellow background for pinned items
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFD700', // Gold border for pinned items
   },
-  pinnedBadge: {
-    marginBottom: 8,
-  },
-  pinnedText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FF9800',
-  },
-  announcementTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#212121',
-    marginBottom: 8,
-  },
-  announcementContent: {
-    fontSize: 14,
-    color: '#424242',
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-  announcementFooter: {
+  announcementHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  announcementMeta: {
+  announcementTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  pinButton: {
+    padding: 8,
+  },
+  pinText: {
+    fontSize: 16,
+    opacity: 0.5,
+  },
+  pinTextActive: {
+    opacity: 1,
+  },
+  announcementContent: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  announcementDate: {
     fontSize: 12,
-    color: '#9E9E9E',
+    color: '#999',
   },
   emptyContainer: {
     padding: 24,
@@ -372,12 +412,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9E9E9E',
     marginBottom: 16,
-  },
-  createButton: {
-    backgroundColor: '#2196F3',
-    borderRadius: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
   },
   createButtonBottom: {
     backgroundColor: '#2196F3',

@@ -52,10 +52,10 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
     setGeneratingLink(true);
     setLoading(true);
     try {
-      const generateInviteFunction = functions().httpsCallable(
+      const generateGroupInvite = functions().httpsCallable(
         'generateGroupInvite',
       );
-      const result = await generateInviteFunction({groupId});
+      const result = await generateGroupInvite({groupId});
       const {code, link} = result.data as {code: string; link: string};
       setInviteCode(code);
       setInviteLink(link);
@@ -97,10 +97,10 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
     setLoading(true);
     try {
       // Call the Cloud Function to send the email
-      const sendInviteEmailFunction = functions().httpsCallable(
+      const sendGroupInviteEmail = functions().httpsCallable(
         'sendGroupInviteEmail',
       );
-      await sendInviteEmailFunction({
+      await sendGroupInviteEmail({
         groupId,
         inviteeEmail: email.trim(),
         inviteCode, // Pass the generated code

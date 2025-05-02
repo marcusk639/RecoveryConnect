@@ -6,7 +6,7 @@ import * as crypto from "crypto"; // Import crypto module
 
 // --- Configuration ---
 const SERVICE_ACCOUNT_PATH = "./recovery-connect.json"; // Ensure this file exists
-const FIRESTORE_COLLECTION = "meetings";
+const FIRESTORE_COLLECTION = "homegroups-meetings";
 const BATCH_SIZE = 400; // Firestore batch write limit is 500, stay below it
 const GEOHASH_PRECISION = 9; // Geohash precision level
 
