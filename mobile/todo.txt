@@ -1,1 +1,2 @@
 crawl https://bmlt.app/ for na meetings and save in firebase
+test donations, set up for prod
