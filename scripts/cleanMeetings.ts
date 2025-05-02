@@ -17,7 +17,7 @@ interface Meeting {
   id?: string; // Document ID
   groupId?: string; // If grouped by the previous script
   name: string;
-  day?: string; // e.g., "monday", "0" etc. Needs normalization
+  day?: string | number; // e.g., "monday", "0" etc. Needs normalization
   time?: string; // e.g., "19:00"
   lat?: number;
   lng?: number;
@@ -95,7 +95,12 @@ function normalizeTime(time?: string): string | null {
   if (!time) return null;
   const timeStr = String(time).trim();
   // Basic check for HH:MM format (can be enhanced)
-  if (/^\d{1,2}:\d{2}$/.test(timeStr)) {
+  // should handle format 12:00:00 or 12:00 or 12:00 PM
+  if (
+    /^\d{1,2}:\d{2}:\d{2}$/.test(timeStr) ||
+    /^\d{1,2}:\d{2}$/.test(timeStr) ||
+    /^\d{1,2}:\d{2} (AM|PM)$/.test(timeStr)
+  ) {
     const parts = timeStr.split(":");
     const hour = parts[0].padStart(2, "0");
     const minute = parts[1];
@@ -112,12 +117,20 @@ function normalizeTime(time?: string): string | null {
  */
 function generateDuplicateCheckKey(meeting: Meeting): string | null {
   const normName = normalizeString(meeting.name);
-  const normDay = normalizeDay(meeting.day);
+  const normDay = normalizeDay(
+    typeof meeting.day === "string"
+      ? meeting.day.toLowerCase()
+      : meeting.day?.toString().toLowerCase()
+  );
   const normTime = normalizeTime(meeting.time);
 
   if (!normName || !normDay || !normTime) {
     // Missing essential info to determine uniqueness
-    // console.warn(`Skipping meeting ${meeting.id}: Missing essential data (name, day, or time) for key generation. Name: ${meeting.name}, Day: ${meeting.day}, Time: ${meeting.time}`);
+    console.log(normName, normDay, normTime);
+    console.log("Meeting", meeting);
+    console.warn(
+      `Skipping meeting ${meeting.id}: Missing essential data (name, day, or time) for key generation. Name: ${meeting.name}, Day: ${meeting.day}, Time: ${meeting.time}`
+    );
     return null;
   }
 

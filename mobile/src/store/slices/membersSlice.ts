@@ -465,6 +465,11 @@ export const selectGroupMilestones = createSelector(
   },
 );
 
+export const selectMemberByUserId = createSelector(
+  [membersSelectors.selectEntities, (_: RootState, userId: string) => userId],
+  (entities, userId) => entities[userId],
+);
+
 export const selectMembersStatus = (state: RootState) => state.members.status;
 export const selectMembersError = (state: RootState) => state.members.error;
 

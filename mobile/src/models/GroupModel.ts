@@ -226,14 +226,14 @@ export class GroupModel {
       await MeetingModel.createBatch(meetings || []);
 
       // Get user data
-      const userDoc = await firestore()
-        .collection('users')
-        .doc(currentUser.uid)
-        .get();
-      const userData = userDoc.data();
+      const user = await UserModel.getById(currentUser.uid);
+
+      if (!user) {
+        throw new Error('User not found');
+      }
 
       // Add current user as a member using the MemberModel
-      await MemberModel.addMember(docRef.id, currentUser.uid, userData, true);
+      await MemberModel.addMember(docRef.id, currentUser.uid, user, true);
 
       const createdGroup = await docRef.get();
       return {
@@ -305,16 +305,14 @@ export class GroupModel {
     isAdmin: boolean = false,
   ): Promise<void> {
     try {
-      const userDoc = await firestore().collection('users').doc(userId).get();
+      const user = await UserModel.getById(userId);
 
-      if (!userDoc.exists) {
+      if (!user) {
         throw new Error('User not found');
       }
 
-      const userData = userDoc.data();
-
       // Use MemberModel to add member to top-level collection
-      await MemberModel.addMember(groupId, userId, userData, isAdmin);
+      await MemberModel.addMember(groupId, userId, user, isAdmin);
     } catch (error) {
       console.error('Error adding group member:', error);
       throw error;

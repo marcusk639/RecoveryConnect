@@ -21,6 +21,7 @@ const PARTIAL_GEOCODE = (query: string) =>
 //   &street=${address.streetNumber + ' ' + address.streetName}&within=10&day=0&lang&orderby=distance`;
 const AA_API = (lat: number, lng: number) =>
   `https://api.meetingguide.org/app/v2/request?latitude=${lat}&longitude=${lng}`;
+// https://api.meetingguide.org/app/v2/request?latitude=41.6747021&longitude=-74.1344599
 // import DEPRECATED_AA_LOCATIONS from '../DEPRECATED_AA_LOCATIONS.json';
 import { AAMeetingResponse } from "../entities/AAMeetingResponse";
 import { getNaMeetings } from "./firestore";

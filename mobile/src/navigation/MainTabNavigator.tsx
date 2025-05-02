@@ -3,6 +3,7 @@ import {Platform, TouchableOpacity, View, Text, StyleSheet} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import {CommonActions} from '@react-navigation/native';
 
 // Import types
 import {MainTabParamList} from '../types/navigation';
@@ -98,6 +99,27 @@ const MainTabNavigator: React.FC = () => {
           tabBarIcon: ({focused}) => <HomeIcon focused={focused} />,
           headerShown: false,
         }}
+        listeners={({navigation}) => ({
+          tabPress: e => {
+            // Prevent default tab press behavior
+            e.preventDefault();
+
+            // Reset the GroupStackNavigator to GroupsList screen
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: 'Home',
+                    state: {
+                      routes: [{name: 'GroupsList'}],
+                    },
+                  },
+                ],
+              }),
+            );
+          },
+        })}
       />
       <Tab.Screen
         name="Meetings"

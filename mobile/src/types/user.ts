@@ -23,3 +23,30 @@ export interface UserData {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  displayName?: string;
+  phoneNumber?: string;
+  photoURL?: string;
+  sobrietyStartDate?: string;
+  privacySettings?: {
+    showSobrietyDate: boolean;
+    showPhoneNumber: boolean;
+    allowDirectMessages: boolean;
+  };
+  notificationSettings?: {
+    meetings: boolean;
+    announcements: boolean;
+    celebrations: boolean;
+  };
+  sponsorSettings?: {
+    isAvailable: boolean;
+    maxSponsees: number;
+    requirements: string[];
+    bio?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}

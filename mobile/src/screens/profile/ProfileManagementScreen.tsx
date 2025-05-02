@@ -259,7 +259,6 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
       await dispatch(
         updateDisplayName({
           displayName: displayName.trim(),
-          useInitialOnly: useInitialOnly,
         }),
       ).unwrap();
       setEditingName(false);

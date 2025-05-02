@@ -1578,6 +1578,8 @@ PODS:
     - React-Core
   - react-native-maps (1.10.4):
     - React-Core
+  - react-native-netinfo (11.4.1):
+    - React-Core
   - react-native-safe-area-context (4.8.2):
     - React-Core
   - react-native-slider (4.5.6):
@@ -1822,6 +1824,7 @@ DEPENDENCIES:
   - react-native-google-maps (from `../node_modules/react-native-maps`)
   - react-native-image-picker (from `../node_modules/react-native-image-picker`)
   - react-native-maps (from `../node_modules/react-native-maps`)
+  - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
   - "react-native-vector-icons (from `../node_modules/@react-native-vector-icons/common`)"
@@ -1977,6 +1980,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-image-picker"
   react-native-maps:
     :path: "../node_modules/react-native-maps"
+  react-native-netinfo:
+    :path: "../node_modules/@react-native-community/netinfo"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-slider:
@@ -2131,6 +2136,7 @@ SPEC CHECKSUMS:
   react-native-google-maps: 6048177d161552f3e382a43e85e1d13c81e39f15
   react-native-image-picker: 3e77316a9ea2f0170aa477cbf606026788b2bb30
   react-native-maps: cdc4955fc67ddc7789eb8040deab5912de66b0c5
+  react-native-netinfo: f0a9899081c185db1de5bb2fdc1c88c202a059ac
   react-native-safe-area-context: 0ee144a6170530ccc37a0fd9388e28d06f516a89
   react-native-slider: 0ea462c812ba616f774af4d7b1e4b6ed98271528
   react-native-vector-icons: 49240cf0f1ac8aa88f8535ca6afe35c5e0a46208

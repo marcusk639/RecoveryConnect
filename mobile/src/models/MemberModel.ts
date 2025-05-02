@@ -1,5 +1,5 @@
 import firestore from '@react-native-firebase/firestore';
-import {GroupMember} from '../types';
+import {GroupMember, User} from '../types';
 import {GroupMemberDocument} from '../types/schema';
 import auth from '@react-native-firebase/auth';
 
@@ -102,7 +102,7 @@ export class MemberModel {
   static async addMember(
     groupId: string,
     userId: string,
-    userData: any,
+    userData: User,
     isAdmin: boolean = false,
   ): Promise<void> {
     try {
@@ -132,12 +132,12 @@ export class MemberModel {
         name: userData?.displayName || authUser?.displayName || 'Anonymous',
         joinedAt: new Date(),
         sobrietyDate: userData?.recoveryDate,
-        phoneNumber: userData?.phoneNumber || phoneNumber,
-        email: userData?.email || authUser?.email,
+        phoneNumber: userData?.phoneNumber || phoneNumber || undefined,
+        email: userData?.email || authUser?.email || undefined,
         isAdmin: isAdmin,
         showSobrietyDate: userData?.privacySettings?.showRecoveryDate || true,
         showPhoneNumber: userData?.privacySettings?.showPhoneNumber || true,
-        photoUrl: photoUrl,
+        photoUrl: photoUrl || undefined,
       };
 
       await firestore()

@@ -41,6 +41,10 @@ import {
   fetchUpcomingMeetingInstances,
   selectUpcomingMeetingInstances,
   selectMeetingsStatus,
+  fetchGroupMeetings,
+  selectGroupMeetingTemplateIds,
+  selectMeetingById,
+  selectGroupMeetings,
 } from '../../store/slices/meetingsSlice';
 import {upperFirst} from 'lodash';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -69,9 +73,10 @@ const GroupOverviewScreen: React.FC = () => {
   const members = useAppSelector(state =>
     selectMembersByGroupId(state, groupId),
   );
-  const upcomingMeetingInstances = useAppSelector(state =>
-    selectUpcomingMeetingInstances(state, groupId),
+  const meetingIds = useAppSelector(state =>
+    selectGroupMeetingTemplateIds(state, groupId),
   );
+  const meetings = useAppSelector(state => selectGroupMeetings(state, groupId));
   const celebrations = useAppSelector(state =>
     selectGroupMilestones(state, groupId),
   );
@@ -98,7 +103,7 @@ const GroupOverviewScreen: React.FC = () => {
         dispatch(fetchGroupById(groupId)).unwrap(),
         dispatch(fetchAnnouncementsForGroup(groupId)).unwrap(),
         dispatch(fetchGroupMembers(groupId)).unwrap(),
-        dispatch(fetchUpcomingMeetingInstances(groupId)).unwrap(),
+        dispatch(fetchGroupMeetings(groupId)).unwrap(),
         dispatch(fetchGroupMilestones({groupId})).unwrap(),
       ]);
     } catch (error: any) {
@@ -267,11 +272,10 @@ const GroupOverviewScreen: React.FC = () => {
     }
   };
 
-  // Format date and time from the MeetingInstance
-  const formatInstanceDateTime = (
-    date?: Date,
+  // Format date and time from the Meeting
+  const formatMeetingDateTime = (
+    meeting: Meeting,
   ): {date: string; time: string} => {
-    if (!date) return {date: 'TBD', time: 'TBD'};
     const dateOptions: Intl.DateTimeFormatOptions = {
       weekday: 'long',
       month: 'short',
@@ -282,9 +286,38 @@ const GroupOverviewScreen: React.FC = () => {
       minute: '2-digit',
       hour12: true,
     };
+
+    // Get the next occurrence of this meeting
+    const now = new Date();
+    const meetingTime = new Date();
+    const [hours, minutes] = meeting.time.split(':').map(Number);
+    meetingTime.setHours(hours, minutes, 0, 0);
+
+    // Find the next occurrence of this meeting day
+    const days = [
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ];
+    const meetingDayIndex = days.indexOf(meeting.day.toLowerCase());
+    const currentDayIndex = now.getDay();
+
+    let daysUntilNextMeeting = meetingDayIndex - currentDayIndex;
+    if (daysUntilNextMeeting <= 0) {
+      daysUntilNextMeeting += 7;
+    }
+
+    const nextMeetingDate = new Date(now);
+    nextMeetingDate.setDate(now.getDate() + daysUntilNextMeeting);
+    nextMeetingDate.setHours(hours, minutes, 0, 0);
+
     return {
-      date: date.toLocaleDateString('en-US', dateOptions),
-      time: date.toLocaleTimeString('en-US', timeOptions),
+      date: nextMeetingDate.toLocaleDateString('en-US', dateOptions),
+      time: nextMeetingDate.toLocaleTimeString('en-US', timeOptions),
     };
   };
 
@@ -489,22 +522,10 @@ const GroupOverviewScreen: React.FC = () => {
             testID="group-admin-edit-button">
             <Text style={styles.adminButtonText}>Edit Group Details</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.adminButton}
-            onPress={() =>
-              Alert.alert(
-                'Manage Members',
-                'This feature will be available soon.',
-              )
-            }
-            testID="group-admin-manage-members-button">
-            <Text style={styles.adminButtonText}>Manage Members</Text>
-          </TouchableOpacity>
         </View>
       )}
 
-      {/* Upcoming Meetings Section - Updated for Instances */}
+      {/* Upcoming Meetings Section */}
       <View style={styles.section} testID="group-upcoming-meetings-section">
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming Meetings</Text>
@@ -515,88 +536,80 @@ const GroupOverviewScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Use upcomingMeetingInstances array */}
-        {upcomingMeetingInstances.length > 0 ? (
-          // Display only the next few (e.g., 3) instances here
-          upcomingMeetingInstances.slice(0, 3).map(instance => {
-            const {date: meetingDate, time: meetingTime} =
-              formatInstanceDateTime(instance.scheduledAt);
-            return (
-              <View
-                key={instance.instanceId}
-                style={[
-                  styles.meetingItem,
-                  instance.isCancelled && styles.cancelledItem,
-                ]}
-                testID={`group-overview-meeting-${instance.instanceId}`}>
-                <View style={styles.meetingTimeContainer}>
-                  {/* Show specific date */}
-                  <Text style={styles.meetingDateText}>{meetingDate}</Text>
-                  <Text style={styles.meetingTime}>{meetingTime}</Text>
-                  {instance.isCancelled && (
-                    <Text style={styles.cancelledText}>CANCELLED</Text>
-                  )}
+        {meetings && meetings.length > 0 ? (
+          // Sort meetings by next occurrence
+          [...meetings]
+            .sort((a, b) => {
+              const days = [
+                'sunday',
+                'monday',
+                'tuesday',
+                'wednesday',
+                'thursday',
+                'friday',
+                'saturday',
+              ];
+              const now = new Date();
+              const currentDayIndex = now.getDay();
+
+              const aDayIndex = days.indexOf(a.day.toLowerCase());
+              const bDayIndex = days.indexOf(b.day.toLowerCase());
+
+              let aDaysUntilNext = aDayIndex - currentDayIndex;
+              let bDaysUntilNext = bDayIndex - currentDayIndex;
+
+              if (aDaysUntilNext <= 0) aDaysUntilNext += 7;
+              if (bDaysUntilNext <= 0) bDaysUntilNext += 7;
+
+              return aDaysUntilNext - bDaysUntilNext;
+            })
+            .slice(0, 3) // Show only the next 3 meetings
+            .map(meeting => {
+              const {date: meetingDate, time: meetingTime} =
+                formatMeetingDateTime(meeting);
+              return (
+                <View
+                  key={meeting.id}
+                  style={styles.meetingItem}
+                  testID={`group-overview-meeting-${meeting.id}`}>
+                  <View style={styles.meetingTimeContainer}>
+                    <Text style={styles.meetingDateText}>{meetingDate}</Text>
+                    <Text style={styles.meetingTime}>{meetingTime}</Text>
+                  </View>
+                  <View style={styles.meetingContent}>
+                    <Text style={styles.meetingName}>{meeting.name}</Text>
+                    <Text style={styles.meetingLocation}>
+                      {meeting.online
+                        ? 'Online Meeting'
+                        : meeting.locationName ||
+                          meeting.address ||
+                          'Location TBD'}
+                    </Text>
+                    <Text style={styles.meetingFormat}>
+                      {meeting.format || meeting.type}
+                    </Text>
+                    {meeting.temporaryNotice && (
+                      <View style={styles.noticeContainer}>
+                        <Icon
+                          name="information-outline"
+                          size={14}
+                          color="#FFA000"
+                          style={{marginRight: 4}}
+                        />
+                        <Text style={styles.noticeText}>
+                          {meeting.temporaryNotice}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.meetingContent}>
-                  <Text style={styles.meetingName}>{instance.name}</Text>
-                  {!instance.isCancelled && (
-                    <>
-                      <Text style={styles.meetingLocation}>
-                        {instance.isOnline
-                          ? 'Online Meeting'
-                          : instance.locationName ||
-                            instance.address ||
-                            'Location TBD'}
-                      </Text>
-                      <Text style={styles.meetingFormat}>
-                        {instance.format || instance.type}
-                      </Text>
-                      {/* Display instance notice if present */}
-                      {(instance.instanceNotice ||
-                        instance.temporaryNotice) && (
-                        <View style={styles.noticeContainer}>
-                          <Icon
-                            name="information-outline"
-                            size={14}
-                            color="#FFA000"
-                            style={{marginRight: 4}}
-                          />
-                          <Text style={styles.noticeText}>
-                            {instance.instanceNotice ||
-                              instance.temporaryNotice}
-                          </Text>
-                        </View>
-                      )}
-                    </>
-                  )}
-                  {/* Display cancellation reason if present */}
-                  {instance.isCancelled && instance.instanceNotice && (
-                    <View
-                      style={[
-                        styles.noticeContainer,
-                        styles.cancelledNoticeContainer,
-                      ]}>
-                      <Icon
-                        name="cancel"
-                        size={14}
-                        color="#D32F2F"
-                        style={{marginRight: 4}}
-                      />
-                      <Text
-                        style={[styles.noticeText, styles.cancelledNoticeText]}>
-                        {instance.instanceNotice}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            );
-          })
+              );
+            })
         ) : (
           <Text
             style={styles.emptyStateText}
             testID="group-overview-no-meetings">
-            No upcoming meetings scheduled for the next week.
+            No upcoming meetings scheduled.
           </Text>
         )}
       </View>

@@ -35,6 +35,7 @@ import {
   selectGroupById,
   selectGroupsStatus,
 } from '../../store/slices/groupsSlice';
+import {selectServicePositionsByMember} from '../../store/slices/servicePositionsSlice';
 import {GroupMember} from '../../types';
 
 type GroupMembersScreenRouteProp = RouteProp<
@@ -148,71 +149,105 @@ const GroupMembersScreen: React.FC = () => {
   };
 
   const handleToggleAdmin = (member: GroupMember) => {
-    dispatch(toggleAdmin({groupId, userId: member.userId}));
+    Alert.alert(
+      'Toggle Admin',
+      'Are you sure you want to make this member an admin?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Toggle',
+          onPress: () =>
+            dispatch(toggleAdmin({groupId, userId: member.userId})),
+        },
+      ],
+    );
   };
 
   const confirmRemoveMember = (member: GroupMember) => {
-    dispatch(removeMember({groupId, userId: member.userId}));
+    Alert.alert(
+      'Remove Member',
+      'Are you sure you want to remove this member from the group?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Remove',
+          onPress: () =>
+            dispatch(removeMember({groupId, userId: member.userId})),
+        },
+      ],
+    );
   };
 
-  const renderMemberItem = ({item}: {item: GroupMember}) => (
-    <TouchableOpacity
-      style={styles.memberItem}
-      onPress={() => handleMemberPress(item)}
-      testID={`group-member-item-${item.id}`}>
-      <View style={styles.memberInitialContainer}>
-        {item.photoUrl ? (
-          <Image
-            source={{uri: item.photoUrl}}
-            style={styles.memberPhoto}
-            onError={() => {
-              console.log(`Failed to load photo for ${item.name}`);
-              // If we could set state here to fall back to initials, we would,
-              // but since this is a functional component, we'll just show the broken image
-            }}
-          />
-        ) : (
-          <Text style={styles.memberInitial}>{getInitials(item.name)}</Text>
-        )}
-      </View>
+  const renderMemberItem = ({item}: {item: GroupMember}) => {
+    const servicePositions = useAppSelector(state =>
+      selectServicePositionsByMember(state, item.id),
+    );
 
-      <View style={styles.memberDetailsContainer}>
-        <View style={styles.memberNameRow}>
-          <Text style={styles.memberName}>{item.name}</Text>
-          {item.isAdmin && (
-            <View style={styles.adminBadge}>
-              <Text style={styles.adminBadgeText}>Admin</Text>
-            </View>
+    return (
+      <TouchableOpacity
+        style={styles.memberItem}
+        onPress={() => handleMemberPress(item)}
+        testID={`group-member-item-${item.id}`}>
+        <View style={styles.memberInitialContainer}>
+          {item.photoUrl ? (
+            <Image
+              source={{uri: item.photoUrl}}
+              style={styles.memberPhoto}
+              onError={() => {
+                console.log(`Failed to load photo for ${item.name}`);
+              }}
+            />
+          ) : (
+            <Text style={styles.memberInitial}>{getInitials(item.name)}</Text>
           )}
         </View>
 
-        {item.position && (
-          <Text style={styles.memberPosition}>{item.position}</Text>
-        )}
+        <View style={styles.memberDetailsContainer}>
+          <View style={styles.memberNameRow}>
+            <Text style={styles.memberName}>{item.name}</Text>
+            {item.isAdmin && (
+              <View style={styles.adminBadge}>
+                <Text style={styles.adminBadgeText}>Admin</Text>
+              </View>
+            )}
+          </View>
 
-        {item.sobrietyDate && (
-          <Text style={styles.memberSobriety}>
-            {formatSobrietyDate(item.sobrietyDate)}
-          </Text>
-        )}
-      </View>
+          {servicePositions.length > 0 && (
+            <View style={styles.servicePositionsContainer}>
+              {servicePositions.map(position => (
+                <View key={position.id} style={styles.servicePositionBadge}>
+                  <Text style={styles.servicePositionText}>
+                    {position.name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-      {isAdmin && !item.isAdmin && (
-        <View style={styles.adminActions}>
-          <TouchableOpacity
-            onPress={() => handleToggleAdmin(item)}
-            testID={`member-admin-toggle-${item.id}`}>
-            <Icon name="account-plus-outline" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => confirmRemoveMember(item)}
-            testID={`member-remove-button-${item.id}`}>
-            <Icon name="account-remove-outline" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          {item.sobrietyDate && (
+            <Text style={styles.memberSobriety}>
+              {formatSobrietyDate(item.sobrietyDate)}
+            </Text>
+          )}
         </View>
-      )}
-    </TouchableOpacity>
-  );
+
+        {isAdmin && !item.isAdmin && (
+          <View style={styles.adminActions}>
+            <TouchableOpacity
+              onPress={() => handleToggleAdmin(item)}
+              testID={`member-admin-toggle-${item.id}`}>
+              <Icon name="account-plus-outline" size={20} color="#2196F3" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => confirmRemoveMember(item)}
+              testID={`member-remove-button-${item.id}`}>
+              <Icon name="account-remove-outline" size={20} color="#F44336" />
+            </TouchableOpacity>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   const renderServicePositions = () => {
     const serviceMembers = members.filter(
@@ -442,6 +477,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
+    flexWrap: 'wrap',
   },
   memberName: {
     fontSize: 16,
@@ -454,16 +490,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    marginRight: 8,
   },
   adminBadgeText: {
     fontSize: 10,
     color: '#2196F3',
     fontWeight: '600',
   },
-  memberPosition: {
-    fontSize: 14,
-    color: '#616161',
-    marginBottom: 2,
+  servicePositionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+    gap: 4,
+  },
+  servicePositionBadge: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  servicePositionText: {
+    fontSize: 10,
+    color: '#2196F3',
+    fontWeight: '600',
   },
   memberSobriety: {
     fontSize: 14,
@@ -499,6 +548,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 12,
+    gap: 8,
   },
 });
 

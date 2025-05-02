@@ -26,6 +26,7 @@ import {selectGroupById} from '../../store/slices/groupsSlice'; // To check admi
 import {ServicePosition} from '../../types';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import AssignMemberModal from '../../components/service-positions/AssignMemberModal';
 
 type ScreenRouteProp = RouteProp<GroupStackParamList, 'GroupServicePositions'>;
 type ScreenNavigationProp = StackNavigationProp<
@@ -48,6 +49,9 @@ const GroupServicePositionsScreen: React.FC = () => {
   const currentUser = auth().currentUser;
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
+  const [selectedPosition, setSelectedPosition] =
+    useState<ServicePositionEntity | null>(null);
 
   useEffect(() => {
     if (group && currentUser) {
@@ -101,6 +105,16 @@ const GroupServicePositionsScreen: React.FC = () => {
         },
       ],
     );
+  };
+
+  const handleAssignMember = (position: ServicePositionEntity) => {
+    setSelectedPosition(position);
+    setAssignModalVisible(true);
+  };
+
+  const handleCloseAssignModal = () => {
+    setAssignModalVisible(false);
+    setSelectedPosition(null);
   };
 
   const renderItem = ({item}: {item: ServicePositionEntity}) => (
@@ -166,7 +180,7 @@ const GroupServicePositionsScreen: React.FC = () => {
       {!item.currentHolderId && isAdmin && (
         <TouchableOpacity
           style={styles.assignButton}
-          onPress={() => handleEditPosition(item)}
+          onPress={() => handleAssignMember(item)}
           testID={`service-pos-assign-button-${item.id}`}>
           <Text style={styles.assignButtonText}>Assign Member</Text>
         </TouchableOpacity>
@@ -247,6 +261,16 @@ const GroupServicePositionsScreen: React.FC = () => {
               )}
             </View>
           }
+        />
+      )}
+
+      {selectedPosition && (
+        <AssignMemberModal
+          visible={assignModalVisible}
+          groupId={groupId}
+          positionId={selectedPosition.id}
+          positionName={selectedPosition.name}
+          onClose={handleCloseAssignModal}
         />
       )}
     </SafeAreaView>

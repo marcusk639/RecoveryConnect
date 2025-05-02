@@ -1,8 +1,5 @@
 import * as functions from "firebase-functions";
 import Stripe from "stripe";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 // --- Environment Variable Names (Use uppercase by convention) ---
 const STRIPE_TEST_SECRET_KEY_ENV = "STRIPE_TEST_SECRET_KEY"; // Use test key for development, live for production

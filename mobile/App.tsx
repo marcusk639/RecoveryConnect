@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useCallback} from 'react';
+import React, {useEffect, useRef, useCallback, useState} from 'react';
 import {
   NavigationContainer,
   LinkingOptions,
@@ -20,6 +20,7 @@ import messaging from '@react-native-firebase/messaging';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {RootStackParamList} from './src/types/navigation';
 import {initStripe, StripeProvider} from '@stripe/stripe-react-native';
+import NetInfo from '@react-native-community/netinfo';
 
 require('react-native').LogBox.ignoreLogs(['`GCanvasReady` with no listeners']);
 
@@ -275,6 +276,28 @@ const AppContent: React.FC = () => {
 
 // Root App component wraps everything in Providers
 const App = () => {
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      if (!state.isConnected) {
+        setIsOffline(true);
+      } else {
+        setIsOffline(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (isOffline) {
+      Alert.alert(
+        'No internet connection',
+        'Please check your connection and try again.',
+      );
+    }
+  }, [isOffline]);
+
   useEffect(() => {
     initStripe({
       publishableKey: process.env.STRIPE_TEST_PUBLISHABLE_KEY as string,

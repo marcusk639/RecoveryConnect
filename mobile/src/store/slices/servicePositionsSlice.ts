@@ -250,6 +250,20 @@ export const selectServicePositionById = (
     .selectById(state.servicePositions.positions, positionId);
 };
 
+export const selectServicePositionsByMember = createSelector(
+  [
+    (state: RootState) => state.servicePositions.positions,
+    (state: RootState, memberId: string) => memberId,
+  ],
+  (positions, memberId) => {
+    const entities = positions.entities;
+    return Object.values(entities).filter(
+      (position): position is ServicePositionEntity =>
+        position !== undefined && position.currentHolderId === memberId,
+    );
+  },
+);
+
 // Simple selectors that don't need memoization
 export const selectServicePositionsStatus = (state: RootState) =>
   state.servicePositions.status;

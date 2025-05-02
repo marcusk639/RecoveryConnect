@@ -9,7 +9,9 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import Button from '../common/Button';
+import {Button} from '../common/Button';
+import {useAppSelector} from '../../store';
+import {selectServicePositionsByMember} from '../../store/slices/servicePositionsSlice';
 
 interface GroupMember {
   id: string;
@@ -40,6 +42,10 @@ const GroupMemberDetailModal: React.FC<GroupMemberDetailModalProps> = ({
   onRemoveAdmin,
   onRemoveMember,
 }) => {
+  const servicePositions = useAppSelector(state =>
+    selectServicePositionsByMember(state, member.id),
+  );
+
   // Format recovery date for display
   const formatRecoveryDate = (dateString?: string): string => {
     if (!dateString) return 'Not shared';
@@ -135,6 +141,37 @@ const GroupMemberDetailModal: React.FC<GroupMemberDetailModalProps> = ({
                 {member.position || 'Member'}
               </Text>
             </View>
+
+            {servicePositions.length > 0 && (
+              <View style={styles.detailSection}>
+                <Text style={styles.sectionTitle}>Service Positions</Text>
+                {servicePositions.map(position => (
+                  <View key={position.id} style={styles.servicePositionItem}>
+                    <Text style={styles.servicePositionName}>
+                      {position.name}
+                    </Text>
+                    {position.description && (
+                      <Text style={styles.servicePositionDescription}>
+                        {position.description}
+                      </Text>
+                    )}
+                    {position.termStartDate && (
+                      <Text style={styles.servicePositionTerm}>
+                        Term:{' '}
+                        {new Date(position.termStartDate).toLocaleDateString()}
+                        {position.termEndDate
+                          ? ` - ${new Date(
+                              position.termEndDate,
+                            ).toLocaleDateString()}`
+                          : position.commitmentLength
+                          ? ` (${position.commitmentLength} months)`
+                          : ''}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
 
             {member.sobrietyDate && (
               <View style={styles.detailSection}>
@@ -304,6 +341,28 @@ const styles = StyleSheet.create({
   },
   removeButtonText: {
     color: '#F44336',
+  },
+  servicePositionItem: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  servicePositionName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#212121',
+    marginBottom: 4,
+  },
+  servicePositionDescription: {
+    fontSize: 14,
+    color: '#757575',
+    marginBottom: 4,
+  },
+  servicePositionTerm: {
+    fontSize: 12,
+    color: '#9E9E9E',
+    fontStyle: 'italic',
   },
 });
 
