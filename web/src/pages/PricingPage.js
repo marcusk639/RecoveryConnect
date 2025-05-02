@@ -402,9 +402,9 @@ const PricingPage = () => {
         <HeroContent>
           <PageTitle>Simple, Affordable Pricing</PageTitle>
           <PageSubtitle>
-            Recovery Connect is designed to be accessible for all recovery
-            groups, with a focus on providing value while respecting the
-            financial traditions of 12-step programs.
+            Homegroups is designed to be accessible for all recovery groups,
+            with a focus on providing value while respecting the financial
+            traditions of 12-step programs.
           </PageSubtitle>
         </HeroContent>
       </HeroSection>

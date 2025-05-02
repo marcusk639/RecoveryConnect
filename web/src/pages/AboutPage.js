@@ -378,19 +378,19 @@ const AboutPage = () => {
       initial: "J",
       name: "James Wilson",
       role: "Founder & CEO",
-      bio: "James founded Recovery Connect after experiencing firsthand the challenges of managing a 12-step homegroup. With 8 years in recovery and 15 years in software development, he combines these passions to serve the recovery community.",
+      bio: "James founded Homegroups after experiencing firsthand the challenges of managing a 12-step homegroup. With 8 years in recovery and 15 years in software development, he combines these passions to serve the recovery community.",
     },
     {
       initial: "S",
       name: "Sarah Chen",
       role: "Lead Developer",
-      bio: "Sarah brings 10 years of mobile app development experience to Recovery Connect. Her expertise in building secure communication platforms ensures our app maintains the highest standards of privacy and security.",
+      bio: "Sarah brings 10 years of mobile app development experience to Homegroups. Her expertise in building secure communication platforms ensures our app maintains the highest standards of privacy and security.",
     },
     {
       initial: "M",
       name: "Michael Davis",
       role: "Community Manager",
-      bio: "With 12 years in recovery and experience serving at the intergroup level, Michael ensures Recovery Connect stays true to recovery principles while meeting the real needs of recovery groups.",
+      bio: "With 12 years in recovery and experience serving at the intergroup level, Michael ensures Homegroups stays true to recovery principles while meeting the real needs of recovery groups.",
     },
   ];
 
@@ -411,19 +411,19 @@ const AboutPage = () => {
       year: "2021",
       title: "First Prototype",
       description:
-        "The first version of Recovery Connect is built and tested with a handful of pilot groups, focusing on meeting management and treasury features.",
+        "The first version of Homegroups is built and tested with a handful of pilot groups, focusing on meeting management and treasury features.",
     },
     {
       year: "2022",
       title: "Official Launch",
       description:
-        "Recovery Connect launches publicly with its core feature set. Within months, hundreds of recovery groups have adopted the platform.",
+        "Homegroups launches publicly with its core feature set. Within months, hundreds of recovery groups have adopted the platform.",
     },
     {
       year: "2023",
       title: "Expansion & Growth",
       description:
-        "New features are added based on user feedback. Recovery Connect grows to serve thousands of users across multiple countries and fellowships.",
+        "New features are added based on user feedback. Homegroups grows to serve thousands of users across multiple countries and fellowships.",
     },
   ];
 
@@ -433,8 +433,8 @@ const AboutPage = () => {
         <HeroContent>
           <PageTitle>Our Story</PageTitle>
           <PageSubtitle>
-            Recovery Connect was built by members of the recovery community to
-            solve real problems while respecting recovery traditions.
+            Homegroups was built by members of the recovery community to solve
+            real problems while respecting recovery traditions.
           </PageSubtitle>
         </HeroContent>
       </HeroSection>
@@ -453,8 +453,8 @@ const AboutPage = () => {
                 From Challenge to Solution
               </SectionTitle>
               <Paragraph>
-                Recovery Connect began with a simple problem: as a treasurer for
-                his homegroup, our founder James was frustrated with the
+                Homegroups began with a simple problem: as a treasurer for his
+                homegroup, our founder James was frustrated with the
                 disorganized system of paper records, email chains, and text
                 messages used to manage the group.
               </Paragraph>
@@ -471,10 +471,9 @@ const AboutPage = () => {
                 simplicity, and respect for traditions.
               </Paragraph>
               <Paragraph>
-                Recovery Connect was created to bridge that gap, providing
-                recovery groups with the digital tools they need while
-                maintaining the principles and traditions that make these
-                communities special.
+                Homegroups was created to bridge that gap, providing recovery
+                groups with the digital tools they need while maintaining the
+                principles and traditions that make these communities special.
               </Paragraph>
             </StoryContent>
             <StoryImageContainer>

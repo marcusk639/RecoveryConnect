@@ -1,7 +1,7 @@
 {
   "name": "recovery-connect-backend",
   "version": "1.0.0",
-  "description": "Backend API for Recovery Connect mobile application",
+  "description": "Backend API for Homegroups mobile application",
   "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",

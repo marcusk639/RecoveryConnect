@@ -134,7 +134,7 @@ const GroupInviteModal: React.FC<GroupInviteModalProps> = ({
 
     try {
       await Share.share({
-        message: `Join our recovery group "${groupName}" on Recovery Connect.\n\nUse invite code: ${inviteCode}\nOr click the link: ${inviteLink}`,
+        message: `Join our recovery group "${groupName}" on Homegroups.\n\nUse invite code: ${inviteCode}\nOr click the link: ${inviteLink}`,
         url: inviteLink, // Include URL for platforms that support it
         title: `Invite to ${groupName}`,
       });

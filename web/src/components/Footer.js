@@ -88,7 +88,7 @@ const Footer = () => {
     <FooterContainer>
       <FooterContent>
         <FooterColumn>
-          <FooterHeading>Recovery Connect</FooterHeading>
+          <FooterHeading>Homegroups</FooterHeading>
           <p>
             A privacy-first app for 12-step recovery groups. Manage meetings,
             treasury, and communications with ease.
@@ -144,7 +144,7 @@ const Footer = () => {
       </FooterContent>
 
       <Copyright>
-        &copy; {currentYear} Recovery Connect. All rights reserved.
+        &copy; {currentYear} Homegroups. All rights reserved.
       </Copyright>
     </FooterContainer>
   );

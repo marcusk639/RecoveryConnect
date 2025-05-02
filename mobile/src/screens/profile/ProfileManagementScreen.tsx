@@ -798,7 +798,7 @@ const ProfileManagementScreen: React.FC<ProfileManagementScreenProps> = ({
 
           {/* App Version */}
           <View style={styles.versionContainer}>
-            <Text style={styles.versionText}>Recovery Connect v1.0.0</Text>
+            <Text style={styles.versionText}>Homegroups v1.0.0</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

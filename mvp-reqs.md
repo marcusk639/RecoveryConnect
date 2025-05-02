@@ -1,4 +1,4 @@
-Based on the requirements and the current state of the Recovery Connect app, here are the core features that should be implemented for the MVP (Minimum Viable Product):
+Based on the requirements and the current state of the Homegroups app, here are the core features that should be implemented for the MVP (Minimum Viable Product):
 
 ## 1. Authentication & User Management
 

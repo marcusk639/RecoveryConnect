@@ -143,7 +143,7 @@ const FeaturesSection = () => {
       <SectionHeader>
         <SectionTitle>Powerful Features for Recovery Groups</SectionTitle>
         <SectionSubtitle>
-          Recovery Connect simplifies managing your homegroup's operations while
+          Homegroups simplifies managing your homegroup's operations while
           preserving anonymity and group autonomy.
         </SectionSubtitle>
       </SectionHeader>

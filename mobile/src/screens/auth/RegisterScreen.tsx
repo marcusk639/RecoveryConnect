@@ -437,8 +437,8 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
       <View style={styles.termsContainer}>
         <Text style={styles.termsTitle}>Our Commitment to Privacy</Text>
         <Text style={styles.termsText}>
-          Recovery Connect is designed with your privacy and anonymity in mind.
-          We adhere to the traditions of 12-step programs in how we handle your
+          Homegroups is designed with your privacy and anonymity in mind. We
+          adhere to the traditions of 12-step programs in how we handle your
           personal information.
         </Text>
 
@@ -628,7 +628,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({navigation}) => {
             <View style={styles.logo}>
               <Text style={styles.logoText}>RC</Text>
             </View>
-            <Text style={styles.appName}>Recovery Connect</Text>
+            <Text style={styles.appName}>Homegroups</Text>
           </View>
 
           {/* Registration Form Card */}

@@ -87,7 +87,7 @@ const GroupDonationScreen: React.FC = () => {
     const customerId = useSelector(selectUserData)?.customerId;
 
     const {error: initError} = await initPaymentSheet({
-      merchantDisplayName: 'Recovery Connect',
+      merchantDisplayName: 'Homegroups',
       customerId: customerId, // Optional: Prefill customer if you have it
       // customerEphemeralKeySecret: ephemeralKey, // Optional: Needed for reusing cards
       paymentIntentClientSecret: secret,

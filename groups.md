@@ -92,7 +92,7 @@ TODO:
 
 Notifications:
 
-Okay, let's brainstorm some notification types for Recovery Connect, focusing on _meaningful engagement_ rather than just noise. The goal is to bring users back to the app for valuable reasons related to their recovery journey and group participation, always respecting privacy.
+Okay, let's brainstorm some notification types for Homegroups, focusing on _meaningful engagement_ rather than just noise. The goal is to bring users back to the app for valuable reasons related to their recovery journey and group participation, always respecting privacy.
 
 Here are notification ideas categorized for clarity:
 

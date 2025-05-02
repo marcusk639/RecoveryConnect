@@ -45,7 +45,7 @@ export const createStripePaymentIntent = functions.https.onCall(
       if (!groupDoc.exists) {
         throw new HttpsError("not-found", "Group not found.");
       }
-      const groupName = groupDoc.data()?.name || "Recovery Connect Group";
+      const groupName = groupDoc.data()?.name || "Homegroups Group";
 
       // Get or create Stripe Customer ID for the donating user
       const userDoc = await db.collection("users").doc(userId).get();

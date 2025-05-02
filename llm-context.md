@@ -1,10 +1,10 @@
-I'll compile the contents of our conversation into a document format. This will include all of our discussion about the Recovery Connect app, including the requirements, design, and implementation details for both the frontend and backend components.
+I'll compile the contents of our conversation into a document format. This will include all of our discussion about the Homegroups app, including the requirements, design, and implementation details for both the frontend and backend components.
 
-# Recovery Connect App Development Document
+# Homegroups App Development Document
 
 ## Executive Summary
 
-Recovery Connect is a mobile application designed to streamline the management of 12-step homegroups while respecting the traditions of anonymity and group autonomy. The MVP focuses on core functionality that solves immediate pain points for homegroups with a privacy-first approach. The app will be available on iOS and Android platforms with a minimal $1/month fee for groups wishing to access premium features.
+Homegroups is a mobile application designed to streamline the management of 12-step homegroups while respecting the traditions of anonymity and group autonomy. The MVP focuses on core functionality that solves immediate pain points for homegroups with a privacy-first approach. The app will be available on iOS and Android platforms with a minimal $1/month fee for groups wishing to access premium features.
 
 ## Core Problem Statement
 
@@ -421,4 +421,4 @@ export const createGroup = asyncHandler(
 
 ## Conclusion
 
-Recovery Connect provides a comprehensive digital platform for 12-step recovery groups while maintaining the privacy and anonymity traditions that are central to these programs. The application balances modern technology with recovery principles to create a tool that enhances group management without compromising core values.
+Homegroups provides a comprehensive digital platform for 12-step recovery groups while maintaining the privacy and anonymity traditions that are central to these programs. The application balances modern technology with recovery principles to create a tool that enhances group management without compromising core values.

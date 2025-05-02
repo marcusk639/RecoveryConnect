@@ -230,7 +230,7 @@ const MeetingsScreen: React.FC = () => {
           {
             title: 'Location Permission',
             message:
-              'Recovery Connect needs access to your location to find meetings near you.',
+              'Homegroups needs access to your location to find meetings near you.',
             buttonPositive: 'OK',
           },
         );

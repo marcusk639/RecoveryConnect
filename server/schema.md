@@ -1,4 +1,4 @@
-// Firestore Database Schema for Recovery Connect
+// Firestore Database Schema for Homegroups
 
 // Collection: users
 {

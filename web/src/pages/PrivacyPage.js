@@ -170,18 +170,17 @@ const PrivacyPage = () => {
           <PrivacyHighlight>
             <HighlightTitle>Our Privacy Commitment</HighlightTitle>
             <Paragraph style={{ marginBottom: 0 }}>
-              Recovery Connect was built with privacy as a foundational
-              principle. We understand the sensitive nature of recovery
-              information and the importance of anonymity in 12-step programs.
-              Our privacy practices are designed to respect and protect these
-              principles.
+              Homegroups was built with privacy as a foundational principle. We
+              understand the sensitive nature of recovery information and the
+              importance of anonymity in 12-step programs. Our privacy practices
+              are designed to respect and protect these principles.
             </Paragraph>
           </PrivacyHighlight>
 
           <Paragraph>
-            This Privacy Policy describes how Recovery Connect ("we", "our", or
-            "us") collects, uses, and discloses your information when you use
-            our mobile application and website (collectively, the "Service").
+            This Privacy Policy describes how Homegroups ("we", "our", or "us")
+            collects, uses, and discloses your information when you use our
+            mobile application and website (collectively, the "Service").
           </Paragraph>
 
           <Paragraph>
@@ -270,10 +269,10 @@ const PrivacyPage = () => {
           <PrivacyHighlight>
             <HighlightTitle>End-to-End Encryption</HighlightTitle>
             <Paragraph style={{ marginBottom: 0 }}>
-              All direct messages and group communications in Recovery Connect
-              are secured with end-to-end encryption. This means that only the
+              All direct messages and group communications in Homegroups are
+              secured with end-to-end encryption. This means that only the
               intended recipients can read these messages—not even our team at
-              Recovery Connect can access the content of your conversations.
+              Homegroups can access the content of your conversations.
             </Paragraph>
           </PrivacyHighlight>
 
@@ -314,13 +313,13 @@ const PrivacyPage = () => {
 
           <SubsectionTitle>Legal Requirements</SubsectionTitle>
           <Paragraph>
-            Recovery Connect may disclose your Personal Information in the good
-            faith belief that such action is necessary to:
+            Homegroups may disclose your Personal Information in the good faith
+            belief that such action is necessary to:
           </Paragraph>
           <BulletList>
             <ListItem>To comply with a legal obligation</ListItem>
             <ListItem>
-              To protect and defend the rights or property of Recovery Connect
+              To protect and defend the rights or property of Homegroups
             </ListItem>
             <ListItem>
               To prevent or investigate possible wrongdoing in connection with
@@ -336,7 +335,7 @@ const PrivacyPage = () => {
           <PrivacyHighlight>
             <HighlightTitle>We Do Not Sell Your Data</HighlightTitle>
             <Paragraph style={{ marginBottom: 0 }}>
-              Recovery Connect does not sell, trade, or rent your personal
+              Homegroups does not sell, trade, or rent your personal
               identification information to others. We may share generic
               aggregated demographic information not linked to any personal
               identification information regarding visitors and users with our
@@ -437,7 +436,7 @@ const PrivacyPage = () => {
               <Emphasis>By Email:</Emphasis> privacy@recoveryconnect.app
             </ContactParagraph>
             <ContactParagraph>
-              <Emphasis>By Mail:</Emphasis> Recovery Connect, Inc.
+              <Emphasis>By Mail:</Emphasis> Homegroups, Inc.
               <br />
               123 Recovery Way, Suite 456
               <br />

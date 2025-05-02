@@ -140,7 +140,7 @@ const Header = () => {
   return (
     <HeaderContainer className={scrolled ? "scrolled" : ""}>
       <NavContainer>
-        <Logo to="/">Recovery Connect</Logo>
+        <Logo to="/">Homegroups</Logo>
 
         <MobileMenuButton onClick={toggleMenu}>
           {isOpen ? "✕" : "☰"}

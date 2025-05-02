@@ -1,7 +1,7 @@
 {
   "name": "recovery-connect-scripts",
   "version": "1.0.0",
-  "description": "Scripts for testing and managing Recovery Connect app",
+  "description": "Scripts for testing and managing Homegroups app",
   "main": "index.js",
   "scripts": {
     "test-chat": "ts-node testChatFunctionality.ts"

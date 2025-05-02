@@ -48,7 +48,7 @@ const SplashScreen: React.FC = () => {
         style={styles.logo}
         resizeMode="contain"
       />
-      <Text style={styles.title}>Recovery Connect</Text>
+      <Text style={styles.title}>Homegroups</Text>
       <Text style={styles.subtitle}>Supporting your recovery journey</Text>
       <ActivityIndicator style={styles.loading} size="large" color="#2196F3" />
     </View>

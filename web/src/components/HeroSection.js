@@ -156,8 +156,8 @@ const HeroSection = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          Recovery Connect simplifies meeting coordination, treasury management,
-          and group communications while respecting the traditions of anonymity.
+          Homegroups simplifies meeting coordination, treasury management, and
+          group communications while respecting the traditions of anonymity.
         </HeroSubtitle>
 
         <ButtonGroup

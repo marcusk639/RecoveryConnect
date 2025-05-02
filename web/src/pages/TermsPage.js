@@ -143,7 +143,7 @@ const TermsPage = () => {
         <HeroContent>
           <PageTitle>Terms of Service</PageTitle>
           <PageSubtitle>
-            Please read these terms carefully before using Recovery Connect.
+            Please read these terms carefully before using Homegroups.
           </PageSubtitle>
         </HeroContent>
       </HeroSection>
@@ -153,11 +153,10 @@ const TermsPage = () => {
           <LastUpdated>Last Updated: January 1, 2023</LastUpdated>
 
           <Paragraph>
-            Welcome to Recovery Connect. The following Terms of Service
-            ("Terms") govern your access to and use of the Recovery Connect
-            mobile application and website ("Service"), including any content,
-            functionality, and services offered on or through the application or
-            website.
+            Welcome to Homegroups. The following Terms of Service ("Terms")
+            govern your access to and use of the Homegroups mobile application
+            and website ("Service"), including any content, functionality, and
+            services offered on or through the application or website.
           </Paragraph>
 
           <Paragraph>
@@ -217,11 +216,10 @@ const TermsPage = () => {
             Our Service allows you to post, link, store, share, and otherwise
             make available certain information, text, graphics, photos, or other
             material ("Content"). By making Content available through the
-            Service, you grant to Recovery Connect a non-exclusive,
-            transferable, sub-licensable, royalty-free, worldwide license to
-            use, copy, modify, create derivative works based on, distribute,
-            publicly display, and otherwise use such Content to provide the
-            Service.
+            Service, you grant to Homegroups a non-exclusive, transferable,
+            sub-licensable, royalty-free, worldwide license to use, copy,
+            modify, create derivative works based on, distribute, publicly
+            display, and otherwise use such Content to provide the Service.
           </Paragraph>
 
           <Paragraph>
@@ -252,9 +250,8 @@ const TermsPage = () => {
               "spam," or any other similar solicitation.
             </ListItem>
             <ListItem>
-              To impersonate or attempt to impersonate Recovery Connect, a
-              Recovery Connect employee, another user, or any other person or
-              entity.
+              To impersonate or attempt to impersonate Homegroups, a Homegroups
+              employee, another user, or any other person or entity.
             </ListItem>
             <ListItem>
               To engage in any other conduct that restricts or inhibits anyone's
@@ -267,11 +264,11 @@ const TermsPage = () => {
           <Paragraph>
             The Service and its original content (excluding Content provided by
             users), features, and functionality are and will remain the
-            exclusive property of Recovery Connect and its licensors. The
-            Service is protected by copyright, trademark, and other laws of both
-            the United States and foreign countries. Our trademarks and trade
-            dress may not be used in connection with any product or service
-            without the prior written consent of Recovery Connect.
+            exclusive property of Homegroups and its licensors. The Service is
+            protected by copyright, trademark, and other laws of both the United
+            States and foreign countries. Our trademarks and trade dress may not
+            be used in connection with any product or service without the prior
+            written consent of Homegroups.
           </Paragraph>
 
           <SectionTitle>8. Termination</SectionTitle>
@@ -290,7 +287,7 @@ const TermsPage = () => {
 
           <SectionTitle>9. Limitation of Liability</SectionTitle>
           <Paragraph>
-            In no event shall Recovery Connect, nor its directors, employees,
+            In no event shall Homegroups, nor its directors, employees,
             partners, agents, suppliers, or affiliates, be liable for any
             indirect, incidental, special, consequential or punitive damages,
             including without limitation, loss of profits, data, use, goodwill,
@@ -315,7 +312,7 @@ const TermsPage = () => {
           </Paragraph>
 
           <Paragraph>
-            Recovery Connect does not warrant that a) the Service will function
+            Homegroups does not warrant that a) the Service will function
             uninterrupted, secure or available at any particular time or
             location; b) any errors or defects will be corrected; c) the Service
             is free of viruses or other harmful components; or d) the results of
@@ -364,7 +361,7 @@ const TermsPage = () => {
               <Emphasis>By Email:</Emphasis> info@recoveryconnect.app
             </ContactParagraph>
             <ContactParagraph>
-              <Emphasis>By Mail:</Emphasis> Recovery Connect, Inc.
+              <Emphasis>By Mail:</Emphasis> Homegroups, Inc.
               <br />
               123 Recovery Way, Suite 456
               <br />

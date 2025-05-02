@@ -221,8 +221,8 @@ const PricingSection = () => {
       <SectionHeader>
         <SectionTitle>Simple, Affordable Pricing</SectionTitle>
         <SectionSubtitle>
-          Recovery Connect is designed to be accessible for all recovery groups,
-          no matter their size.
+          Homegroups is designed to be accessible for all recovery groups, no
+          matter their size.
         </SectionSubtitle>
       </SectionHeader>
 
@@ -295,7 +295,7 @@ const PricingSection = () => {
       >
         <ActionText>
           Ready to transform how your recovery group operates? Join thousands of
-          recovery groups already using Recovery Connect.
+          recovery groups already using Homegroups.
         </ActionText>
         <ActionButtons>
           <ActionButton to="/contact">Start Free Trial</ActionButton>

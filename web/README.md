@@ -1,6 +1,6 @@
-# Recovery Connect - Marketing Website
+# Homegroups - Marketing Website
 
-This is the marketing website for the Recovery Connect mobile app. It's built with React and follows the AIDA (Awareness, Interest, Desire, Action) marketing funnel approach.
+This is the marketing website for the Homegroups mobile app. It's built with React and follows the AIDA (Awareness, Interest, Desire, Action) marketing funnel approach.
 
 ## Features
 
@@ -54,7 +54,7 @@ npm run build
 
 This website implements the AIDA marketing funnel:
 
-1. **Awareness**: Hero section highlighting Recovery Connect's value proposition
+1. **Awareness**: Hero section highlighting Homegroups's value proposition
 2. **Interest**: Features section showcasing app capabilities
 3. **Desire**: Testimonials and problem/solution presentation
 4. **Action**: Pricing and call-to-action sections for conversion

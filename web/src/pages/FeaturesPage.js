@@ -242,9 +242,9 @@ const FeaturesPage = () => {
         <HeroContent>
           <PageTitle>Features Designed for Recovery Groups</PageTitle>
           <PageSubtitle>
-            Recovery Connect combines powerful functionality with privacy-first
-            design to help 12-step groups operate more effectively while
-            respecting recovery traditions.
+            Homegroups combines powerful functionality with privacy-first design
+            to help 12-step groups operate more effectively while respecting
+            recovery traditions.
           </PageSubtitle>
         </HeroContent>
       </HeroSection>
@@ -371,9 +371,8 @@ const FeaturesPage = () => {
           <FeatureContent>
             <FeatureTitle>Privacy & Security</FeatureTitle>
             <FeatureDescription>
-              We take anonymity and security seriously. Recovery Connect is
-              built with privacy-first principles and rigorous security
-              standards.
+              We take anonymity and security seriously. Homegroups is built with
+              privacy-first principles and rigorous security standards.
             </FeatureDescription>
             <FeatureList>
               <FeatureItem>
@@ -401,8 +400,8 @@ const FeaturesPage = () => {
         >
           <FeatureTitle>Additional Features</FeatureTitle>
           <FeatureDescription>
-            Recovery Connect continues to expand with new features requested by
-            the recovery community.
+            Homegroups continues to expand with new features requested by the
+            recovery community.
           </FeatureDescription>
         </div>
 

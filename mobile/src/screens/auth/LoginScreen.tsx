@@ -104,7 +104,7 @@ const LoginScreen = () => {
             <View style={styles.logo}>
               <Text style={styles.logoText}>RC</Text>
             </View>
-            <Text style={styles.appName}>Recovery Connect</Text>
+            <Text style={styles.appName}>Homegroups</Text>
             <Text style={styles.subtitle}>Sign in to your account</Text>
           </View>
 

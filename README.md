@@ -1,8 +1,8 @@
-# Recovery Connect: Application Overview & Feature Breakdown
+# Homegroups: Application Overview & Feature Breakdown
 
 ## 1. Introduction
 
-Recovery Connect is a mobile application (iOS & Android) built with React Native and Firebase, designed specifically for 12-step recovery homegroups (like AA, NA, etc.). Its primary goal is to provide essential tools for group communication, meeting management, and basic operations (like treasury) while strictly adhering to the principles of anonymity and group autonomy central to these fellowships.
+Homegroups is a mobile application (iOS & Android) built with React Native and Firebase, designed specifically for 12-step recovery homegroups (like AA, NA, etc.). Its primary goal is to provide essential tools for group communication, meeting management, and basic operations (like treasury) while strictly adhering to the principles of anonymity and group autonomy central to these fellowships.
 
 The app aims to solve common operational challenges faced by groups without resorting to public social media platforms, offering a private, secure, and focused environment.
 
@@ -241,4 +241,4 @@ The app aims to solve common operational challenges faced by groups without reso
 - Moderation tools for user-generated content.
 - Offline support improvements.
 
-This document provides a detailed snapshot of the Recovery Connect application's features, architecture, and planned development.
+This document provides a detailed snapshot of the Homegroups application's features, architecture, and planned development.

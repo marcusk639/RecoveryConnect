@@ -1,6 +1,6 @@
-Recovery Connect App - MVP Specification
+Homegroups App - MVP Specification
 Executive Summary
-Recovery Connect is a mobile application designed to streamline the management of 12-step homegroups while respecting the traditions of anonymity and group autonomy. The MVP focuses on core functionality that solves immediate pain points for homegroups with a privacy-first approach. The app will be available on iOS and Android platforms with a minimal $1/month fee for groups wishing to access premium features.
+Homegroups is a mobile application designed to streamline the management of 12-step homegroups while respecting the traditions of anonymity and group autonomy. The MVP focuses on core functionality that solves immediate pain points for homegroups with a privacy-first approach. The app will be available on iOS and Android platforms with a minimal $1/month fee for groups wishing to access premium features.
 Core Problem Statement
 12-step recovery groups face challenges with:
 
@@ -91,7 +91,7 @@ Core Problem Statement
 - Advanced treasury features (digital 7th tradition)
 - Additional fellowship-specific customizations
   Conclusion
-  The Recovery Connect MVP delivers essential functionality that solves real problems for 12-step homegroups while maintaining the highest standards of privacy and respect for recovery traditions. The focused feature set enables rapid development and deployment while providing immediate value to users.
+  The Homegroups MVP delivers essential functionality that solves real problems for 12-step homegroups while maintaining the highest standards of privacy and respect for recovery traditions. The focused feature set enables rapid development and deployment while providing immediate value to users.
 
 Possible down the line features:
 

@@ -167,7 +167,7 @@ const ProblemSolutionItem = styled.li`
 
 const testimonials = [
   {
-    text: "Recovery Connect has completely transformed how our group manages meetings and treasury. The app makes it easy to track our 7th Tradition and stay connected without compromising anonymity.",
+    text: "Homegroups has completely transformed how our group manages meetings and treasury. The app makes it easy to track our 7th Tradition and stay connected without compromising anonymity.",
     name: "James T.",
     title: "Group Secretary, 5 years",
     initial: "J",
@@ -185,7 +185,7 @@ const testimonials = [
     initial: "M",
   },
   {
-    text: "We needed a way for members to stay connected without using social media. Recovery Connect respects our traditions while giving us the tools we need to communicate effectively.",
+    text: "We needed a way for members to stay connected without using social media. Homegroups respects our traditions while giving us the tools we need to communicate effectively.",
     name: "Lisa P.",
     title: "Group Administrator, 4 years",
     initial: "L",
@@ -238,8 +238,8 @@ const TestimonialsSection = () => {
       <SectionHeader>
         <SectionTitle>What Recovery Groups Are Saying</SectionTitle>
         <SectionSubtitle>
-          Groups like yours are using Recovery Connect to simplify operations
-          and strengthen their recovery communities.
+          Groups like yours are using Homegroups to simplify operations and
+          strengthen their recovery communities.
         </SectionSubtitle>
       </SectionHeader>
 

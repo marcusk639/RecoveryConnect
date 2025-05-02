@@ -910,7 +910,7 @@ const ProfileScreen: React.FC = () => {
 
           {/* App Info - Keep as is */}
           <View style={styles.section}>
-            <Text style={styles.appInfo}>Recovery Connect v1.0.0</Text>
+            <Text style={styles.appInfo}>Homegroups v1.0.0</Text>
             <View style={styles.linksContainer}>
               <TouchableOpacity>
                 <Text style={styles.link}>Privacy Policy</Text>

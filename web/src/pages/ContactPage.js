@@ -204,7 +204,7 @@ const ContactPage = () => {
   return (
     <PageContainer>
       <PageHeader>
-        <PageTitle>Get Started with Recovery Connect</PageTitle>
+        <PageTitle>Get Started with Homegroups</PageTitle>
         <PageSubtitle>
           We're here to help your recovery group thrive with our tools. Reach
           out to learn more or sign up for a free trial.

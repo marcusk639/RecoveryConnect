@@ -85,4 +85,4 @@ Okay, focusing specifically on features that drive **group adoption and long-ter
 - **Solve Real Problems:** Focus on fixing the actual operational headaches groups face (Treasury, Communication, Scheduling).
 - **Low Barrier to Entry:** Easy onboarding for both individuals and the group as a whole (invites are key).
 
-Focusing intensely on **Tier 1 features** and making them exceptionally user-friendly and reliable is the surest path to getting homegroups to adopt and _keep_ using Recovery Connect.
+Focusing intensely on **Tier 1 features** and making them exceptionally user-friendly and reliable is the surest path to getting homegroups to adopt and _keep_ using Homegroups.
