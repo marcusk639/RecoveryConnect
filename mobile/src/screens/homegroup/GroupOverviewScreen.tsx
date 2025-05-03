@@ -172,6 +172,13 @@ const GroupOverviewScreen: React.FC = () => {
     });
   };
 
+  const navigateToGroupDonation = () => {
+    navigation.navigate('GroupDonation', {
+      groupId,
+      groupName,
+    });
+  };
+
   const navigateToSponsorChat = () => {
     if (!activeSponsorship) return;
 
@@ -476,6 +483,16 @@ const GroupOverviewScreen: React.FC = () => {
             <Text style={styles.navTileIconText}>💰</Text>
           </View>
           <Text style={styles.navTileText}>Treasury</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTile}
+          onPress={navigateToGroupDonation}
+          testID="group-overview-donation-tile">
+          <View style={styles.navTileIcon}>
+            <Text style={styles.navTileIconText}>💝</Text>
+          </View>
+          <Text style={styles.navTileText}>Donate</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

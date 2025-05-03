@@ -55,6 +55,7 @@ export interface MeetingSearchCriteria {
   time?: string;
   location?: Location;
   street?: string;
+  maxDistance?: number; // Maximum distance in kilometers
 }
 
 /**

@@ -85,6 +85,9 @@ const MeetingsScreen: React.FC = () => {
     null,
   );
 
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const meetingTypes: (MeetingType | 'All')[] = [
     'All',
     'AA',
@@ -165,61 +168,84 @@ const MeetingsScreen: React.FC = () => {
   const getUserLocation = useCallback(async () => {
     if (usingCustomLocation) return;
 
+    setIsSearching(true);
     setLocationError(null);
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
       setLocationError(
         'Location permission denied. Search for a location manually.',
       );
-      dispatch(
-        fetchMeetings({
-          location: currentUserLocation || undefined,
-          filters: {
-            day: selectedDayFilter || undefined,
-            type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-          },
-        }),
-      );
+      try {
+        await dispatch(
+          fetchMeetings({
+            location: currentUserLocation || undefined,
+            filters: {
+              day: selectedDayFilter || undefined,
+              type:
+                selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+            },
+          }),
+        );
+      } catch (error) {
+        console.error('Error fetching meetings:', error);
+      } finally {
+        setIsSearching(false);
+      }
       return;
     }
 
-    Geolocation.getCurrentPosition(
-      position => {
-        const location: Location = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        setCurrentUserLocation(location);
-        dispatch(setReduxUserLocation(location));
-        dispatch(
-          fetchMeetings({
-            location,
-            filters: {
-              day: selectedDayFilter || undefined,
-              type:
-                selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-            },
-          }),
-        );
-      },
-      error => {
-        console.error('Error getting location:', error);
-        setLocationError(
-          'Unable to get your location. Check permissions or search manually.',
-        );
-        dispatch(
-          fetchMeetings({
-            location: customLocation || undefined,
-            filters: {
-              day: selectedDayFilter || undefined,
-              type:
-                selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-            },
-          }),
-        );
-      },
-      {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
-    );
+    try {
+      Geolocation.getCurrentPosition(
+        position => {
+          const location: Location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+          setCurrentUserLocation(location);
+          dispatch(setReduxUserLocation(location));
+          dispatch(
+            fetchMeetings({
+              location,
+              filters: {
+                day: selectedDayFilter || undefined,
+                type:
+                  selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+              },
+            }),
+          ).finally(() => {
+            setIsSearching(false);
+          });
+        },
+        error => {
+          console.error('Error getting location:', error);
+          setLocationError(
+            'Unable to get your location. Check permissions or search manually.',
+          );
+          try {
+            dispatch(
+              fetchMeetings({
+                location: customLocation || undefined,
+                filters: {
+                  day: selectedDayFilter || undefined,
+                  type:
+                    selectedTypeFilter === 'All'
+                      ? undefined
+                      : selectedTypeFilter,
+                },
+              }),
+            );
+          } catch (error) {
+            console.error('Error fetching meetings:', error);
+          } finally {
+            setIsSearching(false);
+          }
+        },
+        {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
+      );
+    } catch (error) {
+      console.error('Error in getUserLocation:', error);
+      setIsSearching(false);
+    }
   }, [dispatch, selectedTypeFilter, usingCustomLocation]);
 
   const requestLocationPermission = async () => {
@@ -244,19 +270,30 @@ const MeetingsScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!usingCustomLocation) {
-      getUserLocation();
-    } else if (customLocation) {
-      dispatch(
-        fetchMeetings({
-          location: customLocation,
-          filters: {
-            day: selectedDayFilter || undefined,
-            type: selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
-          },
-        }),
-      );
-    }
+    const findMeetings = async () => {
+      if (!usingCustomLocation) {
+        getUserLocation();
+      } else if (customLocation) {
+        setIsSearching(true);
+        try {
+          await dispatch(
+            fetchMeetings({
+              location: customLocation,
+              filters: {
+                day: selectedDayFilter || undefined,
+                type:
+                  selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+              },
+            }),
+          );
+        } catch (error) {
+          console.error('Error fetching meetings:', error);
+        } finally {
+          setIsSearching(false);
+        }
+      }
+    };
+    findMeetings();
   }, [
     getUserLocation,
     usingCustomLocation,
@@ -303,9 +340,31 @@ const MeetingsScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const handleSearchChange = (text: string) => {
-    setNameQuery(text);
-  };
+  const handleSearch = useCallback(
+    async (query: string) => {
+      setSearchQuery(query);
+      setIsSearching(true);
+
+      try {
+        await dispatch(
+          fetchMeetings({
+            location: activeLocation || undefined,
+            filters: {
+              day: selectedDayFilter || undefined,
+              type:
+                selectedTypeFilter === 'All' ? undefined : selectedTypeFilter,
+              name: query || undefined,
+            },
+          }),
+        );
+      } catch (error) {
+        console.error('Error searching meetings:', error);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [dispatch, activeLocation, selectedDayFilter, selectedTypeFilter],
+  );
 
   const resetFilters = () => {
     setNameQuery('');
@@ -846,11 +905,18 @@ const MeetingsScreen: React.FC = () => {
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name..."
-            value={nameQuery}
-            onChangeText={handleSearchChange}
+            value={searchQuery}
+            onChangeText={handleSearch}
             returnKeyType="search"
             testID="meetings-search-input"
           />
+          {isSearching && (
+            <ActivityIndicator
+              size="small"
+              color="#2196F3"
+              style={styles.searchLoadingIndicator}
+            />
+          )}
         </View>
 
         <View style={styles.filterButtonsRow}>
@@ -921,10 +987,12 @@ const MeetingsScreen: React.FC = () => {
         </View>
       )}
 
-      {isLoading && !refreshing ? (
+      {isLoading || isSearching ? (
         <View style={styles.loaderContainer} testID="meetings-loader">
           <ActivityIndicator size="large" color="#2196F3" />
-          <Text style={styles.loadingText}>Finding meetings...</Text>
+          <Text style={styles.loadingText}>
+            {isSearching ? 'Searching meetings...' : 'Finding meetings...'}
+          </Text>
           <Text style={styles.loadingSubtext}>
             {usingCustomLocation && customLocationAddress
               ? `Searching near ${customLocationAddress.split(',')[0]}`
@@ -1463,6 +1531,9 @@ const styles = StyleSheet.create({
   modalCloseButton: {
     padding: 8,
     marginLeft: 16,
+  },
+  searchLoadingIndicator: {
+    marginLeft: 8,
   },
 });
 

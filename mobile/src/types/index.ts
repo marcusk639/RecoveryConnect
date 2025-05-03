@@ -218,8 +218,9 @@ export interface MeetingSearchCriteria {
 }
 
 export interface MeetingFilters {
-  day?: keyof DaysAndTimes;
   type?: MeetingType;
+  day?: keyof DaysAndTimes;
+  name?: string;
   location?: Location;
   radius?: number;
 }
