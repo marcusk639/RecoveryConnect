@@ -110,6 +110,9 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+    buildFeatures {
+        compose true // Make sure compose is enabled
+    }
 }
 
 dependencies {
