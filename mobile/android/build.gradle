@@ -1,36 +1,52 @@
 buildscript {
     ext {
-        kotlin_version = '2.1.20' // Change from 2.0.x to 1.9.25
+        // Align with @react-native/gradle-plugin's build file
+        kotlinVersion = "1.9.22"
         buildToolsVersion = "34.0.0"
         minSdkVersion = 23
-        compileSdkVersion = 34
+        compileSdkVersion = 34 // Keep compileSdk at 34
         targetSdkVersion = 34
+        composeVersion = "1.5.8" // Keep for composeOptions reference, though compose feature is disabled
+        androidXCore = "1.12.0"
+        androidXAppCompat = "1.6.1"
+        androidXActivity = "1.8.0"
+        androidXFragment = "1.6.1"
+        // Downgrade AGP to be compatible with Gradle 7.6
+        agpVersion = "7.4.2"
 
         // We use NDK 23 which has both M1 support and is the side-by-side NDK version from AGP.
         ndkVersion = "23.1.7779620"
     }
-    repositories {1
+    repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath("com.android.tools.build:gradle")
+        // Use the ext property for AGP version
+        classpath("com.android.tools.build:gradle:$agpVersion")
         classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath 'com.google.gms:google-services:4.4.2'
-        classpath 'com.android.tools.build:gradle:7.4.2' // Example: Upgrade to a newer version
-        classpath "org.jetbrains.compose:compose-gradle-plugin:1.1.1"
-
+        classpath("com.google.gms:google-services:4.4.2")
+        // Use the ext property for Kotlin version
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+        // Remove Kotlin Serialization unless explicitly needed
+        // classpath("org.jetbrains.kotlin:kotlin-serialization:$kotlinVersion")
+        // Remove JetBrains Compose plugin classpath
     }
 }
 
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
-plugins {
+// Remove the top-level plugins block entirely
 
-    // Maps to 'org.jetbrains.kotlin:kotlin-gradle-plugin'
-    id 'org.jetbrains.kotlin.android' version '2.1.20'
-    // Add any others like kotlin-serialization if needed as plugins
-    // id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.22' apply false
-//    id "org.jetbrains.kotlin.plugin.compose" version "1.9.22" apply false
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    doNotTrackState("Kotlin compilation is not tracked")
 }
 
